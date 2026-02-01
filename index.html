@@ -3,95 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Loading...</title>
+    <title>系統加載中...</title>
     <style>
-        :root { --c-primary: #335495; --c-bg: #f0f2f5; --c-accent: #ff0000; }
+        :root { --c-main: #335495; --c-bg: #f4f7f6; --c-txt: #333333; --c-hl: #ff0000; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--c-bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: none; border: 1px solid #bbccdd; }
-        h2 { text-align: center; color: var(--c-primary); border-bottom: 2px solid var(--c-primary); padding-bottom: 10px; margin-top: 0; }
+        .wrapper { width: 100%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: none; border: 1px solid #bbccdd; }
+        h2 { text-align: center; color: var(--c-main); border-bottom: 2px solid var(--c-main); padding-bottom: 10px; margin-top: 0; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th { background-color: #f2f5f9; color: #445566; padding: 12px; border: 1px solid #bbccdd; }
-        td { padding: 10px; border: 1px solid #bbccdd; text-align: center; color: #333; }
+        th { background-color: #f2f5f9; color: #445566; padding: 12px; border: 1px solid #bbccdd; font-size: 15px; }
+        td { padding: 10px; border: 1px solid #bbccdd; text-align: center; color: var(--c-txt); font-size: 16px; }
         tr:nth-child(even) { background-color: #fcfdfe; }
-        .ball { color: var(--c-accent); font-weight: bold; font-size: 18px; letter-spacing: 2px; }
-        .tag { text-align: right; color: #888; font-size: 11px; margin-top: 10px; }
+        .val-hl { color: var(--c-hl); font-weight: bold; font-size: 18px; letter-spacing: 1px; }
+        .ts { text-align: right; color: #999; font-size: 11px; margin-top: 12px; }
     </style>
 </head>
 <body>
 
-<div id="main-content" class="container">
-    <h2 id="ui-title">Data Dashboard</h2>
-    <div id="table-output">Loading...</div>
-    <div id="update-time" class="tag"></div>
+<div id="v-root" class="wrapper">
+    <h2 id="v-title">---</h2>
+    <div id="v-out">加載中...</div>
+    <div id="v-ts" class="ts"></div>
 </div>
 
 <script>
-    /* Security Config */
-    const _0x5a21 = "59CDEED56E59D686C10F6AC7931415B129AB50DFCAC346E3B037577027D5D190";
-    const _0x1f42 = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlI4V3JXRTBpaXhGdll2TGdyV3c4dTV0QlVhanJhME0xVXl6M0FFbHFxTHhmQ2xFdVh1RXg3MXVRam1KVTg4encvcHViP291dHB1dD1jc3Y=";
+    /* Data Security Configuration */
+    const _0x4a = "59CDEED56E59D686C10F6AC7931415B129AB50DFCAC346E3B037577027D5D190";
+    const _0x7b = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlI4V3JXRTBpaXhGdll2TGdyV3c4dTV0QlVhanJhME0xVXl6M0FFbHFxTHhmQ2xFdVh1RXg3MXVRam1KVTg4encvcHViP291dHB1dD1jc3Y=";
 
-    async function _hash(m) {
-        const b = new TextEncoder().encode(m);
+    async function _h(s) {
+        const b = new TextEncoder().encode(s);
         const h = await crypto.subtle.digest('SHA-256', b);
-        return Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, '0')).join('');
+        return Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
     }
 
     async function _init() {
-        if (sessionStorage.getItem('_v') === '1') {
-            _run();
+        if (sessionStorage.getItem('_auth') === '1') {
+            _exe();
             return;
         }
-        const p = prompt("Password");
+        const p = prompt("輸入密碼");
         if (!p) return;
-        if (await _hash(p) === _0x5a21) {
-            sessionStorage.setItem('_v', '1');
-            _run();
+        
+        // 轉為大寫比對以確保一致性
+        if (await _h(p.trim()) === _0x4a.toUpperCase()) {
+            sessionStorage.setItem('_auth', '1');
+            _exe();
         } else {
-            document.body.innerHTML = "Access Denied";
+            alert("密碼錯誤");
+            document.body.innerHTML = "<div style='text-align:center;margin-top:100px;font-size:24px;color:#999;'>🔒 Access Denied</div>";
         }
     }
 
-    function _run() {
-        document.getElementById('main-content').style.display = 'block';
-        document.getElementById('ui-title').innerText = "今彩539開獎號碼 (即時同步)";
-        _load();
+    function _exe() {
+        document.getElementById('v-root').style.display = 'block';
+        document.getElementById('v-title').innerText = "今彩539開獎數據 (同步中)";
+        _fetch();
     }
 
-    async function _load() {
+    async function _fetch() {
         try {
-            const u = atob(_0x1f42); // 解碼網址
+            const u = atob(_0x7b);
             const r = await fetch(`${u}&t=${Date.now()}`);
             const t = await r.text();
-            _render(t);
-            document.getElementById('update-time').innerText = "Last update: " + new Date().toLocaleString();
+            _draw(t);
+            document.getElementById('v-ts').innerText = "Last Synchronized: " + new Date().toLocaleString();
         } catch (e) {
-            document.getElementById('table-output').innerText = "Connection Error";
+            document.getElementById('v-out').innerText = "Connect Error";
         }
     }
 
-    function _render(csv) {
-        const lines = csv.split(/\r?\n/).filter(l => l.trim() !== "");
+    function _draw(csv) {
+        const row = csv.split(/\r?\n/).filter(l => l.trim() !== "");
+        if (row.length === 0) return;
+
         let h = '<table><thead><tr>';
-        lines[0].split(',').forEach(x => h += `<th>${x}</th>`);
+        row[0].split(',').forEach(x => h += `<th>${x}</th>`);
         h += '</tr></thead><tbody>';
 
-        for (let i = 1; i < lines.length; i++) {
+        for (let i = 1; i < row.length; i++) {
             h += '<tr>';
-            lines[i].split(',').forEach((c, j) => {
+            row[i].split(',').forEach((c, j) => {
                 const v = c.replace(/^"(.*)"$/, '$1').trim();
+                // 如果是開獎號碼相關欄位 (index >= 2 且包含數字)
                 if (j >= 2 && /[\d]{2}/.test(v)) {
-                    h += `<td class="ball">${v}</td>`;
+                    h += `<td class="val-hl">${v}</td>`;
                 } else {
                     h += `<td>${v}</td>`;
                 }
             });
             h += '</tr>';
         }
-        document.getElementById('table-output').innerHTML = h + '</tbody></table>';
+        document.getElementById('v-out').innerHTML = h + '</tbody></table>';
     }
 
     _init();
 </script>
 </body>
 </html>
-
