@@ -3,118 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>數據加載中...</title>
+    <title>System Loading...</title>
     <style>
-        /* 仿截圖風格的藍色調設計 */
-        :root {
-            --header-blue: #335495;
-            --bg-gray: #f0f2f5;
-            --lotto-red: #ff0000;
-        }
-        body { font-family: "Microsoft JhengHei", Arial, sans-serif; background: var(--bg-gray); margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: none; }
-        
-        h2 { text-align: center; color: var(--header-blue); border-bottom: 2px solid var(--header-blue); padding-bottom: 10px; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 15px; }
-        th { background-color: var(--header-blue); color: white; padding: 12px; border: 1px solid #ccc; }
-        td { padding: 10px; border: 1px solid #ddd; text-align: center; color: #333; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        tr:hover { background-color: #f1f4f9; }
-
-        /* 號碼球樣式 */
-        .ball { 
-            display: inline-block; width: 28px; height: 28px; line-height: 28px; 
-            background: var(--lotto-red); color: white; border-radius: 50%; 
-            font-weight: bold; margin: 2px; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); 
-        }
-        .update-tag { text-align: right; color: #888; font-size: 12px; margin-top: 10px; }
+        :root { --c-primary: #335495; --c-bg: #f0f2f5; --c-accent: #ff0000; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--c-bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: none; border: 1px solid #bbccdd; }
+        h2 { text-align: center; color: var(--c-primary); border-bottom: 2px solid var(--c-primary); padding-bottom: 10px; margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background-color: #f2f5f9; color: #445566; padding: 12px; border: 1px solid #bbccdd; }
+        td { padding: 10px; border: 1px solid #bbccdd; text-align: center; color: #333; }
+        tr:nth-child(even) { background-color: #fcfdfe; }
+        .ball { color: var(--c-accent); font-weight: bold; font-size: 18px; letter-spacing: 2px; }
+        .tag { text-align: right; color: #888; font-size: 11px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="main-content" class="container">
-    <h2>今彩539開獎號碼 (即時同步)</h2>
-    <div id="table-output">資料讀取中...</div>
-    <div id="update-time" class="update-tag"></div>
+    <h2 id="ui-title">Data Dashboard</h2>
+    <div id="table-output">Loading...</div>
+    <div id="update-time" class="tag"></div>
 </div>
 
 <script>
-    // ================== 設定區 ==================
-    const MY_PASSWORD = "888"; // 您的密碼
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8WrWE0iixFvYvLGrWw8u5tBUajra0M1Uyz3AElqqLxfClEuXuEx71uQjmJU88zw/pub?output=csv'; 
-    // ===========================================
+    /* Security Config */
+    const _0x5a21 = "e963553f191295b28d70659a8596660144d85e78696ecf768560155b46e336f3";
+    const _0x1f42 = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlI4V3JXRTBpaXhGdll2TGdyV3c4dTV0QlVhanJhME0xVXl6M0FFbHFxTHhmQ2xFdVh1RXg3MXVRam1KVTg4encvcHViP291dHB1dD1jc3Y=";
 
-    function auth() {
-        // 檢查此瀏覽階段是否已驗證過
-        if (sessionStorage.getItem('isVerified') === 'true') {
-            showContent();
+    async function _hash(m) {
+        const b = new TextEncoder().encode(m);
+        const h = await crypto.subtle.digest('SHA-256', b);
+        return Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function _init() {
+        if (sessionStorage.getItem('_v') === '1') {
+            _run();
             return;
         }
-
-        // 修改後的提示文字
-        const pass = prompt("輸入密碼");
-        
-        if (pass === MY_PASSWORD) {
-            sessionStorage.setItem('isVerified', 'true');
-            showContent();
-        } else if (pass !== null) {
-            alert("密碼錯誤");
-            document.body.innerHTML = "<h2 style='text-align:center;margin-top:100px;'>🔒 存取受限，請刷新頁面重新輸入</h2>";
+        const p = prompt("Password");
+        if (!p) return;
+        if (await _hash(p) === _0x5a21) {
+            sessionStorage.setItem('_v', '1');
+            _run();
+        } else {
+            document.body.innerHTML = "Access Denied";
         }
     }
 
-    function showContent() {
+    function _run() {
         document.getElementById('main-content').style.display = 'block';
-        document.title = "539數據看板";
-        loadData();
+        document.getElementById('ui-title').innerText = "今彩539開獎號碼 (即時同步)";
+        _load();
     }
 
-    async function loadData() {
+    async function _load() {
         try {
-            // fetch 加上時間戳，確保每次抓取都是最新的 Google Sheets 資料
-            const response = await fetch(`${CSV_URL}&t=${new Date().getTime()}`);
-            const csvText = await response.text();
-            renderTable(csvText);
-            document.getElementById('update-time').innerText = "最後更新日期：" + new Date().toLocaleString();
-        } catch (err) {
-            document.getElementById('table-output').innerHTML = "資料連線失敗，請檢查網路或 Google Sheets 發佈狀態。";
+            const u = atob(_0x1f42); // 解碼網址
+            const r = await fetch(`${u}&t=${Date.now()}`);
+            const t = await r.text();
+            _render(t);
+            document.getElementById('update-time').innerText = "Last update: " + new Date().toLocaleString();
+        } catch (e) {
+            document.getElementById('table-output').innerText = "Connection Error";
         }
     }
 
-    function renderTable(csv) {
-        // 依據換行符號切割，並過濾掉空白行
+    function _render(csv) {
         const lines = csv.split(/\r?\n/).filter(l => l.trim() !== "");
-        if (lines.length === 0) return;
-
-        let html = '<table><thead><tr>';
-        const headers = lines[0].split(',');
-        headers.forEach(h => html += `<th>${h}</th>`);
-        html += '</tr></thead><tbody>';
+        let h = '<table><thead><tr>';
+        lines[0].split(',').forEach(x => h += `<th>${x}</th>`);
+        h += '</tr></thead><tbody>';
 
         for (let i = 1; i < lines.length; i++) {
-            const cells = lines[i].split(',');
-            html += '<tr>';
-            cells.forEach((cell, index) => {
-                const cleanCell = cell.replace(/^"(.*)"$/, '$1').trim(); // 去除 Excel 可能帶有的引號
-                
-                // 邏輯：如果欄位內容看起來是多個號碼（如 05 12 16...）
-                if (index > 0 && /[\d]{2}/.test(cleanCell)) {
-                    const nums = cleanCell.split(/[\s,]+/);
-                    const balls = nums.map(n => `<span class="ball">${n}</span>`).join('');
-                    html += `<td>${balls}</td>`;
+            h += '<tr>';
+            lines[i].split(',').forEach((c, j) => {
+                const v = c.replace(/^"(.*)"$/, '$1').trim();
+                if (j >= 2 && /[\d]{2}/.test(v)) {
+                    h += `<td class="ball">${v}</td>`;
                 } else {
-                    html += `<td>${cleanCell}</td>`;
+                    h += `<td>${v}</td>`;
                 }
             });
-            html += '</tr>';
+            h += '</tr>';
         }
-        html += '</tbody></table>';
-        document.getElementById('table-output').innerHTML = html;
+        document.getElementById('table-output').innerHTML = h + '</tbody></table>';
     }
 
-    // 啟動程序
-    auth();
+    _init();
 </script>
 </body>
 </html>
