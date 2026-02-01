@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系統加載中...</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding-top: 50px; }
+        .lock-screen { text-align: center; background: white; padding: 40px; border-radius: 12px; shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .ball { display: inline-block; width: 28px; height: 28px; line-height: 28px; background: #e74c3c; color: white; border-radius: 50%; margin: 2px; font-weight: bold; font-size: 14px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background: #34495e; color: white; }
+    </style>
+</head>
+<body>
+
+<div id="main-content" style="display:none; width: 90%; max-width: 1000px;">
+    <h2 style="text-align:center;">今彩539走勢分佈圖 (即時同步)</h2>
+    <div id="table-output">資料讀取中...</div>
+</div>
+
+<script>
+    // 1. 設定您的觀看密碼
+    const MY_PASSWORD = "888"; 
+    // 2. 貼上您的 Google Sheet CSV 連結
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8WrWE0iixFvYvLGrWw8u5tBUajra0M1Uyz3AElqqLxfClEuXuEx71uQjmJU88zw/pub?output=csv';
+
+    function auth() {
+        const pass = prompt("此為私密頁面，請輸入授權碼：");
+        if (pass === MY_PASSWORD) {
+            document.getElementById('main-content').style.display = 'block';
+            document.title = "數據看板";
+            loadData();
+        } else {
+            alert("授權失敗");
+            document.body.innerHTML = "<h1>❌ 無權訪問</h1>";
+        }
+    }
+
+    async function loadData() {
+        try {
+            const response = await fetch(`${CSV_URL}&t=${new Date().getTime()}`);
+            const csvText = await response.text();
+            renderTable(csvText);
+        } catch (err) {
+            document.getElementById('table-output').innerHTML = "資料抓取失敗，請確認 Google Sheet 已發佈。";
+        }
+    }
+
+    function renderTable(csv) {
+        const lines = csv.split('\r\n').filter(l => l.trim() !== "");
+        let html = '<table><thead><tr>';
+        const headers = lines[0].split(',');
+        headers.forEach(h => html += `<th>${h}</th>`);
+        html += '</tr></thead><tbody>';
+
+        for (let i = 1; i < lines.length; i++) {
+            const cells = lines[i].split(',');
+            html += '<tr>';
+            cells.forEach((cell, index) => {
+                // 自動判斷：如果內容包含空格或逗號分隔的數字，轉為球狀
+                if (index > 0 && /[\d\s]{2,}/.test(cell)) {
+                    const balls = cell.trim().split(/[\s,]+/).map(n => `<span class="ball">${n}</span>`).join('');
+                    html += `<td>${balls}</td>`;
+                } else {
+                    html += `<td>${cell}</td>`;
+                }
+            });
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+        document.getElementById('table-output').innerHTML = html;
+    }
+
+    // 啟動驗證
+    auth();
+</script>
+</body>
+</html>
