@@ -3,53 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>系統加載中...</title>
+    <title>數據加載中...</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding-top: 50px; }
-        .lock-screen { text-align: center; background: white; padding: 40px; border-radius: 12px; shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .ball { display: inline-block; width: 28px; height: 28px; line-height: 28px; background: #e74c3c; color: white; border-radius: 50%; margin: 2px; font-weight: bold; font-size: 14px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-        th { background: #34495e; color: white; }
+        /* 仿截圖風格的藍色調設計 */
+        :root {
+            --header-blue: #335495;
+            --bg-gray: #f0f2f5;
+            --lotto-red: #ff0000;
+        }
+        body { font-family: "Microsoft JhengHei", Arial, sans-serif; background: var(--bg-gray); margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: none; }
+        
+        h2 { text-align: center; color: var(--header-blue); border-bottom: 2px solid var(--header-blue); padding-bottom: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 15px; }
+        th { background-color: var(--header-blue); color: white; padding: 12px; border: 1px solid #ccc; }
+        td { padding: 10px; border: 1px solid #ddd; text-align: center; color: #333; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f4f9; }
+
+        /* 號碼球樣式 */
+        .ball { 
+            display: inline-block; width: 28px; height: 28px; line-height: 28px; 
+            background: var(--lotto-red); color: white; border-radius: 50%; 
+            font-weight: bold; margin: 2px; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); 
+        }
+        .update-tag { text-align: right; color: #888; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div id="main-content" style="display:none; width: 90%; max-width: 1000px;">
-    <h2 style="text-align:center;">今彩539走勢分佈圖 (即時同步)</h2>
+<div id="main-content" class="container">
+    <h2>今彩539開獎號碼 (即時同步)</h2>
     <div id="table-output">資料讀取中...</div>
+    <div id="update-time" class="update-tag"></div>
 </div>
 
 <script>
-    // 1. 設定您的觀看密碼
-    const MY_PASSWORD = "888"; 
-    // 2. 貼上您的 Google Sheet CSV 連結
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8WrWE0iixFvYvLGrWw8u5tBUajra0M1Uyz3AElqqLxfClEuXuEx71uQjmJU88zw/pub?output=csv';
+    // ================== 設定區 ==================
+    const MY_PASSWORD = "888"; // 您的密碼
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR8WrWE0iixFvYvLGrWw8u5tBUajra0M1Uyz3AElqqLxfClEuXuEx71uQjmJU88zw/pub?output=csv'; 
+    // ===========================================
 
     function auth() {
-        const pass = prompt("此為私密頁面，請輸入授權碼：");
-        if (pass === MY_PASSWORD) {
-            document.getElementById('main-content').style.display = 'block';
-            document.title = "數據看板";
-            loadData();
-        } else {
-            alert("授權失敗");
-            document.body.innerHTML = "<h1>❌ 無權訪問</h1>";
+        // 檢查此瀏覽階段是否已驗證過
+        if (sessionStorage.getItem('isVerified') === 'true') {
+            showContent();
+            return;
         }
+
+        // 修改後的提示文字
+        const pass = prompt("輸入密碼");
+        
+        if (pass === MY_PASSWORD) {
+            sessionStorage.setItem('isVerified', 'true');
+            showContent();
+        } else if (pass !== null) {
+            alert("密碼錯誤");
+            document.body.innerHTML = "<h2 style='text-align:center;margin-top:100px;'>🔒 存取受限，請刷新頁面重新輸入</h2>";
+        }
+    }
+
+    function showContent() {
+        document.getElementById('main-content').style.display = 'block';
+        document.title = "539數據看板";
+        loadData();
     }
 
     async function loadData() {
         try {
+            // fetch 加上時間戳，確保每次抓取都是最新的 Google Sheets 資料
             const response = await fetch(`${CSV_URL}&t=${new Date().getTime()}`);
             const csvText = await response.text();
             renderTable(csvText);
+            document.getElementById('update-time').innerText = "最後更新日期：" + new Date().toLocaleString();
         } catch (err) {
-            document.getElementById('table-output').innerHTML = "資料抓取失敗，請確認 Google Sheet 已發佈。";
+            document.getElementById('table-output').innerHTML = "資料連線失敗，請檢查網路或 Google Sheets 發佈狀態。";
         }
     }
 
     function renderTable(csv) {
-        const lines = csv.split('\r\n').filter(l => l.trim() !== "");
+        // 依據換行符號切割，並過濾掉空白行
+        const lines = csv.split(/\r?\n/).filter(l => l.trim() !== "");
+        if (lines.length === 0) return;
+
         let html = '<table><thead><tr>';
         const headers = lines[0].split(',');
         headers.forEach(h => html += `<th>${h}</th>`);
@@ -59,12 +96,15 @@
             const cells = lines[i].split(',');
             html += '<tr>';
             cells.forEach((cell, index) => {
-                // 自動判斷：如果內容包含空格或逗號分隔的數字，轉為球狀
-                if (index > 0 && /[\d\s]{2,}/.test(cell)) {
-                    const balls = cell.trim().split(/[\s,]+/).map(n => `<span class="ball">${n}</span>`).join('');
+                const cleanCell = cell.replace(/^"(.*)"$/, '$1').trim(); // 去除 Excel 可能帶有的引號
+                
+                // 邏輯：如果欄位內容看起來是多個號碼（如 05 12 16...）
+                if (index > 0 && /[\d]{2}/.test(cleanCell)) {
+                    const nums = cleanCell.split(/[\s,]+/);
+                    const balls = nums.map(n => `<span class="ball">${n}</span>`).join('');
                     html += `<td>${balls}</td>`;
                 } else {
-                    html += `<td>${cell}</td>`;
+                    html += `<td>${cleanCell}</td>`;
                 }
             });
             html += '</tr>';
@@ -73,7 +113,7 @@
         document.getElementById('table-output').innerHTML = html;
     }
 
-    // 啟動驗證
+    // 啟動程序
     auth();
 </script>
 </body>
