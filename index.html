@@ -9,25 +9,33 @@
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
-        .guide-box { background: #fffde7; border-left: 5px solid var(--gold); padding: 10px; margin-bottom: 10px; line-height: 1.6; }
+        
+        /* 模式指引樣式 */
+        .guide-box { background: #fffde7; border-left: 5px solid var(--gold); padding: 12px; margin-bottom: 10px; line-height: 1.6; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .guide-box b { color: #d32f2f; }
+
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
         .f-item { padding: 4px 12px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
         .f-item.active { background: var(--blue-t); color: white; }
         .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
+        
         .action-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 8px; }
         .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .yellow-btn.active { background: #ff9800 !important; color: white; }
         .add-btn { background: #4CAF50; color: white; border: 1px solid #000; padding: 8px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        
         .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; min-height: 500px; }
         .scroll-area { overflow: auto; max-height: 500px; }
         table { border-collapse: collapse; width: 100%; white-space: nowrap; }
         th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
-        tfoot tr { background: #fff5f5; font-weight: bold; color: #f44336; }
+        .num-cell { font-weight: bold; width: 25px; }
+
+        /* 報表樣式 */
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
-        .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; }
+        .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; border-bottom: 2px solid #333; }
+        tfoot tr { background: #fff5f5; font-weight: bold; color: #f44336; }
         .hit-count { color: #f44336; font-weight: bold; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; }
         .hidden { display: none; }
@@ -42,7 +50,7 @@
     </div>
 
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">正在連線至 Google 試算表載入數據...</div>
+        <div id="modeGuide" class="guide-box">正在連線至 Google 試算表載入最新數據...</div>
 
         <div class="filter-panel">
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
@@ -77,37 +85,39 @@
 </div>
 
 <script>
-    // Google 試算表 CSV 導出路徑 (基於您提供的連結轉換)
+    // 您的 Google 試算表 CSV 發佈連結
     const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
 
     let db = [];
     let currentMode = 'history';
     let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
 
+    // 各模式操作指引文字
     const guideText = {
-        history: "<b>【歷史統計】指引：</b>直接選取條件即可篩選分佈圖。報表將統計符合條件的所有數據。",
-        tuopai: "<b>【拖牌模式】指引：</b>每個項目必須點選 <b>2 個</b>，再加上 <b>1 個號碼</b>。邏輯：上期開 X 號，下期開什麼。",
-        duipeng_curr: "<b>【當期對碰】指引：</b>統計篩選期數內，哪些號碼最常同時出現。報表僅<b>次數</b>顯示紅字。",
-        duipeng: "<b>【下期對碰】指引：</b>每個項目點選 <b>2 個</b>，再加上 <b>2 個對碰號碼</b>。邏輯：上期開 X,Y 號，下期開什麼。"
+        history: "<b>【歷史統計】指引：</b><br>1. 直接點選左方條件。分佈圖會即時同步顯示符合條件的期數。<br>2. 點擊「加入報表」可統計所有選定條件的出現次數與排名。",
+        tuopai: "<b>【拖牌模式】指引：</b><br>1. 每個項目（如週、天干等）<b>必須點選 2 個</b>（代表順序關係）。<br>2. <b>必須點選 1 個號碼</b>。<br>3. 邏輯：當第一期符合條件 A 且開出 X 號，第二期符合條件 B 時，計算第二期號碼分佈。",
+        duipeng_curr: "<b>【當期對碰】指引：</b><br>1. 篩選特定條件。系統會計算這些期數中，哪些號碼最常「同時」開出。<br>2. 報表中，<b>次數</b>將以紅字顯示。",
+        duipeng: "<b>【下期對碰】指引：</b><br>1. 每個項目<b>必須點選 2 個</b>。<br>2. <b>必須點選 2 個對碰號碼</b>。<br>3. 邏輯：第一期符合條件 A 且同時開出 X,Y 兩號，第二期符合條件 B 時，計算下期分佈。"
     };
 
-    // 自動加載雲端數據
+    // 自動連線 Google 試算表
     async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const csvText = await response.text();
             const workbook = XLSX.read(csvText, { type: 'string' });
             const sheetName = workbook.SheetNames[0];
+            // 解析數據並過濾無效列
             db = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 })
-                 .filter(row => row[0] && !isNaN(row[0])); // 過濾標頭與空行
+                 .filter(row => row[0] && !isNaN(row[0])); 
             
             renderGrid();
-            document.getElementById('fileMsg').innerText = `雲端連線成功：共 ${db.length} 期`;
-            setMode('history');
+            document.getElementById('fileMsg').innerText = `雲端同步成功：共 ${db.length} 期`;
+            setMode('history'); // 預設歷史統計指引
         } catch (error) {
             console.error(error);
-            document.getElementById('fileMsg').innerText = "雲端載入失敗，請檢查網路";
-            document.getElementById('modeGuide').innerHTML = "<b style='color:red'>錯誤：無法讀取試算表。請確認 Google 試算表已「發佈到網路」並選擇 CSV 格式。</b>";
+            document.getElementById('fileMsg').innerText = "雲端載入失敗";
+            document.getElementById('modeGuide').innerHTML = "<b style='color:red'>錯誤：無法讀取雲端試算表，請確認網路連線。</b>";
         }
     }
 
@@ -150,6 +160,7 @@
         if(idx > -1) { 
             arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); 
         } else {
+            // 拖牌與下期對碰逻辑：項目限選2個
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && arr.length >= 2) return;
             arr.push(val); el.classList.add('active');
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums') el.setAttribute('data-order', arr.length);
@@ -192,9 +203,10 @@
         else hasResult = reportHistory(list);
 
         if(hasResult) switchPage('repo');
-        else alert("無符合條件之數據");
+        else alert("無符合條件之數據，請檢查篩選項目數量是否正確。");
     }
 
+    // 渲染函數：最後一列加總
     function renderTableWithTotal(container, title, rows) {
         const card = document.createElement('div');
         card.className = 'report-card';
@@ -221,6 +233,7 @@
         return true;
     }
 
+    // 當期對碰
     function reportDuiPengCurr(container) {
         let matrix = Array.from({length:40}, () => Array(40).fill(0));
         let matchCount = 0;
@@ -256,6 +269,7 @@
         return true;
     }
 
+    // 拖牌邏輯
     function reportTuoPai(container) {
         const results = [];
         filters.nums.forEach(num => {
@@ -275,6 +289,7 @@
         return results.length ? renderTableWithTotal(container, "拖牌分析報表", results) : false;
     }
 
+    // 下期對碰
     function reportDuiPengNext(container) {
         const results = [];
         let pairs = [];
@@ -297,6 +312,7 @@
         return results.length ? renderTableWithTotal(container, "下期對碰分析報表", results) : false;
     }
 
+    // 歷史統計
     function reportHistory(container) {
         const results = [];
         ['week','tian','di','solar'].forEach(cat => {
@@ -336,8 +352,7 @@
         db.forEach((row, idx) => {
             const tr = document.createElement('tr'); tr.id = `row-${idx}`;
             for(let i=0; i<11; i++){
-                const td = document.createElement('td'); 
-                td.innerText = row[i] || '';
+                const td = document.createElement('td'); td.innerText = row[i] || '';
                 tr.appendChild(td);
             }
             for(let n=1; n<=39; n++){
