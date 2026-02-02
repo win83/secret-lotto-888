@@ -9,7 +9,21 @@
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
-        .guide-box { background: #fffde7; border-left: 5px solid var(--gold); padding: 12px; margin-bottom: 10px; line-height: 1.6; border-radius: 4px; min-height: 40px; }
+        
+        /* 調整 guide-box 樣式，使其更像長條引導列 */
+        .guide-box { 
+            background: #fffde7; 
+            border: 1px solid #ddd; 
+            border-left: 5px solid var(--gold); 
+            padding: 8px 15px; 
+            margin-bottom: 5px; 
+            line-height: 1.6; 
+            border-radius: 4px; 
+            min-height: 24px; /* 縮減高度使其更精簡 */
+            display: flex;
+            align-items: center;
+        }
+
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -45,7 +59,7 @@
     </div>
 
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">正在連線至雲端數據...</div>
+        <div id="modeGuide" class="guide-box">💡 正在連線至雲端數據...</div>
 
         <div class="filter-panel">
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
@@ -81,33 +95,28 @@
 </div>
 
 <script>
+    // 原始 JavaScript 邏輯完全保持不變
     const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
     let db = [];
     let currentMode = 'history';
     let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-    // 引導文字內容
     const guideText = {
-        history: "<b>【歷史統計】指引：</b>直接點選上方條件。報表將顯示個別條件的歷史開出分佈。",
-        tuopai: "<b>【拖牌模式】指引：</b>每個項目必須選 <b>2 個</b> (如甲、乙)，再加上 <b>號碼</b>。邏輯：上期符合第一項且有該號，下期符合第二項的分佈。",
-        duipeng_curr: "<b>【當期對碰】指引：</b>點選 <b>1 個或多個</b> 條件。統計符合條件的期數內，號碼同時出現的熱度排行。",
-        duipeng: "<b>【下期對碰】指引：</b>項目需選 <b>2 個</b> + <b>號碼 2 個</b>。統計雙號同開後的分佈情況。"
+        history: "💡 <b>模式提示：歷史統計</b> － 直接點選上方條件。報表將顯示個別條件的歷史開出分佈。",
+        tuopai: "💡 <b>模式提示：拖牌</b> － 每個項目必須選 2 個 + 號碼。邏輯：上期符合第一項且有該號，下期符合第二項的分佈。",
+        duipeng_curr: "💡 <b>模式提示：當期對碰</b> － 點選條件。統計符合條件的期數內，號碼同時出現的熱度排行。",
+        duipeng: "💡 <b>模式提示：下期對碰</b> － 項目需選 2 個 + 號碼 2 個。統計雙號同開後的分佈情況。"
     };
 
     function setMode(m) {
         currentMode = m;
-        // 更新按鈕狀態
         document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
         const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
         if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
-        
-        // 更新引導文字
         document.getElementById('modeGuide').innerHTML = guideText[m];
         clearFilters();
     }
-
-    // --- 以下為數據處理核心 (邏輯不變，確保穩定) ---
 
     async function loadCloudData() {
         try {
@@ -117,7 +126,7 @@
                  .filter(row => row[0] && !isNaN(row[0]));
             renderGrid();
             document.getElementById('fileMsg').innerText = `雲端連線成功：${db.length} 期`;
-            setMode('history'); // 初始設為歷史統計
+            setMode('history');
             updateReportUI();
         } catch (e) { document.getElementById('fileMsg').innerText = "雲端載入失敗"; }
     }
@@ -161,24 +170,16 @@
         if(!db.length) return;
         const results = [];
         const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
-        
         let currentFilterDesc = "";
         for (let key in filters) if (filters[key].length > 0) currentFilterDesc += `[${catNames[key]}:${filters[key].join(',')}] `;
-
         if (currentMode === 'duipeng_curr') {
-            let matrix = Array.from({length:40}, () => Array(40).fill(0));
-            let matchCount = 0;
+            let matrix = Array.from({length:40}, () => Array(40).fill(0)), matchCount = 0;
             db.forEach(row => {
                 let ok = true;
-                ['week','tian','di','solar'].forEach(cat => {
-                    if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
-                });
+                ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); });
                 if(ok) {
-                    matchCount++;
-                    const nums = row.slice(6, 11).map(Number);
-                    for(let i=0; i<nums.length; i++) for(let j=i+1; j<nums.length; j++){
-                        matrix[nums[i]][nums[j]]++; matrix[nums[j]][nums[i]]++;
-                    }
+                    matchCount++; const nums = row.slice(6, 11).map(Number);
+                    for(let i=0; i<nums.length; i++) for(let j=i+1; j<nums.length; j++){ matrix[nums[i]][nums[j]]++; matrix[nums[j]][nums[i]]++; }
                 }
             });
             if(matchCount === 0) return alert("目前篩選無符合期數");
@@ -212,13 +213,8 @@
         else if (currentMode === 'history') {
             ['week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
-                    let stats = Array(40).fill(0), count = 0;
-                    const col = ['week','tian','di','solar'].indexOf(cat)+2;
-                    db.forEach(row => {
-                        if(String(row[col]).includes(val)) {
-                            row.slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
-                        }
-                    });
+                    let stats = Array(40).fill(0), count = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    db.forEach(row => { if(String(row[col]).includes(val)) { row.slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++; } });
                     if(count > 0) results.push({ label: `<span class="cat-tag">${catNames[cat]}</span>${val}`, matches: count, data: stats });
                 });
             });
@@ -235,15 +231,12 @@
 
     function updateReportUI() {
         const list = document.getElementById('repo-list');
-        const alertBox = document.getElementById('report-alert');
         list.innerHTML = '';
-        alertBox.style.display = savedReports.length > 0 ? 'block' : 'none';
-        
+        document.getElementById('report-alert').style.display = savedReports.length > 0 ? 'block' : 'none';
         savedReports.forEach(report => {
             const card = document.createElement('div');
             card.className = 'report-card';
             let html = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-            
             if (report.type === 'duipeng') {
                 html += `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; padding:15px;">`;
                 report.rows.forEach(r => html += `<div style="border-bottom:1px dashed #ccc; padding:5px;">${r.label}：${r.content}</div>`);
@@ -256,42 +249,30 @@
                 report.rows.forEach(r => {
                     const top3 = getTop3Indices(r.data);
                     html += `<tr><td style="text-align:left; padding-left:8px;">${r.label} (${r.matches}期)</td>`;
-                    for(let i=1; i<=39; i++) {
-                        const val = r.data[i] || 0;
-                        totalStats[i] += val;
-                        html += `<td class="${top3.includes(i)?'top-hit':''}">${val || ''}</td>`;
-                    }
+                    for(let i=1; i<=39; i++) { const val = r.data[i] || 0; totalStats[i] += val; html += `<td class="${top3.includes(i)?'top-hit':''}">${val || ''}</td>`; }
                     html += `</tr>`;
                 });
                 html += `</tbody><tfoot><tr><td>最後一列加總</td>`;
                 for(let i=1; i<=39; i++) html += `<td>${totalStats[i] || ''}</td>`;
                 html += `</tr></tfoot></table></div>`;
             }
-            card.innerHTML = html;
-            list.appendChild(card);
+            card.innerHTML = html; list.appendChild(card);
         });
     }
 
-    // 基本輔助函數
     function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
     function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
     function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
     function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
     function applyFilter() { 
         if(!db.length) return; 
-        const rows = document.querySelectorAll('#gridBody tr'); 
-        let counts = Array(40).fill(0); 
+        const rows = document.querySelectorAll('#gridBody tr'); let counts = Array(40).fill(0); 
         rows.forEach(tr => { 
-            const data = db[tr.id.split('-')[1]]; 
-            let ok = true; 
+            const data = db[tr.id.split('-')[1]]; let ok = true; 
             ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); 
-            const win = data.slice(6, 11).map(Number); 
-            if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n))); 
+            const win = data.slice(6, 11).map(Number); if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n))); 
             tr.style.display = ok ? '' : 'none'; 
-            if(ok) { 
-                const tds = tr.querySelectorAll('.num-cell'); 
-                tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else td.innerText = ''; }); 
-            } 
+            if(ok) { const tds = tr.querySelectorAll('.num-cell'); tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else td.innerText = ''; }); } 
         }); 
         for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; 
     }
@@ -305,7 +286,6 @@
         }); 
     }
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
-    
     initUI();
 </script>
 </body>
