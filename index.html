@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>539 專業回測系統 - 雲端自動同步版</title>
+    <title>539 專業回測系統 - 雲端同步版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --green-border: #8bc34a; }
@@ -80,7 +80,7 @@
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" id="btnAddRepo" onclick="generateBatchReport()">加入報表</button>
             <button onclick="clearFilters()">清空篩選</button>
-            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">嘗試連結試算表...</span>
         </div>
         <div class="scroll-area">
             <table>
@@ -109,34 +109,40 @@
 </div>
 
 <script>
-    // --- 遠端連結設定 ---
-    // 請將原本的 pubhtml 改成這個連結
+    // 自動連結試算表網址 (已修正結尾格式)
     const excelUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=xlsx';
 
     let db = [];
     let currentMode = null;
     let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
 
-    // 自動初始化與抓取資料
-    window.onload = async () => {
+    window.onload = () => {
         initUI();
-        await fetchRemoteExcel();
+        fetchRemoteData();
     };
 
-    async function fetchRemoteExcel() {
+    async function fetchRemoteData() {
         const msg = document.getElementById('fileMsg');
         try {
-            const response = await fetch(excelUrl);
+            // 加入時間戳防止快取
+            const finalUrl = excelUrl + '&t=' + new Date().getTime();
+            const response = await fetch(finalUrl);
+            if (!response.ok) throw new Error("Fetch 失敗");
+            
             const arrayBuffer = await response.arrayBuffer();
             const data = new Uint8Array(arrayBuffer);
             const wb = XLSX.read(data, {type: 'array'});
-            db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(row => row[0] && !isNaN(row[0]));
+            
+            db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1})
+                     .filter(row => row[0] && !isNaN(row[0]));
+            
             renderGrid();
-            msg.innerText = `已連線更新： ${db.length} 期`;
+            msg.innerText = `已同步雲端資料： ${db.length} 期`;
             msg.style.color = 'green';
-        } catch (e) {
-            console.error(e);
-            msg.innerText = "連線失敗，請檢查 URL";
+        } catch (err) {
+            console.error(err);
+            msg.innerText = "連線失敗，請檢查網路或發佈設定";
+            msg.style.color = 'red';
         }
     }
 
@@ -163,7 +169,6 @@
         }
     }
 
-    // --- 以下為原本邏輯，完全保留不更動 ---
     function handleItem(el, type, val) {
         if (!currentMode) return alert("請先選擇分析模式");
         const arr = filters[type]; const idx = arr.indexOf(val);
@@ -404,4 +409,3 @@
 </script>
 </body>
 </html>
-
