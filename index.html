@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 對碰條件強化版</title>
+    <title>539 專業回測系統 - 優化版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
@@ -27,8 +27,12 @@
         th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
         .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .report-title span { max-width: 80%; line-height: 1.4; }
+        
+        /* 報表底部加總樣式：黃底紅字 */
+        tfoot tr td { background: #ffff00 !important; color: #f44336 !important; font-weight: bold !important; border: 1px solid #333 !important; }
+        
         .hit-count { color: #f44336; font-weight: bold; }
+        .top-hit { background-color: #ffff00 !important; font-weight: bold; }
         .hidden { display: none; }
         .cat-tag { background: #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
     </style>
@@ -122,6 +126,7 @@
         const arr = filters[type]; const idx = arr.indexOf(val);
         if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
         else {
+            // 只有拖牌與下期對碰才限制項目點選 2 個
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && arr.length >= 2) return;
             arr.push(val); el.classList.add('active');
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums') el.setAttribute('data-order', arr.length);
@@ -129,14 +134,11 @@
         applyFilter();
     }
 
-    // 取得當前篩選條件的文字描述
     function getFilterDescription() {
         let desc = [];
         const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
         for (let key in filters) {
-            if (filters[key].length > 0) {
-                desc.push(`[${catNames[key]}:${filters[key].join(',')}]`);
-            }
+            if (filters[key].length > 0) desc.push(`[${catNames[key]}:${filters[key].join(',')}]`);
         }
         return desc.length > 0 ? desc.join(' ') : "全部數據";
     }
@@ -164,7 +166,6 @@
             });
             if(matchCount === 0) return alert("無數據");
             
-            // 構建對碰報表特殊的 rows 結構
             let pairsData = [];
             for(let i=1; i<=39; i++) {
                 let pairs = [];
@@ -194,6 +195,7 @@
                 });
             });
             if(results.length) saveAndRender("拖牌分析報表", results, 'table');
+            else alert("拖牌模式：項目需選2個 + 號碼1個");
         }
         else if (currentMode === 'history') {
             ['week','tian','di','solar'].forEach(cat => {
@@ -233,7 +235,7 @@
             
             if (report.type === 'duipeng') {
                 html += `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; padding:15px;">`;
-                report.rows.forEach(r => html += `<div style="border-bottom:1px dashed #ccc; padding:5px;">${r.label}：碰 ${r.content}</div>`);
+                report.rows.forEach(r => html += `<div style="border-bottom:1px dashed #ccc; padding:5px;">${r.label}：${r.content}</div>`);
                 html += `</div>`;
             } else {
                 let totalStats = Array(40).fill(0);
@@ -250,7 +252,7 @@
                     }
                     html += `</tr>`;
                 });
-                html += `</tbody><tfoot><tr><td>加總</td>`;
+                html += `</tbody><tfoot><tr><td>最後一列加總</td>`;
                 for(let i=1; i<=39; i++) html += `<td>${totalStats[i] || ''}</td>`;
                 html += `</tr></tfoot></table></div>`;
             }
@@ -259,14 +261,46 @@
         });
     }
 
-    // 其餘輔助函數 (deleteReport, clearAllReports, applyFilter, renderGrid 等) 同前版...
     function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
-    function clearAllReports() { if(confirm("清空報表？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
+    function clearAllReports() { if(confirm("確定清空所有報表紀錄？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
     function setMode(m) { currentMode = m; document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); const sel = {history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d'}[m]; if(document.querySelector(sel)) document.querySelector(sel).classList.add('active'); clearFilters(); }
     function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
     function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
-    function applyFilter() { if(!db.length) return; const rows = document.querySelectorAll('#gridBody tr'); let counts = Array(40).fill(0); rows.forEach(tr => { const data = db[tr.id.split('-')[1]]; let ok = true; ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); const win = data.slice(6, 11).map(Number); if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n))); tr.style.display = ok ? '' : 'none'; if(ok) { const tds = tr.querySelectorAll('.num-cell'); tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else { td.innerText = ''; } }); } }); for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; }
-    function renderGrid() { const body = document.getElementById('gridBody'); body.innerHTML = ''; db.forEach((row, idx) => { const tr = document.createElement('tr'); tr.id = `row-${idx}`; for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } body.appendChild(tr); }); applyFilter(); }
+    
+    function applyFilter() { 
+        if(!db.length) return; 
+        const rows = document.querySelectorAll('#gridBody tr'); 
+        let counts = Array(40).fill(0); 
+        rows.forEach(tr => { 
+            const data = db[tr.id.split('-')[1]]; 
+            let ok = true; 
+            ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); 
+            const win = data.slice(6, 11).map(Number); 
+            if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n))); 
+            tr.style.display = ok ? '' : 'none'; 
+            if(ok) { 
+                const tds = tr.querySelectorAll('.num-cell'); 
+                tds.forEach(td => { 
+                    const n = parseInt(td.getAttribute('data-n')); 
+                    if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } 
+                    else td.innerText = ''; 
+                }); 
+            } 
+        }); 
+        for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; 
+    }
+
+    function renderGrid() { 
+        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
+        db.forEach((row, idx) => { 
+            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
+            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
+            for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
+            body.appendChild(tr); 
+        }); 
+        applyFilter();
+    }
+    
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
     initUI();
 </script>
