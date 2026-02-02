@@ -3,27 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 指引修復版</title>
+    <title>539 專業回測系統 - 完整功能版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
-        
-        /* 調整 guide-box 樣式，使其更像長條引導列 */
-        .guide-box { 
-            background: #fffde7; 
-            border: 1px solid #ddd; 
-            border-left: 5px solid var(--gold); 
-            padding: 8px 15px; 
-            margin-bottom: 5px; 
-            line-height: 1.6; 
-            border-radius: 4px; 
-            min-height: 24px; /* 縮減高度使其更精簡 */
-            display: flex;
-            align-items: center;
-        }
-
+        .guide-box { background: #fffde7; border: 1px solid #ddd; border-left: 5px solid var(--gold); padding: 8px 15px; margin-bottom: 5px; line-height: 1.6; border-radius: 4px; min-height: 24px; display: flex; align-items: center; }
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -41,10 +27,7 @@
         th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
         .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* 最後一列加總：黃底紅字 */
         tfoot tr td { background: #ffff00 !important; color: #f44336 !important; font-weight: bold !important; }
-        
         .top-hit { background-color: #ffff00 !important; font-weight: bold; }
         .hidden { display: none; }
         .cat-tag { background: #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
@@ -95,7 +78,6 @@
 </div>
 
 <script>
-    // 原始 JavaScript 邏輯完全保持不變
     const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
     let db = [];
     let currentMode = 'history';
@@ -166,12 +148,14 @@
         applyFilter();
     }
 
+    // 核心邏輯修正：補全「下期對碰」報表處理
     function generateBatchReport() {
         if(!db.length) return;
         const results = [];
         const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
-        let currentFilterDesc = "";
-        for (let key in filters) if (filters[key].length > 0) currentFilterDesc += `[${catNames[key]}:${filters[key].join(',')}] `;
+        let filterDesc = "";
+        for (let key in filters) if (filters[key].length > 0) filterDesc += `[${catNames[key]}:${filters[key].join(',')}] `;
+
         if (currentMode === 'duipeng_curr') {
             let matrix = Array.from({length:40}, () => Array(40).fill(0)), matchCount = 0;
             db.forEach(row => {
@@ -190,8 +174,29 @@
                 pList.sort((a,b) => b.v - a.v);
                 if(pList.length > 0) pairsData.push({ label: `號碼 ${i}`, content: pList.slice(0,3).map(p=>`${p.n}(<span style="color:red;font-weight:bold">${p.v}次</span>)`).join(', ') });
             }
-            saveAndRender(`當期對碰排行 - ${currentFilterDesc} (共${matchCount}期)`, pairsData, 'duipeng');
+            saveAndRender(`當期對碰排行 - ${filterDesc}`, pairsData, 'duipeng');
         } 
+        else if (currentMode === 'duipeng') {
+            // 下期對碰邏輯：選2項+選2號碼
+            if (filters.nums.length < 2) return alert("下期對碰：請至少選擇 2 個號碼");
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2) {
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    let stats = Array(40).fill(0), count = 0;
+                    for(let i=1; i<db.length; i++){
+                        const prevWin = db[i-1].slice(6,11).map(Number);
+                        // 判斷上期是否符合條件1且包含所選的2個號碼，本期是否符合條件2
+                        if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && 
+                           filters.nums.every(n => prevWin.includes(Number(n)))){
+                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
+                        }
+                    }
+                    if(count > 0) results.push({ label: `[對碰:${filters.nums.join(',')}] <span class="cat-tag">${catNames[cat]}</span>${v1}→${v2}`, matches: count, data: stats });
+                }
+            });
+            if(results.length) saveAndRender("下期對碰報表", results, 'table');
+            else alert("未找到符合條件的數據 (需符合條件轉換且號碼同開)");
+        }
         else if (currentMode === 'tuopai') {
             filters.nums.forEach(num => {
                 ['week','tian','di','solar'].forEach(cat => {
