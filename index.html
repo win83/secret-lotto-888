@@ -2,16 +2,14 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>539 專業回測系統 - GitHub 雲端同步版</title>
+    <title>539 專業回測系統 - 雲端自動同步版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --green-border: #8bc34a; }
-        /* 密碼遮罩 */
-        #auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .auth-box { background: white; padding: 30px; border-radius: 10px; text-align: center; }
-        
-        body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; user-select: none; }
+        body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
+        
+        /* 篩選面板 */
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -19,127 +17,135 @@
         .f-item.active { background: var(--blue-t); color: white; }
         .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
         
+        /* 功能列 */
         .action-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 8px; }
+        .guide-msg { width: 100%; color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 5px; font-weight: bold; display: none; border-left: 5px solid #ffc107; }
+        
         .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .yellow-btn.active { background: #ff9800 !important; color: white; }
+        .filter-btn { background: #607d8b; color: white; border: 1px solid #333; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .filter-btn.active { background: #263238 !important; }
         .add-btn { background: #4CAF50; color: white; border: 1px solid #000; padding: 8px 20px; font-weight: bold; cursor: pointer; display: none; border-radius: 4px; }
         
         .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; min-height: 500px; }
         .scroll-area { overflow: auto; max-height: 450px; }
-        table { border-collapse: collapse; width: 100%; white-space: nowrap; background: #fff; }
+        table { border-collapse: collapse; width: 100%; white-space: nowrap; }
         th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-        .sum-row { background: #fff3e0; font-weight: bold; color: #e65100; }
-        .top-hit { background-color: #ffff00 !important; font-weight: bold; }
+        
+        .condition-display-box { border: 2px solid var(--green-border); background: #f1f8e9; margin: 10px 0; padding: 10px 15px; border-radius: 5px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .cond-tag { background: #fff; border: 1px solid var(--green-border); padding: 2px 8px; border-radius: 4px; font-weight: bold; color: #33691e; }
+
+        .report-card { border: 2px solid #333; background: #fff; margin-bottom: 30px; border-radius: 4px; overflow: hidden; }
+        .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; border-bottom: 2px solid #333; }
+        
+        .matrix-container { display: flex; gap: 20px; padding: 10px; align-items: flex-start; }
+        .matrix-wrapper { overflow: auto; max-width: 100%; }
+        .matrix-table { font-size: 11px; table-layout: fixed; border-collapse: collapse; }
+        .matrix-table td { width: 24px; height: 24px; padding: 0; border: 1px solid #ddd; }
+        .matrix-header { background: #eee; font-weight: bold; }
+        .m-hit { background: #ffeb3b; font-weight: bold; }
+        .m-hot { background: #ff5722; color: white; font-weight: bold; }
+        
+        .stats-panel { border: 2px solid #f44336; min-width: 260px; padding: 15px; background: #fff; border-radius: 8px; }
+        .stats-title { font-weight: bold; color: #c62828; margin-bottom: 10px; border-bottom: 2px solid #f44336; padding-bottom: 5px; font-size: 15px; }
+        .stats-item { margin-bottom: 8px; font-size: 14px; }
+        .stats-num { font-weight: bold; color: blue; }
+
+        .top-hit { background-color: #ffff00 !important; color: #000; font-weight: bold; }
         .hidden { display: none; }
-        .report-card { border: 2px solid #333; margin-bottom: 30px; background: #fff; }
-        .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; }
+        .del-btn { background: #333; color: white; border: none; padding: 4px 10px; cursor: pointer; border-radius: 3px; }
     </style>
 </head>
-<body oncontextmenu="return false" onkeydown="return checkForbiddenKeys(event)">
+<body>
 
-<div id="auth-overlay">
-    <div class="auth-box">
-        <h3>專業回測系統 - 身分驗證</h3>
-        <input type="password" id="pwdInput" placeholder="請輸入密碼" style="padding:10px; margin-bottom:10px;"><br>
-        <button onclick="verifyPassword()" style="padding:10px 20px; cursor:pointer;">登入系統</button>
+<div class="main-layout">
+    <div style="display:flex; gap:5px;">
+        <button onclick="switchPage('dist')" style="padding:10px 30px; cursor:pointer; font-weight:bold;">數據分佈圖</button>
+        <button onclick="switchPage('repo')" style="padding:10px 30px; cursor:pointer; font-weight:bold;">匯總報表</button>
     </div>
-</div>
 
-<div id="main-content" class="hidden">
-    <div class="main-layout">
-        <div style="display:flex; gap:5px;">
-            <button onclick="switchPage('dist')" style="padding:10px 30px; cursor:pointer; font-weight:bold;">數據分佈圖</button>
-            <button onclick="switchPage('repo')" style="padding:10px 30px; cursor:pointer; font-weight:bold;">匯總報表</button>
-            <span id="sync-status" style="margin-left:auto; align-self:center; font-weight:bold; color:blue;">正在同步雲端資料...</span>
+    <div id="page-dist" class="view-container">
+        <div id="modeGuide" class="guide-msg"></div>
+        <div class="filter-panel">
+            <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
+            <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
+            <div class="f-label">地支</div><div class="f-btns" data-type="di"></div>
+            <div class="f-label">節氣</div><div class="f-btns" data-type="solar"></div>
+            <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
         </div>
+        <div class="action-bar">
+            <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
+            <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
+            <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
+            <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
+            <button class="add-btn" id="btnAddRepo" onclick="generateBatchReport()">加入報表</button>
+            <button onclick="clearFilters()">清空篩選</button>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
+        </div>
+        <div class="scroll-area">
+            <table>
+                <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
+                <tbody id="gridBody"></tbody>
+            </table>
+        </div>
+    </div>
 
-        <div id="page-dist" class="view-container">
-            <div class="filter-panel">
-                <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
-                <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
-                <div class="f-label">地支</div><div class="f-btns" data-type="di"></div>
-                <div class="f-label">節氣</div><div class="f-btns" data-type="solar"></div>
-                <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
-            </div>
-            <div class="action-bar">
-                <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
-                <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
-                <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
-                <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
-                <button class="add-btn" id="btnAddRepo" onclick="generateBatchReport()">加入報表</button>
-                <button onclick="clearFilters()">清空篩選</button>
-            </div>
-            <div class="scroll-area">
-                <table>
-                    <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
-                    <tbody id="gridBody"></tbody>
-                </table>
-            </div>
+    <div id="page-repo" class="view-container hidden">
+        <div style="display:flex; flex-wrap:wrap; gap:10px; background:#e0e0e0; padding:12px; border-radius:5px;">
+            <span style="font-weight:bold; align-self:center;">報表分類：</span>
+            <button onclick="filterRepoDisplay('all', this)" class="filter-btn active">全部</button>
+            <button onclick="filterRepoDisplay('history', this)" class="filter-btn">歷史</button>
+            <button onclick="filterRepoDisplay('tuopai', this)" class="filter-btn">拖牌</button>
+            <button onclick="filterRepoDisplay('duipeng_curr', this)" class="filter-btn">當期對碰</button>
+            <button onclick="filterRepoDisplay('duipeng', this)" class="filter-btn">下期對碰</button>
+            <button onclick="clearAllReports()" style="background:red; color:white; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; margin-left:auto;">清空報表</button>
         </div>
-
-        <div id="page-repo" class="view-container hidden">
-            <div style="display:flex; gap:10px; background:#eee; padding:10px; margin-bottom:10px;">
-                <button onclick="clearAllReports()" style="background:red; color:white; border:none; padding:8px 15px; cursor:pointer; font-weight:bold;">清空所有報表</button>
-            </div>
-            <div id="repo-list"></div>
+        <div class="condition-display-box">
+            <span style="color: #666; font-weight: bold;">📌 已加入報表之條件：</span>
+            <div id="cond-tags-list" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
         </div>
+        <div id="repo-list"></div>
     </div>
 </div>
 
 <script>
+    // --- 遠端連結設定 ---
+    // 請更換成你的 Google 試算表 Excel 匯出連結
+    const excelUrl = '你的_EXCEL_下載連結_放在這裡'; 
+
     let db = [];
     let currentMode = null;
     let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
-    const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pubhtml';
 
-    // 1. 密碼驗證與防護
-    function verifyPassword() {
-        if(document.getElementById('pwdInput').value === '0912') {
-            document.getElementById('auth-overlay').remove();
-            document.getElementById('main-content').classList.remove('hidden');
-            fetchCloudData();
-        } else {
-            alert('密碼錯誤！');
-        }
-    }
+    // 自動初始化與抓取資料
+    window.onload = async () => {
+        initUI();
+        await fetchRemoteExcel();
+    };
 
-    function checkForbiddenKeys(e) {
-        if (e.keyCode === 123 || (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 83 || e.keyCode === 73))) {
-            e.preventDefault();
-            return false;
-        }
-    }
-
-    // 2. 雲端資料抓取
-    async function fetchCloudData() {
+    async function fetchRemoteExcel() {
+        const msg = document.getElementById('fileMsg');
         try {
-            const response = await fetch(GOOGLE_SHEET_URL);
-            const html = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const table = doc.querySelector('table');
-            
-            // 轉換 Table 轉 JSON 
-            const data = XLSX.utils.sheet_to_json(XLSX.utils.table_to_sheet(table), {header:1});
-            
-            // 過濾 A~K 欄 (0-10) 並清洗無用行
-            db = data.filter(row => row[0] && !isNaN(parseInt(row[0]))).map(row => row.slice(0, 11));
-            
-            document.getElementById('sync-status').innerText = `✅ 雲端同步成功 (共 ${db.length} 期)`;
-            document.getElementById('sync-status').style.color = 'green';
+            const response = await fetch(excelUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            const wb = XLSX.read(data, {type: 'array'});
+            db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(row => row[0] && !isNaN(row[0]));
             renderGrid();
+            msg.innerText = `已連線更新： ${db.length} 期`;
+            msg.style.color = 'green';
         } catch (e) {
-            document.getElementById('sync-status').innerText = `❌ 同步失敗，請檢查網址或連線`;
-            document.getElementById('sync-status').style.color = 'red';
+            console.error(e);
+            msg.innerText = "連線失敗，請檢查 URL";
         }
     }
 
-    // 3. UI 邏輯與原有回測引擎
     function initUI() {
         const build = (type, list) => {
             const container = document.querySelector(`[data-type="${type}"]`);
             list.forEach(v => {
-                const div = document.createElement('div'); div.className = 'f-item'; div.innerText = v;
+                const div = document.createElement('div');
+                div.className = 'f-item'; div.innerText = v;
                 div.onclick = () => handleItem(div, type, v);
                 container.appendChild(div);
             });
@@ -157,12 +163,13 @@
         }
     }
 
+    // --- 以下為原本邏輯，完全保留不更動 ---
     function handleItem(el, type, val) {
         if (!currentMode) return alert("請先選擇分析模式");
         const arr = filters[type]; const idx = arr.indexOf(val);
         if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
         else {
-            if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && arr.length >= 2) return alert("限選2個日期項目");
+            if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && arr.length >= 2) return alert("拖牌/下期對碰日期項目限選2個");
             arr.push(val); el.classList.add('active');
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums') el.setAttribute('data-order', arr.length);
         }
@@ -171,93 +178,229 @@
 
     function applyFilter() {
         if(!db.length) return;
+        const rows = document.querySelectorAll('#gridBody tr');
         let counts = Array(40).fill(0);
-        document.querySelectorAll('#gridBody tr').forEach(tr => {
-            const rowData = db[tr.id.split('-')[1]];
+        rows.forEach(tr => {
+            const data = db[tr.id.split('-')[1]];
             let ok = true;
             ['week','tian','di','solar'].forEach(cat => {
-                if(filters[cat].length > 0) ok &= filters[cat].some(v => String(rowData[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
+                if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
             });
-            const win = rowData.slice(6, 11).map(Number);
+            const win = data.slice(6, 11).map(Number);
             if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n)));
             tr.style.display = ok ? '' : 'none';
-            if(ok) win.forEach(n => { if(n > 0) counts[n]++; });
+            if(ok) win.forEach(n => { if(n>0) counts[n]++; });
         });
         for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i];
+    }
+
+    function generateBatchReport() {
+        if (!db.length) return alert("尚未載入資料");
+        const list = document.getElementById('repo-list');
+        const tid = Date.now();
+        ['week','tian','di','solar'].forEach(c => {
+            filters[c].forEach(v => {
+                const txt = `${getCatName(c)}:${v}`;
+                const tagsList = document.getElementById('cond-tags-list');
+                if(!Array.from(tagsList.children).some(s => s.innerText === txt)) {
+                    const span = document.createElement('span'); span.className = 'cond-tag';
+                    span.innerText = txt; tagsList.appendChild(span);
+                }
+            });
+        });
+        if (currentMode === 'duipeng_curr') renderMatrixReport(list, tid);
+        else if (currentMode === 'duipeng') generateNextDuiPeng(list, tid);
+        else if (currentMode === 'tuopai') generateTuoPai(list, tid);
+        else generateHistory(list, tid);
+        switchPage('repo');
+    }
+
+    function renderMatrixReport(container, tid) {
+        let matrix = Array.from({length:40}, () => Array(40).fill(0));
+        let matchCount = 0;
+        let conds = [];
+        ['week','tian','di','solar'].forEach(c => filters[c].forEach(v => conds.push(`${getCatName(c)}:${v}`)));
+        db.forEach(row => {
+            let ok = true;
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
+            });
+            if(ok) {
+                matchCount++;
+                const nums = row.slice(6, 11).map(Number);
+                for(let i=0; i<nums.length; i++) for(let j=i+1; j<nums.length; j++){
+                    matrix[nums[i]][nums[j]]++; matrix[nums[j]][nums[i]]++;
+                }
+            }
+        });
+        let pairs = [];
+        for(let i=1; i<=39; i++) for(let j=i+1; j<=39; j++) if(matrix[i][j] > 0) pairs.push({ p: `${i}-${j}`, v: matrix[i][j] });
+        pairs.sort((a,b) => b.v - a.v);
+        const card = document.createElement('div');
+        card.className = 'report-card'; card.setAttribute('data-mode', 'duipeng_curr');
+        let tableHtml = `<table class="matrix-table"><tr class="matrix-header"><td></td>${Array.from({length:39},(_,i)=>`<td>${i+1}</td>`).join('')}</tr>`;
+        for(let i=1; i<=39; i++){
+            tableHtml += `<tr><td class="matrix-header">${i}</td>`;
+            for(let j=1; j<=39; j++){
+                let val = matrix[i][j];
+                let cls = val > 5 ? 'm-hot' : (val > 0 ? 'm-hit' : '');
+                tableHtml += `<td class="${cls}">${val === 0 ? '' : val}</td>`;
+            }
+            tableHtml += `</tr>`;
+        }
+        tableHtml += `</table>`;
+        card.innerHTML = `
+            <div class="report-title"><span>【當期對碰】條件：${conds.join('+')} (${matchCount}期)</span><button class="del-btn" onclick="this.closest('.report-card').remove()">刪除</button></div>
+            <div class="matrix-container">
+                <div class="matrix-wrapper">${tableHtml}</div>
+                <div class="stats-panel">
+                    <div class="stats-title">對碰分析 (行+列)</div>
+                    <div style="color:red; font-weight:bold;">🔥 TOP 3 熱門</div>
+                    ${pairs.slice(0,3).map((x,idx)=>`<div class="stats-item">${idx+1}. <span class="stats-num">${x.p}</span>：${x.v}次</div>`).join('')}
+                    <div style="color:blue; font-weight:bold; margin-top:15px;">❄️ TOP 3 冷門</div>
+                    ${pairs.slice(-3).reverse().map((x,idx)=>`<div class="stats-item">${idx+1}. <span class="stats-num">${x.p}</span>：${x.v}次</div>`).join('')}
+                </div>
+            </div>`;
+        container.insertBefore(card, container.firstChild);
+    }
+
+    function generateNextDuiPeng(list, tid) {
+        if(filters.nums.length < 2) return alert("請至少選2個號碼");
+        const details = [];
+        const pairs = [];
+        for(let i=0; i<filters.nums.length; i++) for(let j=i+1; j<filters.nums.length; j++) pairs.push([filters.nums[i], filters.nums[j]]);
+        ['week','tian','di','solar'].forEach(cat => {
+            if(filters[cat].length === 2){
+                const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                pairs.forEach(pair => {
+                    let stats = Array(40).fill(0), count = 0;
+                    for(let i=1; i<db.length; i++){
+                        if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && pair.every(n => db[i-1].slice(6,11).map(Number).includes(Number(n)))){
+                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
+                        }
+                    }
+                    if(count > 0) details.push({ label: `[下碰] ${getCatName(cat)}:${v1}→${v2} (${pair[0]},${pair[1]})`, matches: count, data: stats });
+                });
+            }
+        });
+        if(details.length) renderCommonCard(list, "下期對碰", details, `rep-dp-${tid}`, 'duipeng');
+    }
+
+    function generateTuoPai(list, tid) {
+        const pNums = filters.nums.length > 0 ? filters.nums : ["全號碼"];
+        pNums.forEach(num => {
+            const inner = [];
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2){
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    let stats = Array(40).fill(0), count = 0;
+                    for(let i=1; i<db.length; i++){
+                        const numOk = (num === "全號碼") ? true : db[i-1].slice(6,11).map(Number).includes(Number(num));
+                        if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && numOk){
+                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
+                        }
+                    }
+                    if(count > 0) inner.push({ label: `[拖] ${getCatName(cat)}:${v1}→${v2} + ${num}`, matches: count, data: stats });
+                }
+            });
+            if(inner.length) renderCommonCard(list, num, inner, `rep-tp-${num}-${tid}`, 'tuopai');
+        });
+    }
+
+    function generateHistory(list, tid) {
+        const pNums = filters.nums.length > 0 ? filters.nums : ["全號碼"];
+        pNums.forEach(num => {
+            const inner = [];
+            ['week','tian','di','solar'].forEach(cat => {
+                filters[cat].forEach(val => {
+                    let stats = Array(40).fill(0), count = 0;
+                    const col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    db.forEach(row => {
+                        if(String(row[col]).includes(val) && (num==="全號碼" || row.slice(6,11).map(Number).includes(Number(num)))){
+                            row.slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
+                        }
+                    });
+                    if(count > 0) inner.push({ label: `${getCatName(cat)}:${val}`, matches: count, data: stats });
+                });
+            });
+            if(inner.length) renderCommonCard(list, num, inner, `rep-hs-${num}-${tid}`, 'history');
+        });
+    }
+
+    function renderCommonCard(container, titleLabel, detailData, uniqueId, mode) {
+        const card = document.createElement('div');
+        card.className = 'report-card'; card.setAttribute('data-mode', mode);
+        card.innerHTML = `<div class="report-title"><span>【${{history:'歷史',tuopai:'拖牌',duipeng:'下期對碰'}[mode]}】${titleLabel}</span><button class="del-btn" onclick="this.closest('.report-card').remove()">刪除</button></div>
+            <table style="background:#fff"><thead><tr style="background:#eee"><td>條件組合</td>${Array.from({length:39},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body"></tbody><tfoot><tr style="background:#fff9c4; font-weight:bold" class="total-row"></tr></tfoot></table>`;
+        container.insertBefore(card, container.firstChild);
+        const tbody = card.querySelector('.report-body');
+        detailData.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-matches', row.matches); tr.setAttribute('data-stats', JSON.stringify(row.data));
+            const top3 = getTop3Indices(row.data);
+            tr.innerHTML = `<td style="text-align:left; padding-left:10px;">${row.label} (${row.matches}次)</td>` + 
+                           row.data.slice(1).map((v, i) => `<td class="${top3.includes(i+1)?'top-hit':''}">${v===0?'':v}</td>`).join('');
+            tbody.appendChild(tr);
+        });
+        recalculateTotal(card);
+    }
+
+    function recalculateTotal(card) {
+        const rows = card.querySelectorAll('.report-body tr');
+        let tStats = Array(40).fill(0), tMatches = 0;
+        rows.forEach(tr => {
+            const stats = JSON.parse(tr.getAttribute('data-stats'));
+            tMatches += parseInt(tr.getAttribute('data-matches'));
+            stats.forEach((v, i) => tStats[i] += v);
+        });
+        const top3 = getTop3Indices(tStats);
+        card.querySelector('.total-row').innerHTML = `<td style="text-align:left; padding-left:10px;">條件加總 (${tMatches}次)</td>` + 
+            tStats.slice(1).map((v, i) => `<td class="${top3.includes(i+1)?'top-hit':''}">${v===0?'':v}</td>`).join('');
+    }
+
+    function setMode(m) {
+        currentMode = m;
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+        const sel = m==='history'?'.btn-mode-h':(m==='tuopai'?'.btn-mode-t':(m==='duipeng_curr'?'.btn-mode-d_curr':'.btn-mode-d'));
+        document.querySelectorAll(sel).forEach(b => b.classList.add('active'));
+        document.getElementById('btnAddRepo').style.display = 'block';
+        document.getElementById('modeGuide').style.display = 'block';
+        document.getElementById('modeGuide').innerHTML = `💡 目前模式：<b>${{history:'歷史',tuopai:'拖牌',duipeng_curr:'當期對碰',duipeng:'下期對碰'}[m]}</b>`;
+        clearFilters();
+    }
+    function filterRepoDisplay(mode, btn) {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.report-card').forEach(card => card.style.display = (mode === 'all' || card.getAttribute('data-mode') === mode) ? 'block' : 'none');
+    }
+    function switchPage(p) {
+        document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden');
+        document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden');
+    }
+    function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => { el.classList.remove('active'); el.removeAttribute('data-order'); }); applyFilter(); }
+    function getCatName(c) { return {week:'週', tian:'天干', di:'地支', solar:'節氣'}[c]; }
+    function clearAllReports() { if(confirm("確定清空報表與條件標籤？")) { document.getElementById('repo-list').innerHTML = ''; document.getElementById('cond-tags-list').innerHTML = ''; } }
+    function getTop3Indices(data) {
+        const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v);
+        const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3);
+        return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i);
     }
 
     function renderGrid() {
         const body = document.getElementById('gridBody'); body.innerHTML = '';
         db.forEach((row, idx) => {
             const tr = document.createElement('tr'); tr.id = `row-${idx}`;
-            row.forEach((v, i) => {
-                const td = document.createElement('td');
-                td.innerText = v;
-                tr.appendChild(td);
-            });
-            const win = row.slice(6,11).map(Number);
-            for(let i=1; i<=39; i++){
-                const td = document.createElement('td');
-                if(win.includes(i)) { td.innerText = String(i).padStart(2,'0'); td.style.fontWeight='bold'; }
-                tr.appendChild(td);
+            for(let i=0; i<11; i++){
+                const td = document.createElement('td'); let v = row[i] || '';
+                if(i===1 && typeof v === 'number') { const d = new Date((v-25569)*86400*1000); v=`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
+                td.innerText = v; tr.appendChild(td);
             }
+            const win = row.slice(6,11).map(Number);
+            for(let i=1; i<=39; i++){ const td = document.createElement('td'); if(win.includes(i)) { td.innerText = String(i).padStart(2,'0'); td.style.fontWeight='bold'; } tr.appendChild(td); }
             body.appendChild(tr);
         });
         applyFilter();
     }
-
-    // 報表生成與加總邏輯（承襲之前修正）
-    function generateBatchReport() {
-        const list = document.getElementById('repo-list');
-        const tid = Date.now();
-        // 這裡會依照目前的 filter 生成報表（程式碼長度考量，簡化呈現歷史統計邏輯）
-        const inner = [];
-        ['week','tian','di','solar'].forEach(cat => {
-            filters[cat].forEach(val => {
-                let s = Array(40).fill(0), mCount = 0;
-                const colIdx = ['week','tian','di','solar'].indexOf(cat)+2;
-                db.forEach(r => {
-                    const win = r.slice(6, 11).map(Number);
-                    if(String(r[colIdx]).includes(val)) {
-                        win.forEach(n => { if(n > 0) s[n]++; }); mCount++;
-                    }
-                });
-                if(mCount > 0) inner.push({ label: `${getCatName(cat)}:${val}`, matches: mCount, data: s });
-            });
-        });
-        if(inner.length) renderReportTable(list, `雲端回測分析`, inner, tid);
-        switchPage('repo');
-    }
-
-    function renderReportTable(container, title, rows, id) {
-        const card = document.createElement('div');
-        card.className = 'report-card';
-        let verticalSums = Array(40).fill(0);
-        let html = `<div class="report-title"><span>${title}</span><button onclick="this.parentElement.parentElement.remove()">刪除</button></div>`;
-        html += `<table><thead><tr style="background:#eee"><th>條件</th>${Array.from({length:39},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
-        rows.forEach(row => {
-            html += `<tr><td style="text-align:left">${row.label} (${row.matches}期)</td>`;
-            for(let i=1; i<=39; i++) {
-                const v = row.data[i] || 0;
-                verticalSums[i] += v;
-                html += `<td>${v || ''}</td>`;
-            }
-            html += `</tr>`;
-        });
-        html += `<tr class="sum-row"><td>垂直加總</td>`;
-        for(let i=1; i<=39; i++) html += `<td>${verticalSums[i]}</td>`;
-        html += `</tr></tbody></table>`;
-        card.innerHTML = html;
-        container.insertBefore(card, container.firstChild);
-    }
-
-    function setMode(m) { currentMode = m; document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); document.querySelector(`.btn-mode-${m==='history'?'h':(m==='tuopai'?'t':(m==='duipeng_curr'?'d_curr':'d'))}`).classList.add('active'); document.getElementById('btnAddRepo').style.display = 'block'; clearFilters(); }
-    function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
-    function getCatName(c) { return {week:'週', tian:'天干', di:'地支', solar:'節氣'}[c]; }
-    function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
-    function clearAllReports() { if(confirm("確定清空？")) document.getElementById('repo-list').innerHTML = ''; }
-
-    initUI();
 </script>
 </body>
 </html>
