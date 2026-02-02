@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 完整表格版</title>
+    <title>539 專業回測系統 - 下期對碰矩陣版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
-        .guide-box { background: #fffde7; border: 1px solid #ddd; border-left: 5px solid var(--gold); padding: 8px 15px; margin-bottom: 5px; line-height: 1.6; border-radius: 4px; min-height: 24px; display: flex; align-items: center; }
+        .guide-box { background: #fffde7; border: 1px solid #ddd; border-left: 5px solid var(--gold); padding: 8px 15px; margin-bottom: 5px; border-radius: 4px; display: flex; align-items: center; }
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -30,7 +30,6 @@
         tfoot tr td { background: #ffff00 !important; color: #f44336 !important; font-weight: bold !important; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; }
         .hidden { display: none; }
-        .cat-tag { background: #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
     </style>
 </head>
 <body>
@@ -42,8 +41,7 @@
     </div>
 
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">💡 正在連線至雲端數據...</div>
-
+        <div id="modeGuide" class="guide-box">💡 模式導引...</div>
         <div class="filter-panel">
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
             <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
@@ -51,7 +49,6 @@
             <div class="f-label">節氣</div><div class="f-btns" data-type="solar"></div>
             <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
         </div>
-
         <div class="action-bar">
             <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
             <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
@@ -59,10 +56,9 @@
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
             <button onclick="clearFilters()">清空篩選</button>
-            <div id="report-alert">📢 報表未清空</div>
+            <div id="report-alert">📢 報表區有資料</div>
             <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
-
         <div class="scroll-area">
             <table>
                 <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
@@ -70,9 +66,8 @@
             </table>
         </div>
     </div>
-
     <div id="page-repo" class="view-container hidden">
-        <div style="margin-bottom:10px;"><button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表 (藍框將消失)</button></div>
+        <div style="margin-bottom:10px;"><button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表</button></div>
         <div id="repo-list"></div>
     </div>
 </div>
@@ -85,10 +80,10 @@
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
     const guideText = {
-        history: "💡 <b>模式提示：歷史統計</b> － 直接點選上方條件。報表顯示個別條件的歷史分佈。",
-        tuopai: "💡 <b>模式提示：拖牌</b> － 項目選 2 個 + 號碼。邏輯：上期符合第一項且有該號，下期符合第二項的分佈。",
-        duipeng_curr: "💡 <b>模式提示：當期對碰</b> － 統計符合條件期數內，號碼同時出現的熱度排行。",
-        duipeng: "💡 <b>模式提示：下期對碰</b> － 項目選 2 個 + 號碼。統計上期符合條件後，下期號碼同時開出的熱度。"
+        history: "💡 <b>歷史統計</b>：單純統計所選條件的開獎分佈。",
+        tuopai: "💡 <b>拖牌模式</b>：項目選 2 個 + 1 個號碼。統計上期符合轉換後的下期分佈。",
+        duipeng_curr: "💡 <b>當期對碰</b>：統計當前篩選期數內，號碼同時開出的熱度。",
+        duipeng: "💡 <b>下期對碰</b>：項目選 2 個 + <b>必選 2 號</b>。統計上期開出該雙號後，下期的矩陣分佈。"
     };
 
     function setMode(m) {
@@ -107,10 +102,10 @@
             db = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets[XLSX.read(csvText, { type: 'string' }).SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0]));
             renderGrid();
-            document.getElementById('fileMsg').innerText = `雲端連線成功：${db.length} 期`;
+            document.getElementById('fileMsg').innerText = `雲端連線：${db.length} 期`;
             setMode('history');
             updateReportUI();
-        } catch (e) { document.getElementById('fileMsg').innerText = "雲端載入失敗"; }
+        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
     }
 
     function initUI() {
@@ -151,73 +146,86 @@
     function generateBatchReport() {
         if(!db.length) return;
         const results = [];
-        const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
-        
-        if (currentMode === 'duipeng_curr' || currentMode === 'duipeng') {
+        const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣' };
+
+        if (currentMode === 'duipeng') {
+            // 【修正邏輯】：下期對碰必須選 2 個號碼
+            if (filters.nums.length < 2) return alert("下期對碰：必須點選 2 個號碼以上才會成立。");
+            
             let matrix = Array.from({length:40}, () => Array(40).fill(0));
             let matchCount = 0;
-            let currentLabel = (currentMode === 'duipeng' ? "下期對碰" : "當期對碰");
+            let reportTitle = `下期對碰 [${filters.nums.join(',')}]`;
 
-            if (currentMode === 'duipeng') {
-                if (filters.nums.length < 1) return alert("下期對碰：請至少選擇 1 個號碼");
-                ['week','tian','di','solar'].forEach(cat => {
-                    if(filters[cat].length === 2) {
-                        const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
-                        for(let i=1; i<db.length; i++) {
-                            const prevWin = db[i-1].slice(6,11).map(Number);
-                            if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && filters.nums.every(n => prevWin.includes(Number(n)))) {
-                                matchCount++;
-                                const nextWin = db[i].slice(6,11).map(Number);
-                                for(let x=0; x<nextWin.length; x++) for(let y=x+1; y<nextWin.length; y++) {
-                                    if(nextWin[x]>0 && nextWin[y]>0) { matrix[nextWin[x]][nextWin[y]]++; matrix[nextWin[y]][nextWin[x]]++; }
-                                }
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2) {
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    reportTitle += ` (${catNames[cat]}:${v1}→${v2})`;
+                    for(let i=1; i<db.length; i++) {
+                        const prevWin = db[i-1].slice(6,11).map(Number);
+                        // 上期符合 V1 且包含那 2 個號碼，本期符合 V2
+                        if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && 
+                           filters.nums.every(n => prevWin.includes(Number(n)))) {
+                            matchCount++;
+                            const nextWin = db[i].slice(6,11).map(Number);
+                            // 統計下期的矩陣分佈
+                            for(let x=0; x<nextWin.length; x++) for(let y=x+1; y<nextWin.length; y++) {
+                                if(nextWin[x]>0 && nextWin[y]>0) { matrix[nextWin[x]][nextWin[y]]++; matrix[nextWin[y]][nextWin[x]]++; }
                             }
                         }
-                        currentLabel += ` (${catNames[cat]}:${v1}→${v2})`;
                     }
-                });
-            } else {
-                db.forEach(row => {
-                    let ok = true;
-                    ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); });
-                    if(ok) {
-                        matchCount++; const nums = row.slice(6, 11).map(Number);
-                        for(let i=0; i<nums.length; i++) for(let j=i+1; j<nums.length; j++){ if(nums[i]>0 && nums[j]>0){ matrix[nums[i]][nums[j]]++; matrix[nums[j]][nums[i]]++; } }
-                    }
-                });
-            }
+                }
+            });
 
-            if(matchCount === 0) return alert("查無符合期數");
-            let tableRows = [];
+            if(matchCount === 0) return alert("無歷史數據符合此下期對碰條件");
+            let rows = [];
             for(let i=1; i<=39; i++) {
-                let stats = Array(40).fill(0);
-                for(let j=1; j<=39; j++) stats[j] = matrix[i][j];
-                tableRows.push({ label: `號碼 ${i}`, matches: matchCount, data: stats });
+                let s = Array(40).fill(0);
+                for(let j=1; j<=39; j++) s[j] = matrix[i][j];
+                rows.push({ label: `號碼 ${i}`, data: s });
             }
-            saveAndRender(`${currentLabel} 矩陣分析 (共${matchCount}期)`, tableRows, 'table');
+            saveAndRender(reportTitle + ` (${matchCount}期)`, rows, 'table');
         } 
+        else if (currentMode === 'duipeng_curr') {
+            let matrix = Array.from({length:40}, () => Array(40).fill(0)), count = 0;
+            db.forEach(row => {
+                let ok = true;
+                ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); });
+                if(ok) {
+                    count++; const ns = row.slice(6, 11).map(Number);
+                    for(let i=0; i<ns.length; i++) for(let j=i+1; j<ns.length; j++){ if(ns[i]>0 && ns[j]>0){ matrix[ns[i]][ns[j]]++; matrix[ns[j]][ns[i]]++; } }
+                }
+            });
+            if(count === 0) return alert("無資料");
+            let rows = [];
+            for(let i=1; i<=39; i++) {
+                let s = Array(40).fill(0);
+                for(let j=1; j<=39; j++) s[j] = matrix[i][j];
+                rows.push({ label: `號碼 ${i}`, data: s });
+            }
+            saveAndRender(`當期對碰 (${count}期)`, rows, 'table');
+        }
         else if (currentMode === 'tuopai') {
             filters.nums.forEach(num => {
                 ['week','tian','di','solar'].forEach(cat => {
                     if(filters[cat].length === 2) {
                         const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
-                        let stats = Array(40).fill(0), count = 0;
+                        let s = Array(40).fill(0), c = 0;
                         for(let i=1; i<db.length; i++) if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && db[i-1].slice(6,11).map(Number).includes(Number(num))){
-                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
+                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
                         }
-                        if(count > 0) results.push({ label: `[號:${num}] <span class="cat-tag">${catNames[cat]}</span>${v1}→${v2}`, matches: count, data: stats });
+                        if(c > 0) results.push({ label: `[拖牌:${num}] ${v1}→${v2}`, data: s });
                     }
                 });
             });
             if(results.length) saveAndRender("拖牌分析報表", results, 'table');
-            else alert("拖牌模式：請選 2 個項目 + 1 個號碼");
+            else alert("拖牌：請選 2 個項目 + 1 個號碼");
         }
-        else if (currentMode === 'history') {
+        else {
             ['week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
-                    let stats = Array(40).fill(0), count = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
-                    db.forEach(row => { if(String(row[col]).includes(val)) { row.slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++; } });
-                    if(count > 0) results.push({ label: `<span class="cat-tag">${catNames[cat]}</span>${val}`, matches: count, data: stats });
+                    let s = Array(40).fill(0), c = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    db.forEach(row => { if(String(row[col]).includes(val)) { row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++; } });
+                    if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s });
                 });
             });
             if(results.length) saveAndRender("歷史統計報表", results, 'table');
@@ -238,25 +246,21 @@
         savedReports.forEach(report => {
             const card = document.createElement('div');
             card.className = 'report-card';
-            let totalStats = Array(40).fill(0);
-            let html = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-            html += `<div class="scroll-area"><table><thead><tr style="background:#eee"><td>分析對象</td>`;
-            for(let i=1; i<=39; i++) html += `<td>${i}</td>`;
-            html += `</tr></thead><tbody>`;
+            let totals = Array(40).fill(0);
+            let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
+            h += `<div class="scroll-area"><table><thead><tr style="background:#eee"><td>分析項目</td>`;
+            for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
+            h += `</tr></thead><tbody>`;
             report.rows.forEach(r => {
                 const top3 = getTop3Indices(r.data);
-                html += `<tr><td style="text-align:left; padding-left:8px; background:#f9f9f9; font-weight:bold;">${r.label}</td>`;
-                for(let i=1; i<=39; i++) {
-                    const val = r.data[i] || 0;
-                    totalStats[i] += val;
-                    html += `<td class="${top3.includes(i)?'top-hit':''}">${val || ''}</td>`;
-                }
-                html += `</tr>`;
+                h += `<tr><td style="font-weight:bold; background:#f5f5f5;">${r.label}</td>`;
+                for(let i=1; i<=39; i++) { const v = r.data[i] || 0; totals[i] += v; h += `<td class="${top3.includes(i)?'top-hit':''}">${v || ''}</td>`; }
+                h += `</tr>`;
             });
-            html += `</tbody><tfoot><tr><td>最後一列加總</td>`;
-            for(let i=1; i<=39; i++) html += `<td>${totalStats[i] || ''}</td>`;
-            html += `</tr></tfoot></table></div>`;
-            card.innerHTML = html; list.appendChild(card);
+            h += `</tbody><tfoot><tr><td>合計開出次數</td>`;
+            for(let i=1; i<=39; i++) h += `<td>${totals[i] || ''}</td>`;
+            h += `</tr></tfoot></table></div>`;
+            card.innerHTML = h; list.appendChild(card);
         });
     }
 
@@ -264,18 +268,22 @@
     function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
     function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
     function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
+    
     function applyFilter() { 
         if(!db.length) return; 
         const rows = document.querySelectorAll('#gridBody tr'); let counts = Array(40).fill(0); 
         rows.forEach(tr => { 
             const data = db[tr.id.split('-')[1]]; let ok = true; 
             ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); 
-            const win = data.slice(6, 11).map(Number); if(filters.nums.length > 0) ok &= filters.nums.some(n => win.includes(Number(n))); 
+            const win = data.slice(6, 11).map(Number); 
+            // 號碼過濾邏輯：必須包含所有點選的號碼
+            if(filters.nums.length > 0) ok &= filters.nums.every(n => win.includes(Number(n))); 
             tr.style.display = ok ? '' : 'none'; 
             if(ok) { const tds = tr.querySelectorAll('.num-cell'); tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else td.innerText = ''; }); } 
         }); 
         for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; 
     }
+
     function renderGrid() { 
         const body = document.getElementById('gridBody'); body.innerHTML = ''; 
         db.forEach((row, idx) => { 
