@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 優化版</title>
+    <title>539 專業回測系統 - 指引修復版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
-        .guide-box { background: #fffde7; border-left: 5px solid var(--gold); padding: 12px; margin-bottom: 10px; line-height: 1.6; border-radius: 4px; }
+        .guide-box { background: #fffde7; border-left: 5px solid var(--gold); padding: 12px; margin-bottom: 10px; line-height: 1.6; border-radius: 4px; min-height: 40px; }
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -28,10 +28,9 @@
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
         .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         
-        /* 報表底部加總樣式：黃底紅字 */
-        tfoot tr td { background: #ffff00 !important; color: #f44336 !important; font-weight: bold !important; border: 1px solid #333 !important; }
+        /* 最後一列加總：黃底紅字 */
+        tfoot tr td { background: #ffff00 !important; color: #f44336 !important; font-weight: bold !important; }
         
-        .hit-count { color: #f44336; font-weight: bold; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; }
         .hidden { display: none; }
         .cat-tag { background: #333; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
@@ -46,7 +45,8 @@
     </div>
 
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">正在連線至 Google 試算表...</div>
+        <div id="modeGuide" class="guide-box">正在連線至雲端數據...</div>
+
         <div class="filter-panel">
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
             <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
@@ -54,8 +54,9 @@
             <div class="f-label">節氣</div><div class="f-btns" data-type="solar"></div>
             <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
         </div>
+
         <div class="action-bar">
-            <button class="yellow-btn btn-mode-h active" onclick="setMode('history')">歷史統計</button>
+            <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
             <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
             <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
@@ -64,6 +65,7 @@
             <div id="report-alert">📢 報表未清空</div>
             <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
+
         <div class="scroll-area">
             <table>
                 <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
@@ -73,7 +75,7 @@
     </div>
 
     <div id="page-repo" class="view-container hidden">
-        <div style="margin-bottom:10px;"><button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表</button></div>
+        <div style="margin-bottom:10px;"><button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表 (藍框將消失)</button></div>
         <div id="repo-list"></div>
     </div>
 </div>
@@ -85,6 +87,28 @@
     let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
+    // 引導文字內容
+    const guideText = {
+        history: "<b>【歷史統計】指引：</b>直接點選上方條件。報表將顯示個別條件的歷史開出分佈。",
+        tuopai: "<b>【拖牌模式】指引：</b>每個項目必須選 <b>2 個</b> (如甲、乙)，再加上 <b>號碼</b>。邏輯：上期符合第一項且有該號，下期符合第二項的分佈。",
+        duipeng_curr: "<b>【當期對碰】指引：</b>點選 <b>1 個或多個</b> 條件。統計符合條件的期數內，號碼同時出現的熱度排行。",
+        duipeng: "<b>【下期對碰】指引：</b>項目需選 <b>2 個</b> + <b>號碼 2 個</b>。統計雙號同開後的分佈情況。"
+    };
+
+    function setMode(m) {
+        currentMode = m;
+        // 更新按鈕狀態
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+        const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
+        if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
+        
+        // 更新引導文字
+        document.getElementById('modeGuide').innerHTML = guideText[m];
+        clearFilters();
+    }
+
+    // --- 以下為數據處理核心 (邏輯不變，確保穩定) ---
+
     async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
@@ -92,10 +116,10 @@
             db = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets[XLSX.read(csvText, { type: 'string' }).SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0]));
             renderGrid();
-            document.getElementById('fileMsg').innerText = `連線成功：共 ${db.length} 期`;
-            setMode('history');
+            document.getElementById('fileMsg').innerText = `雲端連線成功：${db.length} 期`;
+            setMode('history'); // 初始設為歷史統計
             updateReportUI();
-        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
+        } catch (e) { document.getElementById('fileMsg').innerText = "雲端載入失敗"; }
     }
 
     function initUI() {
@@ -126,7 +150,6 @@
         const arr = filters[type]; const idx = arr.indexOf(val);
         if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
         else {
-            // 只有拖牌與下期對碰才限制項目點選 2 個
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && arr.length >= 2) return;
             arr.push(val); el.classList.add('active');
             if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums') el.setAttribute('data-order', arr.length);
@@ -134,19 +157,13 @@
         applyFilter();
     }
 
-    function getFilterDescription() {
-        let desc = [];
-        const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
-        for (let key in filters) {
-            if (filters[key].length > 0) desc.push(`[${catNames[key]}:${filters[key].join(',')}]`);
-        }
-        return desc.length > 0 ? desc.join(' ') : "全部數據";
-    }
-
     function generateBatchReport() {
         if(!db.length) return;
         const results = [];
-        const currentFilterDesc = getFilterDescription();
+        const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣', nums: '號碼' };
+        
+        let currentFilterDesc = "";
+        for (let key in filters) if (filters[key].length > 0) currentFilterDesc += `[${catNames[key]}:${filters[key].join(',')}] `;
 
         if (currentMode === 'duipeng_curr') {
             let matrix = Array.from({length:40}, () => Array(40).fill(0));
@@ -164,19 +181,15 @@
                     }
                 }
             });
-            if(matchCount === 0) return alert("無數據");
-            
+            if(matchCount === 0) return alert("目前篩選無符合期數");
             let pairsData = [];
             for(let i=1; i<=39; i++) {
-                let pairs = [];
-                for(let j=1; j<=39; j++) if(matrix[i][j] > 0) pairs.push({n:j, v:matrix[i][j]});
-                pairs.sort((a,b) => b.v - a.v);
-                if(pairs.length > 0) {
-                    const hits = pairs.slice(0,3).map(p=>`${p.n}(<span class="hit-count">${p.v}次</span>)`);
-                    pairsData.push({ label: `號碼 ${i}`, content: hits.join(', ') });
-                }
+                let pList = [];
+                for(let j=1; j<=39; j++) if(matrix[i][j] > 0) pList.push({n:j, v:matrix[i][j]});
+                pList.sort((a,b) => b.v - a.v);
+                if(pList.length > 0) pairsData.push({ label: `號碼 ${i}`, content: pList.slice(0,3).map(p=>`${p.n}(<span style="color:red;font-weight:bold">${p.v}次</span>)`).join(', ') });
             }
-            saveAndRender(`當期對碰排行榜 - 篩選：${currentFilterDesc} (符合:${matchCount}期)`, pairsData, 'duipeng');
+            saveAndRender(`當期對碰排行 - ${currentFilterDesc} (共${matchCount}期)`, pairsData, 'duipeng');
         } 
         else if (currentMode === 'tuopai') {
             filters.nums.forEach(num => {
@@ -189,13 +202,12 @@
                                 db[i].slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
                             }
                         }
-                        const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣' };
                         if(count > 0) results.push({ label: `[號:${num}] <span class="cat-tag">${catNames[cat]}</span>${v1}→${v2}`, matches: count, data: stats });
                     }
                 });
             });
             if(results.length) saveAndRender("拖牌分析報表", results, 'table');
-            else alert("拖牌模式：項目需選2個 + 號碼1個");
+            else alert("拖牌模式：請選 2 個項目(如:甲,乙) + 1 個號碼");
         }
         else if (currentMode === 'history') {
             ['week','tian','di','solar'].forEach(cat => {
@@ -207,7 +219,6 @@
                             row.slice(6,11).map(Number).forEach(n => { if(n>0) stats[n]++; }); count++;
                         }
                     });
-                    const catNames = { week: '週', tian: '天干', di: '地支', solar: '節氣' };
                     if(count > 0) results.push({ label: `<span class="cat-tag">${catNames[cat]}</span>${val}`, matches: count, data: stats });
                 });
             });
@@ -261,12 +272,11 @@
         });
     }
 
+    // 基本輔助函數
     function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
-    function clearAllReports() { if(confirm("確定清空所有報表紀錄？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
-    function setMode(m) { currentMode = m; document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); const sel = {history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d'}[m]; if(document.querySelector(sel)) document.querySelector(sel).classList.add('active'); clearFilters(); }
+    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
     function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
     function clearFilters() { filters = { week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
-    
     function applyFilter() { 
         if(!db.length) return; 
         const rows = document.querySelectorAll('#gridBody tr'); 
@@ -280,16 +290,11 @@
             tr.style.display = ok ? '' : 'none'; 
             if(ok) { 
                 const tds = tr.querySelectorAll('.num-cell'); 
-                tds.forEach(td => { 
-                    const n = parseInt(td.getAttribute('data-n')); 
-                    if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } 
-                    else td.innerText = ''; 
-                }); 
+                tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else td.innerText = ''; }); 
             } 
         }); 
         for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; 
     }
-
     function renderGrid() { 
         const body = document.getElementById('gridBody'); body.innerHTML = ''; 
         db.forEach((row, idx) => { 
@@ -298,10 +303,9 @@
             for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
             body.appendChild(tr); 
         }); 
-        applyFilter();
     }
-    
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
+    
     initUI();
 </script>
 </body>
