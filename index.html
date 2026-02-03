@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 2026 最終優化版</title>
+    <title>539 專業回測系統 - 年份按鈕修正版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --total-row: #ffebee; }
@@ -29,7 +29,7 @@
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
         .total-row { background-color: var(--total-row); font-weight: bold; }
         .hidden { display: none; }
-        input[type="number"] { width: 60px; padding: 5px; }
+        input[type="number"] { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -90,7 +90,12 @@
             db = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0]));
             
-            const years = [...new Set(db.map(row => String(row[1]).substring(0,4)))].sort((a,b)=>b-a);
+            // 關鍵修正：從日期欄位 B (索引1) 正確抓取年份前四碼 YYYY
+            const years = [...new Set(db.map(row => {
+                const dateStr = String(row[1]);
+                return dateStr.substring(0, 4);
+            }))].filter(y => y.length === 4 && !isNaN(y)).sort((a,b)=>b-a);
+            
             build('year', years);
             renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
@@ -133,7 +138,7 @@
         const catNames = { year:'年份', week:'週', tian:'天干', di:'地支', solar:'節氣' };
         const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
 
-        if (currentMode === 'history' || currentMode === 'current' || currentMode === 'next') {
+        if (['history', 'current', 'next'].includes(currentMode)) {
             ['year','week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
                     let s = Array(40).fill(0), c = 0;
@@ -172,7 +177,8 @@
                 }
             });
         }
-        if(results.length) saveAndRender(currentMode, results);
+        const titleMap = { history: "歷史統計", tuopai: "拖牌回測", current: "當期對碰", next: "下期對碰" };
+        if(results.length) saveAndRender(titleMap[currentMode] || "統計報表", results);
         switchPage('repo');
     }
 
@@ -237,7 +243,14 @@
         const body = document.getElementById('gridBody'); body.innerHTML = '';
         db.forEach((row, idx) => {
             const tr = document.createElement('tr'); tr.id = `row-${idx}`;
-            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); }
+            // 修正：日期欄位顯示格式固定為 YYYY/MM/DD
+            for(let i=0; i<11; i++){ 
+                const td = document.createElement('td'); 
+                let val = row[i] || '';
+                if(i === 1) val = String(val).split(' ')[0].replace(/-/g, '/');
+                td.innerText = val; 
+                tr.appendChild(td); 
+            }
             for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); }
             body.appendChild(tr);
         });
@@ -254,7 +267,11 @@
             if(idx < startIdx) { tr.style.display = 'none'; return; }
             const data = db[idx];
             let ok = true;
-            if(filters.year.length > 0) ok &= filters.year.includes(String(data[1]).substring(0,4));
+            // 修正：年份篩選邏輯
+            if(filters.year.length > 0) {
+                const rowYear = String(data[1]).substring(0,4);
+                ok &= filters.year.includes(rowYear);
+            }
             ['week','tian','di','solar'].forEach(cat => {
                 if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
             });
