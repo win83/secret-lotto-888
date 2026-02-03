@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 日期格式終極修正版</title>
+    <title>539 專業回測系統 - 標題強化版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
@@ -57,8 +57,8 @@
             <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
-            <button onclick="clearFilters()">清空篩選</button>
-            <button onclick="switchPage('repo')" style="background:#607d8b; color:white; border-radius:4px;">切換報表</button>
+            <button onclick="clearFilters()" style="padding:8px 15px; cursor:pointer;">清空篩選</button>
+            <button onclick="switchPage('repo')" style="padding:8px 15px; cursor:pointer; background:#607d8b; color:white; border:none; border-radius:4px; margin-left:10px;">切換報表</button>
             <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
         <div class="scroll-area">
@@ -69,6 +69,10 @@
         </div>
     </div>
     <div id="page-repo" class="view-container hidden">
+        <div style="margin-bottom:15px; display:flex; gap:10px;">
+            <button onclick="switchPage('dist')" style="padding:10px 20px; font-weight:bold; cursor:pointer;">← 返回分佈圖</button>
+            <button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:10px 20px; cursor:pointer; font-weight:bold; border:none; border-radius:4px;">⚠️ 清空所有報表</button>
+        </div>
         <div id="repo-list"></div>
     </div>
 </div>
@@ -80,19 +84,14 @@
     let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-    // 核心修正：Excel 序號轉日期
     function formatDate(val) {
         if (!val) return "";
         let d = val;
-        // 如果是序號 (純數字)
-        if (!isNaN(val) && typeof val !== 'string') {
-            d = new Date((val - 25569) * 86400 * 1000);
-        } else if (typeof val === 'string' && !val.includes('/')) {
-            // 如果是字串型態的序號
+        if (!isNaN(val) && typeof val !== 'string') d = new Date((val - 25569) * 86400 * 1000);
+        else if (typeof val === 'string' && !val.includes('/')) {
             let n = parseFloat(val);
             if (!isNaN(n)) d = new Date((n - 25569) * 86400 * 1000);
         }
-        
         if (d instanceof Date && !isNaN(d)) {
             let y = d.getFullYear();
             let m = ("0" + (d.getMonth() + 1)).slice(-2);
@@ -106,59 +105,116 @@
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const arrayBuffer = await response.arrayBuffer();
-            // 修正讀取方式：不使用 type: string，改用 arrayBuffer 讓 SheetJS 處理編碼與數值
             const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            // 轉換為 JSON 陣列，並強制格式化數值
-            let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
-
+            const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
             db = rawData.filter(row => row[0] && !isNaN(row[0])).map(row => {
-                // 再次確保 B 欄日期是 YYYY/MM/DD
                 row[1] = formatDate(row[1]);
                 return row;
             });
-            
-            initYearBtns();
-            renderGrid();
+            initYearBtns(); renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-            setMode('history');
-            updateReportUI();
-        } catch (e) { 
-            console.error(e);
-            document.getElementById('fileMsg').innerText = "載入失敗"; 
-        }
+        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
     }
 
     function initYearBtns() {
         const yearSet = new Set();
         db.forEach(row => {
-            const dateStr = String(row[1]);
-            const y = dateStr.substring(0, 4);
+            const y = String(row[1]).substring(0, 4);
             if (y.length === 4 && !isNaN(y)) yearSet.add(y);
         });
-        const years = Array.from(yearSet).sort((a, b) => b - a);
-        const container = document.getElementById('yearList');
-        container.innerHTML = '';
-        years.forEach(y => {
-            const div = document.createElement('div');
-            div.className = 'f-item'; div.innerText = y;
-            div.onclick = () => handleItem(div, 'year', y);
-            container.appendChild(div);
+        const container = document.getElementById('yearList'); container.innerHTML = '';
+        Array.from(yearSet).sort((a,b)=>b-a).forEach(y => {
+            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
+            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
         });
     }
 
-    function renderGrid() { 
-        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
-        db.forEach((row, idx) => { 
-            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
-            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
-            for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
-            body.appendChild(tr); 
-        }); 
-        applyFilter();
+    function generateBatchReport() {
+        if(!db.length) return;
+        const results = [];
+        const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
+        const catNames = { week:'週', tian:'天干', di:'地支', solar:'節氣' };
+
+        // --- 核心修改：生成篩選條件標籤串 ---
+        let filterLabel = "";
+        if(filters.year.length) filterLabel += `[年:${filters.year.join(',')}] `;
+        if(filters.nums.length) filterLabel += `[號:${filters.nums.join(',')}] `;
+        if(currentMode === 'history') {
+            ['week','tian','di','solar'].forEach(c => { if(filters[c].length) filterLabel += `[${catNames[c]}:${filters[c].join(',')}] `; });
+        }
+        const reportTitle = filterLabel || "未篩選";
+        // ---------------------------------
+
+        if (currentMode === 'history') {
+            ['week','tian','di','solar'].forEach(cat => {
+                filters[cat].forEach(val => {
+                    let s = Array(40).fill(0), c = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    db.forEach(row => { 
+                        if(filters.year.length > 0 && !filters.year.some(y => String(row[1]).startsWith(y))) return;
+                        if(String(row[col]).includes(val)) { row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++; } 
+                    });
+                    if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s, matches: c });
+                });
+            });
+            if(filters.tian.length === 1 && filters.di.length === 1) {
+                const t = filters.tian[0], d = filters.di[0];
+                let s = Array(40).fill(0), c = 0;
+                db.forEach(row => {
+                    if(filters.year.length > 0 && !filters.year.some(y => String(row[1]).startsWith(y))) return;
+                    if(String(row[3]).includes(t) && String(row[4]).includes(d)) {
+                        row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
+                    }
+                });
+                if(c > 0) results.push({ label: `★組合:${t}${d}`, data: s, matches: c, isCombo: true });
+            }
+            if(results.length) saveAndRender(`歷史:${reportTitle}`, results);
+        } 
+        else if (currentMode === 'tuopai') {
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2) {
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    selectedNums.forEach(num => {
+                        let s = Array(40).fill(0), c = 0;
+                        for(let i=1; i<db.length; i++) {
+                            if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && db[i-1].slice(6,11).map(Number).includes(num)) {
+                                db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
+                            }
+                        }
+                        if(c>0) results.push({ label: `[拖:${num}] ${v1}→${v2}`, data: s, matches: c });
+                    });
+                }
+            });
+            if(results.length) saveAndRender(`拖牌:${reportTitle}`, results);
+            else alert("請點選 2 個項目 + 至少 1 個號碼。");
+        }
+        switchPage('repo');
     }
 
-    // ... (其餘 handleItem, applyFilter, generateBatchReport 保持原邏輯) ...
+    function saveAndRender(title, rows) {
+        savedReports.unshift({ title, rows, id: Date.now() });
+        localStorage.setItem('539_reports', JSON.stringify(savedReports));
+        updateReportUI();
+    }
+
+    function updateReportUI() {
+        const list = document.getElementById('repo-list'); list.innerHTML = '';
+        savedReports.forEach(report => {
+            const card = document.createElement('div'); card.className = 'report-card';
+            let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})" style="background:#fff; color:#333; border:none; padding:4px 10px; border-radius:3px; cursor:pointer;">刪除</button></div>`;
+            h += `<div class="scroll-area"><table><thead><tr style="background:#eee; font-weight:bold;"><td>項目(期數)</td>`;
+            for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
+            h += `</tr></thead><tbody>`;
+            report.rows.forEach(r => {
+                const top3 = getTop3Indices(r.data);
+                h += `<tr class="${r.isCombo?'combo-row':''}"><td>${r.label}(${r.matches})</td>`;
+                for(let i=1; i<=39; i++) { const v = r.data[i] || 0; h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`; }
+                h += `</tr>`;
+            });
+            h += `</tbody></table></div>`;
+            card.innerHTML = h; list.appendChild(card);
+        });
+    }
+
     function handleItem(el, type, val) {
         const arr = filters[type]; const idx = arr.indexOf(val);
         if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
@@ -174,8 +230,7 @@
         if(!db.length) return; 
         const limit = parseInt(document.getElementById('limitRows').value) || 0;
         const gridRows = document.querySelectorAll('#gridBody tr'); 
-        let counts = Array(40).fill(0); 
-        let visibleIdx = 0;
+        let counts = Array(40).fill(0); let visibleIdx = 0;
         gridRows.forEach((tr) => { 
             const data = db[tr.id.split('-')[1]]; 
             let ok = true; 
@@ -203,17 +258,14 @@
         const build = (type, list, containerId) => {
             const container = containerId ? document.getElementById(containerId) : document.querySelector(`[data-type="${type}"]`);
             list.forEach(v => {
-                const div = document.createElement('div');
-                div.className = 'f-item'; div.innerText = v;
-                div.onclick = () => handleItem(div, type, v);
-                container.appendChild(div);
+                const div = document.createElement('div'); div.className = 'f-item'; div.innerText = v;
+                div.onclick = () => handleItem(div, type, v); container.appendChild(div);
             });
         };
         build('week', ['一','二','三','四','五','六','日']);
         build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
         build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
-        let tlist = [], slist = [];
-        for(let i=0; i<=15; i++) { tlist.push('T'+i); slist.push('S'+i); }
+        let tlist = [], slist = []; for(let i=0; i<=15; i++) { tlist.push('T'+i); slist.push('S'+i); }
         build('solar', tlist, 'solarT'); build('solar', slist, 'solarS');
         build('nums', Array.from({length:39}, (_,i)=>i+1));
         for(let i=1; i<=39; i++) {
@@ -224,13 +276,22 @@
         loadCloudData();
     }
 
-    // 其他功能(略)
-    function setMode(m) { currentMode = m; document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); applyFilter(); }
-    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
+    function setMode(m) { currentMode = m; document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' }; if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active'); clearFilters(); }
+    function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
+    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
     function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
-    function updateReportUI() { /* 報表渲染邏輯 */ }
+    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
+    function renderGrid() { 
+        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
+        db.forEach((row, idx) => { 
+            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
+            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
+            for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
+            body.appendChild(tr); 
+        }); 
+        applyFilter();
+    }
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
-
     initUI();
 </script>
 </body>
