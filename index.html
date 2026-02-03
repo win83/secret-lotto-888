@@ -104,22 +104,40 @@
         return String(val);
     }
 
-    async function loadCloudData() {
+async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const arrayBuffer = await response.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true, codepage: 65001 });
-            const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
+            
+            // 修正重點：強制指定 codepage 為 65001 (UTF-8) 並優化讀取參數
+            const workbook = XLSX.read(new Uint8Array(arrayBuffer), { 
+                type: 'array', 
+                cellDates: true,
+                codepage: 65001 
+            });
+            
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            // 讀取為原始陣列，確保不漏掉任何欄位
+            let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+            
             db = rawData.filter(row => row[0] && !isNaN(row[0])).map(row => {
+                // 確保日期格式正確
                 row[1] = formatDate(row[1]);
-                for(let i=2; i<=10; i++) row[i] = String(row[i] || '').trim();
+                // 針對文字欄位（週、天干、地支、節氣）進行強制字串化與去空白，防止亂碼殘留
+                for(let i = 2; i <= 5; i++) {
+                    if (row[i]) row[i] = String(row[i]).trim();
+                }
                 return row;
             });
+
             initYearBtns(); 
-            renderGrid(); // 渲染後會自動 applyFilter
+            renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
             updateReportUI();
-        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
+        } catch (e) { 
+            console.error("Data Load Error:", e);
+            document.getElementById('fileMsg').innerText = "載入失敗"; 
+        }
     }
 
     function getFilterLabel() {
@@ -311,3 +329,4 @@
 </script>
 </body>
 </html>
+
