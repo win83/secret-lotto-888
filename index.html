@@ -3,26 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 年份整合版</title>
+    <title>539 專業回測系統 - 年份報表整合版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
+        .guide-box { background: #fffde7; border: 1px solid #ddd; border-left: 5px solid var(--gold); padding: 8px 15px; margin-bottom: 5px; border-radius: 4px; min-height: 24px; display: flex; align-items: center; }
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 60px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
         .f-item { padding: 4px 12px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
         .f-item.active { background: var(--blue-t); color: white; }
+        .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
         .action-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 8px; }
         .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .yellow-btn.active { background: #ff9800 !important; color: white; }
         .add-btn { background: #4CAF50; color: white; border: 1px solid #000; padding: 8px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; min-height: 500px; }
-        .scroll-area { overflow: auto; max-height: 550px; }
+        .scroll-area { overflow: auto; max-height: 500px; }
         table { border-collapse: collapse; width: 100%; white-space: nowrap; }
         th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-        .num-cell { width: 25px; }
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
         .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
@@ -38,6 +39,7 @@
     </div>
 
     <div id="page-dist" class="view-container">
+        <div id="modeGuide" class="guide-box">💡 模式導引...</div>
         <div class="filter-panel">
             <div class="f-label">年份</div><div class="f-btns" data-type="year"></div>
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
@@ -49,19 +51,21 @@
         <div class="action-bar">
             <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
             <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
+            <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
+            <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
             <button onclick="clearFilters()">清空篩選</button>
-            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">讀取中...</span>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
         <div class="scroll-area">
             <table>
-                <thead><tr id="thr"><th>期號</th><th>開獎日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
+                <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th><th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th></tr></thead>
                 <tbody id="gridBody"></tbody>
             </table>
         </div>
     </div>
-
     <div id="page-repo" class="view-container hidden">
+        <div style="margin-bottom:10px;"><button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表</button></div>
         <div id="repo-list"></div>
     </div>
 </div>
@@ -69,157 +73,183 @@
 <script>
     const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
     let db = [];
-    let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let currentMode = 'history';
+    let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-    // 初始化與讀取
-    async function init() {
-        // 建立靜態按鈕
-        build('week', ['週一','週二','週三','週四','週五','週六']);
-        build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
-        build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
-        let slist = []; for(let i=0; i<=13; i++) { slist.push('T'+i); slist.push('S'+i); }
-        build('solar', slist);
-        build('nums', Array.from({length:39}, (_,i)=>i+1));
-        
-        // 建立號碼標頭
-        for(let i=1; i<=39; i++) {
-            const th = document.createElement('th'); th.style.background = '#ffc107';
-            th.innerHTML = `${i}<br><span id="s-${i}" style="font-size:10px; color:blue">0</span>`;
-            document.getElementById('thr').appendChild(th);
-        }
+    function setMode(m) {
+        currentMode = m;
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+        const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
+        if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
+        const guides = {
+            history: "💡 <b>歷史統計</b>：單純統計所選條件的歷史分佈。",
+            tuopai: "💡 <b>拖牌模式</b>：項目選2個才成立。若不選號碼則統計純項目拖牌。",
+            duipeng_curr: "💡 <b>當期對碰</b>：號碼選2-5個。統計當期兩兩配對成功的熱度。",
+            duipeng: "💡 <b>下期對碰</b>：項目選2個+號碼選2-5個。統計上期對碰後，下期配對分布。"
+        };
+        document.getElementById('modeGuide').innerHTML = guides[m];
+        clearFilters();
+    }
 
+    async function loadCloudData() {
         try {
-            const resp = await fetch(GSHEET_CSV_URL);
-            const text = await resp.text();
-            const wb = XLSX.read(text, { type: 'string' });
-            db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })
-                 .filter(row => row[0] && !isNaN(row[0].toString().substring(0,3)));
-
-            // 抓取 B 欄年份並顯示 YYYY
-            const years = [...new Set(db.map(row => row[1].toString().split('/')[0]))].sort((a,b)=>b-a);
+            const response = await fetch(GSHEET_CSV_URL);
+            const csvText = await response.text();
+            db = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets[XLSX.read(csvText, { type: 'string' }).SheetNames[0]], { header: 1 })
+                 .filter(row => row[0] && !isNaN(row[0]));
+            
+            // 動態提取年份
+            const years = [...new Set(db.map(row => String(row[0]).substring(0,4)))].sort((a,b)=>b-a);
             build('year', years);
 
             renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
             setMode('history');
             updateReportUI();
-        } catch (e) { console.error(e); }
+        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
     }
 
     function build(type, list) {
-        const box = document.querySelector(`[data-type="${type}"]`);
-        box.innerHTML = '';
+        const container = document.querySelector(`[data-type="${type}"]`);
+        if(!container) return;
+        container.innerHTML = '';
         list.forEach(v => {
             const div = document.createElement('div');
             div.className = 'f-item'; div.innerText = v;
-            div.onclick = () => {
-                const idx = filters[type].indexOf(v);
-                if(idx>-1) { filters[type].splice(idx,1); div.classList.remove('active'); }
-                else { filters[type].push(v); div.classList.add('active'); }
-                applyFilter();
-            };
-            box.appendChild(div);
+            div.onclick = () => handleItem(div, type, v);
+            container.appendChild(div);
         });
     }
 
-    function renderGrid() {
-        const body = document.getElementById('gridBody');
-        body.innerHTML = '';
-        db.forEach((row, idx) => {
-            const tr = document.createElement('tr');
-            tr.id = `row-${idx}`;
-            // 處理 A-F 欄與球號 G-K 欄
-            for(let i=0; i<11; i++) {
-                const td = document.createElement('td');
-                td.innerText = row[i] || '';
-                tr.appendChild(td);
-            }
-            // 建立 1-39 號碼格
-            for(let n=1; n<=39; n++) {
-                const td = document.createElement('td');
-                td.className = 'num-cell';
-                td.setAttribute('data-n', n);
-                tr.appendChild(td);
-            }
-            body.appendChild(tr);
-        });
+    function initUI() {
+        build('week', ['一','二','三','四','五','六','日']);
+        build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
+        build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
+        let slist = []; for(let i=0; i<=15; i++) { slist.push('T'+i); slist.push('S'+i); }
+        build('solar', slist);
+        build('nums', Array.from({length:39}, (_,i)=>i+1));
+        for(let i=1; i<=39; i++) {
+            const th = document.createElement('th'); th.style.background = '#ffc107';
+            th.innerHTML = `${i}<br><span id="s-${i}" style="font-size:10px; color:blue">0</span>`;
+            document.getElementById('thr').appendChild(th);
+        }
+        loadCloudData();
+    }
+
+    function handleItem(el, type, val) {
+        const arr = filters[type]; const idx = arr.indexOf(val);
+        if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
+        else {
+            if(type === 'nums' && (currentMode.includes('duipeng')) && arr.length >= 5) return alert("對碰模式號碼上限 5 個");
+            if((currentMode === 'tuopai' || currentMode === 'duipeng') && !['nums','year'].includes(type) && arr.length >= 2) return;
+            arr.push(val); el.classList.add('active');
+            if((currentMode === 'tuopai' || currentMode === 'duipeng') && !['nums','year'].includes(type)) el.setAttribute('data-order', arr.length);
+        }
         applyFilter();
     }
 
-    function applyFilter() {
-        const rows = document.querySelectorAll('#gridBody tr');
-        let counts = Array(40).fill(0);
-        rows.forEach(tr => {
-            const data = db[tr.id.split('-')[1]];
-            let ok = true;
-            // 年份過濾 (B欄)
-            if(filters.year.length > 0) ok &= filters.year.includes(data[1].toString().split('/')[0]);
-            // 週、天干、地支、節氣 (C,D,E,F欄)
-            ['week','tian','di','solar'].forEach((cat, i) => {
-                if(filters[cat].length > 0) ok &= filters[cat].some(v => data[i+2].toString().includes(v));
-            });
-            // 號碼過濾 (G-K欄)
-            const winNums = data.slice(6,11).map(Number);
-            if(filters.nums.length > 0) ok &= filters.nums.every(n => winNums.includes(Number(n)));
+    function generateBatchReport() {
+        if(!db.length) return;
+        const results = [];
+        const hasNums = filters.nums.length > 0;
+        const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
+        const catNames = { year:'年份', week:'週', tian:'天干', di:'地支', solar:'節氣' };
 
-            tr.style.display = ok ? '' : 'none';
-            if(ok) {
-                const cells = tr.querySelectorAll('.num-cell');
-                cells.forEach(td => {
-                    const n = parseInt(td.getAttribute('data-n'));
-                    if(winNums.includes(n)) { td.innerText = n; td.style.color = 'red'; td.style.fontWeight='bold'; counts[n]++; }
-                    else { td.innerText = ''; }
+        if (currentMode === 'duipeng' || currentMode === 'duipeng_curr') {
+            if (!hasNums || selectedNums.length < 2) return alert("對碰模式必須點選 2 個號碼以上。");
+            let matrix = Array.from({length:40}, () => Array(40).fill(0)), mCount = 0;
+            let reportTitle = (currentMode === 'duipeng' ? "下期對碰" : "當期對碰") + ` [${selectedNums.join(',')}]`;
+            // 對碰邏輯維持原樣...
+            if (currentMode === 'duipeng') {
+                ['week','tian','di','solar'].forEach(cat => {
+                    if(filters[cat].length === 2) {
+                        const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                        reportTitle += ` (${catNames[cat]}:${v1}→${v2})`;
+                        for(let i=1; i<db.length; i++) {
+                            const prevWin = db[i-1].slice(6,11).map(Number);
+                            const nextWin = db[i].slice(6,11).map(Number);
+                            if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && selectedNums.every(n => prevWin.includes(n))) {
+                                mCount++;
+                                for(let x=0; x<selectedNums.length; x++) for(let y=x+1; y<selectedNums.length; y++) {
+                                    if(nextWin.includes(selectedNums[x]) && nextWin.includes(selectedNums[y])) { matrix[selectedNums[x]][selectedNums[y]]++; matrix[selectedNums[y]][selectedNums[x]]++; }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                db.forEach(row => {
+                    let ok = true;
+                    if(filters.year.length > 0) ok &= filters.year.some(v => String(row[0]).startsWith(v));
+                    ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); });
+                    if(ok && selectedNums.every(n => row.slice(6,11).map(Number).includes(n))) {
+                        mCount++; const win = row.slice(6,11).map(Number);
+                        for(let x=0; x<selectedNums.length; x++) for(let y=x+1; y<selectedNums.length; y++) {
+                            if(win.includes(selectedNums[x]) && win.includes(selectedNums[y])) { matrix[selectedNums[x]][selectedNums[y]]++; matrix[selectedNums[y]][selectedNums[x]]++; }
+                        }
+                    }
                 });
             }
-        });
-        for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i];
-    }
-
-    function generateBatchReport() {
-        const results = [];
-        const catNames = { year:'年份', week:'週', tian:'天干', di:'地支', solar:'節氣' };
-        
-        if(currentMode === 'history') {
+            if(mCount === 0) return alert("查無數據");
+            let rows = selectedNums.map(n1 => {
+                let s = Array(40).fill(0); selectedNums.forEach(n2 => { if(n1!==n2) s[n2] = matrix[n1][n2]; });
+                return { label: `號碼 ${n1}`, data: s, matches: mCount };
+            });
+            saveAndRender(reportTitle + ` (${mCount}期)`, rows, 'pair', selectedNums);
+        }
+        else if (currentMode === 'tuopai') {
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2) {
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    if(!hasNums) {
+                        let s = Array(40).fill(0), c = 0;
+                        for(let i=1; i<db.length; i++) {
+                            if(filters.year.length > 0 && !filters.year.some(y => String(db[i][0]).startsWith(y))) continue;
+                            if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2)) {
+                                db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
+                            }
+                        }
+                        if(c>0) results.push({ label: `[純項] ${catNames[cat]}:${v1}→${v2}`, data: s, matches: c });
+                    } else {
+                        selectedNums.forEach(num => {
+                            let s = Array(40).fill(0), c = 0;
+                            for(let i=1; i<db.length; i++) {
+                                if(filters.year.length > 0 && !filters.year.some(y => String(db[i][0]).startsWith(y))) continue;
+                                if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && db[i-1].slice(6,11).map(Number).includes(num)) {
+                                    db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
+                                }
+                            }
+                            if(c>0) results.push({ label: `[拖:${num}] ${v1}→${v2}`, data: s, matches: c });
+                        });
+                    }
+                }
+            });
+            if(results.length) saveAndRender("拖牌分析報表", results, 'table');
+            else alert("拖牌：請點選 2 個項目。");
+        }
+        else if (currentMode === 'history') {
             ['year','week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
                     let s = Array(40).fill(0), c = 0;
-                    db.forEach(row => {
-                        let rowVal = (cat === 'year') ? row[1].toString().split('/')[0] : row[['week','tian','di','solar'].indexOf(cat)+2].toString();
-                        if(rowVal.includes(val)) {
-                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; });
-                            c++;
-                        }
+                    let col = (cat === 'year') ? 0 : ['week','tian','di','solar'].indexOf(cat)+2;
+                    db.forEach(row => { 
+                        let rowVal = (cat === 'year') ? String(row[col]).substring(0,4) : String(row[col]);
+                        let numMatch = !hasNums || selectedNums.every(n => row.slice(6,11).map(Number).includes(n));
+                        if(rowVal.includes(val) && numMatch) { 
+                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++; 
+                        } 
                     });
                     if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s, matches: c });
                 });
             });
-            saveAndRender("歷史統計報表", results);
-        } 
-        else if (currentMode === 'tuopai') {
-            // 拖牌邏輯：每個項目點選2個成立
-            ['week','tian','di','solar'].forEach(cat => {
-                if(filters[cat].length === 2) {
-                    const [v1, v2] = filters[cat];
-                    const col = ['week','tian','di','solar'].indexOf(cat)+2;
-                    let s = Array(40).fill(0), c = 0;
-                    for(let i=1; i<db.length; i++) {
-                        if(db[i-1][col].toString().includes(v1) && db[i][col].toString().includes(v2)) {
-                            db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; });
-                            c++;
-                        }
-                    }
-                    if(c > 0) results.push({ label: `拖牌:${v1}→${v2}`, data: s, matches: c });
-                }
-            });
-            saveAndRender("拖牌分析報表", results);
+            if(results.length) saveAndRender("歷史統計報表", results, 'table');
         }
         switchPage('repo');
     }
 
-    function saveAndRender(title, rows) {
-        savedReports.unshift({ title, rows, id: Date.now() });
+    function saveAndRender(title, rows, type, targetNums = []) {
+        savedReports.unshift({ title, rows, type, targetNums, id: Date.now() });
         localStorage.setItem('539_reports', JSON.stringify(savedReports));
         updateReportUI();
     }
@@ -230,46 +260,55 @@
         savedReports.forEach(report => {
             const card = document.createElement('div');
             card.className = 'report-card';
-            let h = `<div class="report-title"><span>${report.title}</span><button onclick="deleteRepo(${report.id})">刪除</button></div>`;
-            h += `<div class="scroll-area"><table><tr><td>項目</td>`;
-            for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
-            h += `</tr>`;
+            const isPair = report.type === 'pair';
+            let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
+            h += `<div class="scroll-area"><table><thead><tr style="background:#eee"><td>項目</td>`;
+            if(isPair) report.targetNums.forEach(n => h += `<td>${n}</td>`);
+            else for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
+            h += `</tr></thead><tbody>`;
             report.rows.forEach(r => {
-                h += `<tr><td>${r.label}(${r.matches}期)</td>`;
-                for(let i=1; i<=39; i++) h += `<td>${r.data[i]||''}</td>`;
+                const top3 = getTop3Indices(r.data);
+                h += `<tr><td style="font-weight:bold; background:#f9f9f9;">${r.label} (${r.matches}期)</td>`;
+                if(isPair) report.targetNums.forEach(n => { const v = r.data[n] || 0; h += `<td class="${v>0?'top-hit':''}">${v||''}</td>`; });
+                else for(let i=1; i<=39; i++) { const v = r.data[i] || 0; h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`; }
                 h += `</tr>`;
             });
-            h += `</table></div>`;
-            card.innerHTML = h;
-            list.appendChild(card);
+            h += `</tbody></table></div>`;
+            card.innerHTML = h; list.appendChild(card);
         });
     }
 
-    function deleteRepo(id) {
-        savedReports = savedReports.filter(r => r.id !== id);
-        localStorage.setItem('539_reports', JSON.stringify(savedReports));
-        updateReportUI();
+    function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
+    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
+    function switchPage(p) { document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden'); document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden'); }
+    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
+    
+    function applyFilter() { 
+        if(!db.length) return; 
+        const rows = document.querySelectorAll('#gridBody tr'); let counts = Array(40).fill(0); 
+        rows.forEach(tr => { 
+            const data = db[tr.id.split('-')[1]]; let ok = true; 
+            if(filters.year.length > 0) ok &= filters.year.some(v => String(data[0]).startsWith(v));
+            ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); 
+            const win = data.slice(6, 11).map(Number); 
+            if(filters.nums.length > 0) ok &= filters.nums.every(n => win.includes(Number(n))); 
+            tr.style.display = ok ? '' : 'none'; 
+            if(ok) { const tds = tr.querySelectorAll('.num-cell'); tds.forEach(td => { const n = parseInt(td.getAttribute('data-n')); if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } else td.innerText = ''; }); } 
+        }); 
+        for(let i=1; i<=39; i++) { const el = document.getElementById(`s-${i}`); if(el) el.innerText = counts[i]; }
     }
 
-    function setMode(m) {
-        currentMode = m;
-        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-        if(m==='history') document.querySelector('.btn-mode-h').classList.add('active');
-        if(m==='tuopai') document.querySelector('.btn-mode-t').classList.add('active');
+    function renderGrid() { 
+        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
+        db.forEach((row, idx) => { 
+            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
+            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
+            for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
+            body.appendChild(tr); 
+        }); 
     }
-
-    function switchPage(p) {
-        document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist');
-        document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo');
-    }
-
-    function clearFilters() {
-        filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
-        document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active'));
-        applyFilter();
-    }
-
-    init();
+    function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
+    initUI();
 </script>
 </body>
 </html>
