@@ -104,31 +104,44 @@
     }
 
     async function loadCloudData() {
-        try {
-            const response = await fetch(GSHEET_CSV_URL);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                // 強制 UTF-8 解碼防止亂碼
-                const decoder = new TextDecoder('utf-8');
-                const csvString = decoder.decode(e.target.result);
-                const workbook = XLSX.read(csvString, { type: 'string' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    try {
+        const response = await fetch(GSHEET_CSV_URL);
+        const blob = await response.blob();
+        const reader = new FileReader();
 
-                db = rawData.filter(row => row[0] && row[0] !== "期號" && !isNaN(row[0])).map(row => {
-                    row[1] = formatDate(row[1]);
-                    for(let i = 2; i <= 5; i++) row[i] = row[i] ? String(row[i]).trim() : "";
-                    return row;
-                });
+        reader.onload = function(e) {
+            // 強制使用 UTF-8 解碼，解決週、天干、地支亂碼問題
+            const decoder = new TextDecoder('utf-8');
+            const csvString = decoder.decode(e.target.result);
+            const workbook = XLSX.read(csvString, { type: 'string' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-                initYearBtns(); 
-                renderGrid();
-                document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-            };
-            reader.readAsArrayBuffer(blob);
-        } catch (e) { console.error(e); }
-    }
+            // 資料清洗：過濾標題列並統一日期格式
+            db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
+                // 處理日期：確保轉換為 "YYYY/MM/DD" 字串
+                let dateVal = row[1];
+                if (!isNaN(dateVal) && Number(dateVal) > 40000) {
+                    dateVal = formatDate(dateVal); // 處理 Excel 序號
+                } else {
+                    dateVal = String(dateVal).trim().replace(/-/g, '/');
+                }
+                row[1] = dateVal;
+
+                // 清洗週、天干、地支 (Index 2, 3, 4)
+                for(let i = 2; i <= 5; i++) {
+                    row[i] = row[i] ? String(row[i]).trim() : "";
+                }
+                return row;
+            });
+
+            initYearBtns(); // 動態生成 2026 等年份按鈕
+            renderGrid();   // 渲染表格
+            document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
+        };
+        reader.readAsArrayBuffer(blob);
+    } catch (e) { console.error("加載失敗:", e); }
+}
 
     function renderGrid() { 
         const body = document.getElementById('gridBody'); body.innerHTML = ''; 
@@ -345,3 +358,4 @@
 </script>
 </body>
 </html>
+
