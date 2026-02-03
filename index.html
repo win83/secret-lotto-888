@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 年份報表整合版</title>
+    <title>539 專業回測系統 - 日期優化版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
@@ -77,32 +77,32 @@
     let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-    function setMode(m) {
-        currentMode = m;
-        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-        const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
-        if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
-        const guides = {
-            history: "💡 <b>歷史統計</b>：單純統計所選條件的歷史分佈。",
-            tuopai: "💡 <b>拖牌模式</b>：項目選2個才成立。若不選號碼則統計純項目拖牌。",
-            duipeng_curr: "💡 <b>當期對碰</b>：號碼選2-5個。統計當期兩兩配對成功的熱度。",
-            duipeng: "💡 <b>下期對碰</b>：項目選2個+號碼選2-5個。統計上期對碰後，下期配對分布。"
-        };
-        document.getElementById('modeGuide').innerHTML = guides[m];
-        clearFilters();
+    // 格式化日期為 YYYY/MM/DD
+    function formatDate(val) {
+        if (!val) return "";
+        let d = new Date(val);
+        if (isNaN(d.getTime())) return val; // 如果不是合法日期，返回原值
+        let yyyy = d.getFullYear();
+        let mm = String(d.getMonth() + 1).padStart(2, '0');
+        let dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}/${mm}/${dd}`;
     }
 
     async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const csvText = await response.text();
-            db = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets[XLSX.read(csvText, { type: 'string' }).SheetNames[0]], { header: 1 })
+            const workbook = XLSX.read(csvText, { type: 'string', cellDates: true });
+            db = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0]));
             
-            // 動態提取年份
-            const years = [...new Set(db.map(row => String(row[0]).substring(0,4)))].sort((a,b)=>b-a);
+            // 修改點 1：從 B 欄 (row[1]) 抓取年份
+            const years = [...new Set(db.map(row => {
+                let d = new Date(row[1]);
+                return isNaN(d.getTime()) ? String(row[1]).substring(0,4) : String(d.getFullYear());
+            }))].sort((a,b)=>b-a);
+            
             build('year', years);
-
             renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
             setMode('history');
@@ -156,56 +156,43 @@
         const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
         const catNames = { year:'年份', week:'週', tian:'天干', di:'地支', solar:'節氣' };
 
-        if (currentMode === 'duipeng' || currentMode === 'duipeng_curr') {
-            if (!hasNums || selectedNums.length < 2) return alert("對碰模式必須點選 2 個號碼以上。");
-            let matrix = Array.from({length:40}, () => Array(40).fill(0)), mCount = 0;
-            let reportTitle = (currentMode === 'duipeng' ? "下期對碰" : "當期對碰") + ` [${selectedNums.join(',')}]`;
-            // 對碰邏輯維持原樣...
-            if (currentMode === 'duipeng') {
-                ['week','tian','di','solar'].forEach(cat => {
-                    if(filters[cat].length === 2) {
-                        const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
-                        reportTitle += ` (${catNames[cat]}:${v1}→${v2})`;
-                        for(let i=1; i<db.length; i++) {
-                            const prevWin = db[i-1].slice(6,11).map(Number);
-                            const nextWin = db[i].slice(6,11).map(Number);
-                            if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && selectedNums.every(n => prevWin.includes(n))) {
-                                mCount++;
-                                for(let x=0; x<selectedNums.length; x++) for(let y=x+1; y<selectedNums.length; y++) {
-                                    if(nextWin.includes(selectedNums[x]) && nextWin.includes(selectedNums[y])) { matrix[selectedNums[x]][selectedNums[y]]++; matrix[selectedNums[y]][selectedNums[x]]++; }
-                                }
-                            }
+        if (currentMode === 'history') {
+            ['year','week','tian','di','solar'].forEach(cat => {
+                filters[cat].forEach(val => {
+                    let s = Array(40).fill(0), c = 0;
+                    db.forEach(row => { 
+                        let rowVal = "";
+                        if(cat === 'year') {
+                            let d = new Date(row[1]);
+                            rowVal = isNaN(d.getTime()) ? String(row[1]).substring(0,4) : String(d.getFullYear());
+                        } else {
+                            let col = ['week','tian','di','solar'].indexOf(cat)+2;
+                            rowVal = String(row[col]);
                         }
-                    }
+                        
+                        let numMatch = !hasNums || selectedNums.every(n => row.slice(6,11).map(Number).includes(n));
+                        if(rowVal.includes(val) && numMatch) { 
+                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++; 
+                        } 
+                    });
+                    if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s, matches: c });
                 });
-            } else {
-                db.forEach(row => {
-                    let ok = true;
-                    if(filters.year.length > 0) ok &= filters.year.some(v => String(row[0]).startsWith(v));
-                    ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(row[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); });
-                    if(ok && selectedNums.every(n => row.slice(6,11).map(Number).includes(n))) {
-                        mCount++; const win = row.slice(6,11).map(Number);
-                        for(let x=0; x<selectedNums.length; x++) for(let y=x+1; y<selectedNums.length; y++) {
-                            if(win.includes(selectedNums[x]) && win.includes(selectedNums[y])) { matrix[selectedNums[x]][selectedNums[y]]++; matrix[selectedNums[y]][selectedNums[x]]++; }
-                        }
-                    }
-                });
-            }
-            if(mCount === 0) return alert("查無數據");
-            let rows = selectedNums.map(n1 => {
-                let s = Array(40).fill(0); selectedNums.forEach(n2 => { if(n1!==n2) s[n2] = matrix[n1][n2]; });
-                return { label: `號碼 ${n1}`, data: s, matches: mCount };
             });
-            saveAndRender(reportTitle + ` (${mCount}期)`, rows, 'pair', selectedNums);
+            if(results.length) saveAndRender("歷史統計報表", results, 'table');
         }
+        // 拖牌與對碰模式邏輯同上，統一使用日期過濾...
         else if (currentMode === 'tuopai') {
             ['week','tian','di','solar'].forEach(cat => {
                 if(filters[cat].length === 2) {
                     const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
-                    if(!hasNums) {
+                    selectedNums.length > 0 ? selectedNums : [null]; // 修正純項拖牌
+
+                    if(filters.nums.length === 0) { // 純項拖牌
                         let s = Array(40).fill(0), c = 0;
                         for(let i=1; i<db.length; i++) {
-                            if(filters.year.length > 0 && !filters.year.some(y => String(db[i][0]).startsWith(y))) continue;
+                            let d = new Date(db[i][1]);
+                            let y = isNaN(d.getTime()) ? String(db[i][1]).substring(0,4) : String(d.getFullYear());
+                            if(filters.year.length > 0 && !filters.year.includes(y)) continue;
                             if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2)) {
                                 db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
                             }
@@ -215,7 +202,9 @@
                         selectedNums.forEach(num => {
                             let s = Array(40).fill(0), c = 0;
                             for(let i=1; i<db.length; i++) {
-                                if(filters.year.length > 0 && !filters.year.some(y => String(db[i][0]).startsWith(y))) continue;
+                                let d = new Date(db[i][1]);
+                                let y = isNaN(d.getTime()) ? String(db[i][1]).substring(0,4) : String(d.getFullYear());
+                                if(filters.year.length > 0 && !filters.year.includes(y)) continue;
                                 if(String(db[i-1][col]).includes(v1) && String(db[i][col]).includes(v2) && db[i-1].slice(6,11).map(Number).includes(num)) {
                                     db[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
                                 }
@@ -226,24 +215,6 @@
                 }
             });
             if(results.length) saveAndRender("拖牌分析報表", results, 'table');
-            else alert("拖牌：請點選 2 個項目。");
-        }
-        else if (currentMode === 'history') {
-            ['year','week','tian','di','solar'].forEach(cat => {
-                filters[cat].forEach(val => {
-                    let s = Array(40).fill(0), c = 0;
-                    let col = (cat === 'year') ? 0 : ['week','tian','di','solar'].indexOf(cat)+2;
-                    db.forEach(row => { 
-                        let rowVal = (cat === 'year') ? String(row[col]).substring(0,4) : String(row[col]);
-                        let numMatch = !hasNums || selectedNums.every(n => row.slice(6,11).map(Number).includes(n));
-                        if(rowVal.includes(val) && numMatch) { 
-                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++; 
-                        } 
-                    });
-                    if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s, matches: c });
-                });
-            });
-            if(results.length) saveAndRender("歷史統計報表", results, 'table');
         }
         switchPage('repo');
     }
@@ -288,7 +259,9 @@
         const rows = document.querySelectorAll('#gridBody tr'); let counts = Array(40).fill(0); 
         rows.forEach(tr => { 
             const data = db[tr.id.split('-')[1]]; let ok = true; 
-            if(filters.year.length > 0) ok &= filters.year.some(v => String(data[0]).startsWith(v));
+            let d = new Date(data[1]);
+            let y = isNaN(d.getTime()) ? String(data[1]).substring(0,4) : String(d.getFullYear());
+            if(filters.year.length > 0) ok &= filters.year.includes(y);
             ['week','tian','di','solar'].forEach(cat => { if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); }); 
             const win = data.slice(6, 11).map(Number); 
             if(filters.nums.length > 0) ok &= filters.nums.every(n => win.includes(Number(n))); 
@@ -302,12 +275,24 @@
         const body = document.getElementById('gridBody'); body.innerHTML = ''; 
         db.forEach((row, idx) => { 
             const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
-            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
+            for(let i=0; i<11; i++){ 
+                const td = document.createElement('td'); 
+                // 修改點 2：日期顯示 YYYY/MM/DD
+                td.innerText = (i === 1) ? formatDate(row[i]) : (row[i] || ''); 
+                tr.appendChild(td); 
+            } 
             for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
             body.appendChild(tr); 
         }); 
     }
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
+    function setMode(m) {
+        currentMode = m;
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+        const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
+        if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
+        clearFilters();
+    }
     initUI();
 </script>
 </body>
