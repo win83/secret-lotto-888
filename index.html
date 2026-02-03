@@ -161,7 +161,7 @@
             const tr = document.getElementById(`row-${i}`);
             let ok = true; 
             // 年份比對：檢查日期字串是否以年份開頭
-            if(filters.year.length) ok &= filters.year.some(y => String(data[1]).startsWith(y));
+            if(filters.year.length) ok &= filters.year.some(y => String(data[1]).trim().includes(String(y)));
             if(filters.week.length) ok &= filters.week.some(v => String(data[2]).includes(v));
             if(filters.tian.length) ok &= filters.tian.some(v => String(data[3]).includes(v));
             if(filters.di.length) ok &= filters.di.some(v => String(data[4]).includes(v));
@@ -352,3 +352,4 @@
 </script>
 </body>
 </html>
+
