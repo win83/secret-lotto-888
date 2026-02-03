@@ -85,6 +85,10 @@
     }
     .info-bar input{ width:70px; padding:3px 6px; }
     .info-hint{ color:#444; font-weight:bold; }
+
+    /* ✅ 新增：節氣分2行的樣式（不影響其它類別） */
+    .solar-wrap{ display:flex; flex-direction:column; gap:6px; }
+    .solar-row{ display:flex; flex-wrap:wrap; gap:4px; }
   </style>
 </head>
 <body>
@@ -334,7 +338,6 @@
     return (n > 0) ? db.slice(-n) : db;
   }
 
-  /* ✅ 新增：將目前篩選條件組成摘要字串（給每張報表存檔用） */
   function getFilterSummaryForReport(){
     const viewN = parseInt(document.getElementById('viewN').value) || 0;
     const recentN = parseInt(document.getElementById('recentN').value) || 0;
@@ -343,9 +346,7 @@
     const modeText = modeMap[currentMode] || currentMode;
 
     const parts = [];
-    const add = (label, arr) => {
-      if(arr && arr.length) parts.push(`${label}:${arr.join(',')}`);
-    };
+    const add = (label, arr) => { if(arr && arr.length) parts.push(`${label}:${arr.join(',')}`); };
 
     add('年份', filters.year);
     add('週', filters.week);
@@ -356,8 +357,6 @@
 
     const cond = parts.length ? parts.join('｜') : '無篩選';
     const meta = `顯示:${viewN===0?'全部':viewN+'期'}｜統計:${recentN===0?'全部':recentN+'期'}｜模式:${modeText}`;
-
-    // 顯示兩行（藍底中間視覺更清楚）
     return `${cond}\n${meta}`;
   }
 
@@ -407,7 +406,7 @@
     const titleMap = { history: "歷史統計", tuopai: "拖牌回測", current: "當期對碰", next: "下期對碰" };
 
     if(results.length) {
-      const summary = getFilterSummaryForReport(); // ✅ 產生摘要
+      const summary = getFilterSummaryForReport();
       saveAndRender(titleMap[currentMode], results, summary);
     }
     switchPage('repo');
@@ -422,7 +421,6 @@
       card.className = 'report-card';
       let totals = Array(40).fill(0);
 
-      // ✅ 藍底列：左=標題，中=摘要，右=刪除
       let h = `
         <div class="report-title">
           <span class="report-left">【${report.title}】</span>
@@ -464,7 +462,6 @@
     return sorted.filter(x => topVals.includes(x.v)).map(x => x.i);
   }
 
-  /* ✅ 改：存報表時多存 summary */
   function saveAndRender(title, rows, summary) {
     savedReports.unshift({ title, rows, summary, id: Date.now() });
     localStorage.setItem('539_reports', JSON.stringify(savedReports));
@@ -593,9 +590,42 @@
     build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
     build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
 
-    let slist = [];
-    for(let i=0; i<=15; i++) { slist.push('T'+i); slist.push('S'+i); }
-    build('solar', slist);
+    /* ✅ 修改點：節氣 S / T 分 2 行（取代原本 build('solar', slist)） */
+    (function buildSolarTwoRows(){
+      const container = document.querySelector('[data-type="solar"]');
+      if(!container) return;
+      container.innerHTML = '';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'solar-wrap';
+
+      const rowT = document.createElement('div');
+      rowT.className = 'solar-row';
+
+      const rowS = document.createElement('div');
+      rowS.className = 'solar-row';
+
+      for(let i=0; i<=15; i++){
+        const t = 'T' + i;
+        const s = 'S' + i;
+
+        const tDiv = document.createElement('div');
+        tDiv.className = 'f-item';
+        tDiv.innerText = t;
+        tDiv.onclick = () => handleItem(tDiv, 'solar', t);
+        rowT.appendChild(tDiv);
+
+        const sDiv = document.createElement('div');
+        sDiv.className = 'f-item';
+        sDiv.innerText = s;
+        sDiv.onclick = () => handleItem(sDiv, 'solar', s);
+        rowS.appendChild(sDiv);
+      }
+
+      wrap.appendChild(rowT);
+      wrap.appendChild(rowS);
+      container.appendChild(wrap);
+    })();
 
     build('nums', Array.from({length:39}, (_,i)=>i+1));
 
