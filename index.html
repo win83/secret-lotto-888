@@ -3,30 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 年份修正整合版</title>
+    <title>539 專業回測系統 - 年份修正完整版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
         body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
         .main-layout { display: flex; flex-direction: column; gap: 10px; }
         .guide-box { background: #fffde7; border: 1px solid #ddd; border-left: 5px solid var(--gold); padding: 8px 15px; margin-bottom: 5px; border-radius: 4px; min-height: 24px; display: flex; align-items: center; }
+        
+        /* 紅框過濾面板：依照截圖調整佈局 */
         .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 80px 1fr; gap: 8px; border-radius: 8px; }
         .f-label { background: #fdf2f2; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; height: 35px; border-radius: 4px; }
         .f-btns { display: flex; flex-wrap: wrap; gap: 6px; align-content: center; }
-        .f-item { padding: 4px 12px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
+        .f-item { padding: 4px 12px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; transition: all 0.2s; }
+        .f-item:hover { background: #f0f0f0; }
         .f-item.active { background: var(--blue-t); color: white; border-color: #0d47a1; }
         .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
+        
+        /* 功能按鈕區 */
         .action-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 0; }
         .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 18px; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .yellow-btn.active { background: #ff9800 !important; color: white; }
         .add-btn { background: #4CAF50; color: white; border: 1px solid #000; padding: 8px 25px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        
         .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; min-height: 500px; }
-        .scroll-area { overflow: auto; max-height: 550px; }
+        .scroll-area { overflow: auto; max-height: 600px; }
         table { border-collapse: collapse; width: 100%; white-space: nowrap; }
         th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-        .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
+        
+        .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; overflow: hidden; }
         .report-title { background: #7da7d8; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; color: white; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
+        .combo-row { background-color: #fffde7; font-weight: bold; }
         .hidden { display: none; }
     </style>
 </head>
@@ -50,7 +58,7 @@
             
             <div class="f-label" style="background:#e3f2fd">自訂期數</div>
             <div class="f-btns">
-                <input type="number" id="limitRows" value="0" min="0" onchange="applyFilter()" style="width: 80px; padding: 6px;">
+                <input type="number" id="limitRows" value="0" min="0" onchange="applyFilter()" style="width: 80px; padding: 6px; border: 1px solid #ccc;">
                 <span style="color: #666; font-size: 11px; margin-left:10px;">(0代表全部，輸入 50 則只看最近 50 期)</span>
             </div>
         </div>
@@ -63,7 +71,7 @@
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
             <button onclick="clearFilters()" style="padding:8px 15px; cursor:pointer;">清空篩選</button>
             <button onclick="switchPage('repo')" style="padding:8px 15px; cursor:pointer; background:#607d8b; color:white; border:none; border-radius:4px; margin-left:10px;">切換報表</button>
-            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">讀取數據中...</span>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
 
         <div class="scroll-area">
@@ -90,34 +98,43 @@
     let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
+    // 新增：Excel 日期序號轉 YYYY/MM/DD 文字函數
+    function excelSerialToDate(serial) {
+        if (isNaN(serial) || String(serial).includes('/')) return String(serial);
+        // Excel 序號以 1899-12-30 為基準
+        let date = new Date((serial - 25569) * 86400 * 1000);
+        let y = date.getFullYear();
+        let m = ("0" + (date.getMonth() + 1)).slice(-2);
+        let d = ("0" + date.getDate()).slice(-2);
+        return `${y}/${m}/${d}`;
+    }
+
     async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const csvText = await response.text();
-            // 修正點：使用 raw: true 確保日期 B 欄位不被轉成 Excel 序號
-            const workbook = XLSX.read(csvText, { type: 'string', cellDates: false });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            db = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true })
-                 .filter(row => row[0] && !isNaN(row[0]));
+            // 讀取原始數據
+            let rawData = XLSX.utils.sheet_to_json(XLSX.read(csvText, { type: 'string' }).Sheets[XLSX.read(csvText, { type: 'string' }).SheetNames[0]], { header: 1 });
+            
+            // 過濾並轉換 B 欄位日期格式
+            db = rawData.filter(row => row[0] && !isNaN(row[0])).map(row => {
+                row[1] = excelSerialToDate(row[1]); // 確保 B 欄是 YYYY/MM/DD
+                return row;
+            });
             
             initYearBtns();
             renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
             setMode('history');
             updateReportUI();
-        } catch (e) { 
-            console.error(e);
-            document.getElementById('fileMsg').innerText = "載入失敗"; 
-        }
+        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
     }
 
     function initYearBtns() {
         const yearSet = new Set();
         db.forEach(row => {
-            let dateVal = String(row[1]); // B 欄位
-            // 如果還是序號 (如 4xxxx)，這部分邏輯會進行簡單判定或直接擷取
-            // 但在讀取時 raw: true 已能解決大部分問題
-            let y = dateVal.includes('/') ? dateVal.split('/')[0] : dateVal.substring(0, 4);
+            const dateStr = String(row[1]); // 此時 B 欄已是正確日期字串
+            const y = dateStr.substring(0, 4);
             if (y.length === 4 && !isNaN(y)) yearSet.add(y);
         });
         const years = Array.from(yearSet).sort((a, b) => b - a);
@@ -131,7 +148,6 @@
         });
     }
 
-    // 介面初始化與事件處理
     function initUI() {
         const build = (type, list, containerId) => {
             const container = containerId ? document.getElementById(containerId) : document.querySelector(`[data-type="${type}"]`);
@@ -182,9 +198,7 @@
         gridRows.forEach((tr, idx) => { 
             const data = db[tr.id.split('-')[1]]; 
             let ok = true; 
-            // 年份過濾
             if(filters.year.length > 0) ok &= filters.year.some(y => String(data[1]).startsWith(y));
-            // 其他項目過濾
             ['week','tian','di','solar'].forEach(cat => { 
                 if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); 
             }); 
@@ -206,11 +220,9 @@
         for(let i=1; i<=39; i++) document.getElementById(`s-${i}`).innerText = counts[i]; 
     }
 
-    // 報表與組合統計邏輯
     function generateBatchReport() {
         if(!db.length) return;
         const results = [];
-        const hasNums = filters.nums.length > 0;
         const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
         const catNames = { week:'週', tian:'天干', di:'地支', solar:'節氣' };
 
@@ -226,7 +238,6 @@
                 });
             });
 
-            // 天干地支組合邏輯
             if(filters.tian.length === 1 && filters.di.length === 1) {
                 const t = filters.tian[0], d = filters.di[0];
                 let s = Array(40).fill(0), c = 0;
@@ -238,9 +249,9 @@
                 });
                 if(c > 0) results.push({ label: `★組合:${t}${d}`, data: s, matches: c, isCombo: true });
             }
-            if(results.length) saveAndRender("歷史統計", results);
-        } else if (currentMode === 'tuopai') {
-            // 遵循每個項目點選 2 個成立邏輯
+            if(results.length) saveAndRender("歷史分析報表", results, 'table');
+        } 
+        else if (currentMode === 'tuopai') {
             ['week','tian','di','solar'].forEach(cat => {
                 if(filters[cat].length === 2) {
                     const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
@@ -255,13 +266,14 @@
                     });
                 }
             });
-            if(results.length) saveAndRender("拖牌分析", results);
+            if(results.length) saveAndRender("拖牌分析報表", results, 'table');
+            else alert("拖牌模式：請點選 2 個項目 + 至少 1 個號碼。");
         }
         switchPage('repo');
     }
 
-    function saveAndRender(title, rows) {
-        savedReports.unshift({ title, rows, id: Date.now() });
+    function saveAndRender(title, rows, type) {
+        savedReports.unshift({ title, rows, type, id: Date.now() });
         localStorage.setItem('539_reports', JSON.stringify(savedReports));
         updateReportUI();
     }
@@ -270,13 +282,13 @@
         const list = document.getElementById('repo-list'); list.innerHTML = '';
         savedReports.forEach(report => {
             const card = document.createElement('div'); card.className = 'report-card';
-            let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-            h += `<div class="scroll-area"><table><thead><tr style="background:#eee"><td>項目(期數)</td>`;
+            let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})" style="background:#fff; color:#333; border:none; padding:4px 10px; border-radius:3px; cursor:pointer;">刪除</button></div>`;
+            h += `<div class="scroll-area"><table><thead><tr style="background:#eee; font-weight:bold;"><td>項目(期數)</td>`;
             for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
             h += `</tr></thead><tbody>`;
             report.rows.forEach(r => {
                 const top3 = getTop3Indices(r.data);
-                h += `<tr><td style="background:#f9f9f9;">${r.label}(${r.matches})</td>`;
+                h += `<tr class="${r.isCombo?'combo-row':''}"><td>${r.label}(${r.matches})</td>`;
                 for(let i=1; i<=39; i++) { const v = r.data[i] || 0; h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`; }
                 h += `</tr>`;
             });
@@ -307,6 +319,7 @@
             for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
             body.appendChild(tr); 
         }); 
+        applyFilter();
     }
     function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
     initUI();
