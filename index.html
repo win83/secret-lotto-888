@@ -111,40 +111,46 @@ async function loadCloudData() {
             const reader = new FileReader();
 
             reader.onload = function(e) {
-                // 強制使用 UTF-8 解碼字串，徹底解決週、天干地支亂碼
                 const decoder = new TextDecoder('utf-8');
                 const csvString = decoder.decode(e.target.result);
-                
-                // 使用 XLSX 讀取純文字字串
                 const workbook = XLSX.read(csvString, { type: 'string' });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-                // 重新對齊資料邏輯
                 db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
-                    // 日期轉換邏輯
-                    if (!isNaN(row[1]) && row[1] > 40000) {
-                        row[1] = formatDate(row[1]);
+                    // 關鍵修正：確保 row[1] 轉換後真的是 YYYY/MM/DD 字串
+                    let dateVal = row[1];
+                    if (!isNaN(dateVal) && dateVal > 40000) {
+                        dateVal = formatDate(dateVal); // 如果是 Excel 序號轉格式
+                    } else {
+                        dateVal = String(dateVal).trim().replace(/-/g, '/'); // 強制統一樣式
                     }
-                    // 文字欄位去空白
+                    row[1] = dateVal;
+
                     for(let i = 2; i <= 5; i++) {
                         row[i] = row[i] ? String(row[i]).trim() : "";
                     }
                     return row;
                 });
 
-                // 重新渲染畫面
-                initYearBtns(); 
-                renderGrid();
+                initYearBtns(); // 這裡會根據 db 重新產生年份按鈕
+                renderGrid();   // 預設顯示
                 document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-                if (typeof updateReportUI === "function") updateReportUI();
             };
-
             reader.readAsArrayBuffer(blob);
-        } catch (e) { 
-            console.error("Data Load Error:", e);
-            document.getElementById('fileMsg').innerText = "載入失敗"; 
-        }
+        } catch (e) { console.error(e); }
+    }
+
+    // 請檢查您的年份篩選函式，確保是用 row[1] 的前 4 碼判斷
+    function filterByYear(year) {
+        // year 是按鈕傳進來的字串，例如 "2026"
+        const filteredData = db.filter(row => {
+            const rowYear = String(row[1]).split('/')[0]; // 取得 "2026/8/17" 的 "2026"
+            return rowYear === String(year);
+        });
+        
+        // 將篩選後的資料餵給渲染函式（請確認您原本渲染函式的名稱）
+        renderGrid(filteredData); 
     }
 
     function getFilterLabel() {
@@ -336,6 +342,7 @@ async function loadCloudData() {
 </script>
 </body>
 </html>
+
 
 
 
