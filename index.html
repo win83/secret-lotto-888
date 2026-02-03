@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 整合優化版</title>
+    <title>539 專業回測系統 - 2026 修正版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
@@ -30,7 +30,6 @@
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; overflow: hidden; }
         .report-title { background: #7da7d8; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; color: white; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
-        .combo-row { background-color: #fffde7; font-weight: bold; }
         .hidden { display: none; }
     </style>
 </head>
@@ -63,7 +62,7 @@
             <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
-            <button onclick="clearFilters()" style="padding: 8px 15px; cursor:pointer;">清空篩選</button>
+            <button onclick="clearFilters()" style="padding: 8px 15px; cursor:pointer;">清空篩選器</button>
             <button onclick="switchPage('repo')" style="background:#607d8b; color:white; border-radius:4px; padding: 8px 15px; border:none; cursor:pointer;">切換報表</button>
             <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
@@ -101,79 +100,117 @@
             let y = d.getFullYear(), m = ("0" + (d.getMonth() + 1)).slice(-2), day = ("0" + d.getDate()).slice(-2);
             return `${y}/${m}/${day}`;
         }
-        return String(val);
+        return String(val).trim().replace(/-/g, '/');
     }
 
-async function loadCloudData() {
+    async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const blob = await response.blob();
             const reader = new FileReader();
-
             reader.onload = function(e) {
+                // 強制 UTF-8 解碼防止亂碼
                 const decoder = new TextDecoder('utf-8');
                 const csvString = decoder.decode(e.target.result);
                 const workbook = XLSX.read(csvString, { type: 'string' });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-                db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
-                    // 關鍵修正：確保 row[1] 轉換後真的是 YYYY/MM/DD 字串
-                    let dateVal = row[1];
-                    if (!isNaN(dateVal) && dateVal > 40000) {
-                        dateVal = formatDate(dateVal); // 如果是 Excel 序號轉格式
-                    } else {
-                        dateVal = String(dateVal).trim().replace(/-/g, '/'); // 強制統一樣式
-                    }
-                    row[1] = dateVal;
-
-                    for(let i = 2; i <= 5; i++) {
-                        row[i] = row[i] ? String(row[i]).trim() : "";
-                    }
+                db = rawData.filter(row => row[0] && row[0] !== "期號" && !isNaN(row[0])).map(row => {
+                    row[1] = formatDate(row[1]);
+                    for(let i = 2; i <= 5; i++) row[i] = row[i] ? String(row[i]).trim() : "";
                     return row;
                 });
 
-                initYearBtns(); // 這裡會根據 db 重新產生年份按鈕
-                renderGrid();   // 預設顯示
+                initYearBtns(); 
+                renderGrid();
                 document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
             };
             reader.readAsArrayBuffer(blob);
         } catch (e) { console.error(e); }
     }
 
-    // 請檢查您的年份篩選函式，確保是用 row[1] 的前 4 碼判斷
-    function filterByYear(year) {
-        // year 是按鈕傳進來的字串，例如 "2026"
-        const filteredData = db.filter(row => {
-            const rowYear = String(row[1]).split('/')[0]; // 取得 "2026/8/17" 的 "2026"
-            return rowYear === String(year);
-        });
-        
-        // 將篩選後的資料餵給渲染函式（請確認您原本渲染函式的名稱）
-        renderGrid(filteredData); 
+    function renderGrid() { 
+        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
+        db.forEach((row, idx) => { 
+            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
+            for(let i=0; i<11; i++) tr.innerHTML += `<td>${row[i]||''}</td>`; 
+            for(let n=1; n<=39; n++) tr.innerHTML += `<td class="num-cell" data-n="${n}"></td>`;
+            body.appendChild(tr); 
+        }); 
+        applyFilter();
     }
 
-    function getFilterLabel() {
-        const labels = [];
-        const n = parseInt(document.getElementById('recentN').value) || 0;
-        if (n > 0) labels.push(`統計${n}期`);
-        if (filters.year.length) labels.push(`年:${filters.year}`);
-        if (filters.week.length) labels.push(`週:${filters.week}`);
-        if (filters.tian.length) labels.push(`干:${filters.tian}`);
-        if (filters.di.length) labels.push(`支:${filters.di}`);
-        if (filters.nums.length) labels.push(`號:${filters.nums}`);
-        return labels.length ? labels.join(' | ') : "全域";
+    function applyFilter() { 
+        if(!db.length) return; 
+        const limit = parseInt(document.getElementById('limitRows').value) || 0;
+        let counts = Array(40).fill(0); let visibleIdx = 0;
+        
+        for (let i = db.length - 1; i >= 0; i--) {
+            const data = db[i];
+            const tr = document.getElementById(`row-${i}`);
+            let ok = true; 
+            if(filters.year.length) ok &= filters.year.some(y => String(data[1]).startsWith(y));
+            if(filters.week.length) ok &= filters.week.some(v => String(data[2]).includes(v));
+            if(filters.tian.length) ok &= filters.tian.some(v => String(data[3]).includes(v));
+            if(filters.di.length) ok &= filters.di.some(v => String(data[4]).includes(v));
+            if(filters.solar.length) ok &= filters.solar.some(v => String(data[5]).includes(v));
+
+            const win = data.slice(6, 11).map(Number);
+            if(filters.nums.length) ok &= filters.nums.every(n => win.includes(Number(n))); 
+
+            const show = ok && (limit === 0 || visibleIdx < limit);
+            tr.style.display = show ? '' : 'none';
+            if(show) {
+                visibleIdx++;
+                win.forEach(n => { if(n>0) counts[n]++; });
+                tr.querySelectorAll('.num-cell').forEach(td => { 
+                    const n = parseInt(td.dataset.n);
+                    td.innerText = win.includes(n) ? (n < 10 ? '0'+n : n) : '';
+                });
+            }
+        }
+        for(let i=1; i<=39; i++) {
+            const s = document.getElementById(`s-${i}`);
+            s.innerText = counts[i]; s.style.color = counts[i]>0 ? 'red' : 'blue';
+        }
+    }
+
+    function handleItem(el, type, val) {
+        const arr = filters[type]; const idx = arr.indexOf(val);
+        if(idx > -1) {
+            arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order');
+        } else {
+            // 拖牌/對碰模式限制：每個文字類別最多點選 2 個
+            if(['tuopai','duipeng_curr','duipeng'].includes(currentMode) && ['week','tian','di','solar'].includes(type) && arr.length >= 2) {
+                alert("此模式下該項目最多選2個"); return;
+            }
+            arr.push(val); el.classList.add('active');
+            if(type !== 'nums' && type !== 'year') el.setAttribute('data-order', arr.length);
+        }
+        applyFilter();
     }
 
     function generateBatchReport() {
         if(!db.length) return;
         const results = [];
-        const selectedNums = filters.nums.map(Number);
         const nLimit = parseInt(document.getElementById('recentN').value) || 0;
         let targetData = (nLimit > 0) ? db.slice(-nLimit) : db;
         const conditionText = getFilterLabel();
 
-        // 歷史統計模式
+        // 拖牌邏輯驗證：每個點選的項目（週、天干、地支、節氣）必須點選 2 個才會成立
+        if (currentMode !== 'history') {
+            const cats = ['week', 'tian', 'di', 'solar'];
+            const invalidCat = cats.find(cat => filters[cat].length > 0 && filters[cat].length !== 2);
+            if (invalidCat) {
+                alert(`拖牌邏輯：${invalidCat} 類別必須點選 2 個才會成立！`);
+                return;
+            }
+            if (filters.nums.length === 0) {
+                alert("請至少選擇一個號碼進行拖牌"); return;
+            }
+        }
+
         if (currentMode === 'history') {
             ['week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
@@ -186,29 +223,52 @@ async function loadCloudData() {
                     if(c > 0) results.push({ label: `${val}`, data: s, matches: c });
                 });
             });
-        } 
-        // 拖牌與對碰模式
-        else {
-            const isNext = currentMode === 'duipeng' || currentMode === 'tuopai';
-            const isTuopai = currentMode === 'tuopai';
-
-            selectedNums.forEach(num => {
+        } else {
+            const isNext = (currentMode === 'duipeng' || currentMode === 'tuopai');
+            filters.nums.forEach(num => {
                 let s = Array(40).fill(0), c = 0;
                 for(let i = 0; i < targetData.length - (isNext?1:0); i++) {
                     const win1 = targetData[i].slice(6,11).map(Number);
-                    if(win1.includes(num)) {
-                        const win2 = isNext ? targetData[i+1].slice(6,11).map(Number) : win1;
-                        win2.forEach(n => { if(n>0) s[n]++; }); c++;
+                    if(win1.includes(Number(num))) {
+                        // 檢查其他文字過濾條件
+                        let matchText = true;
+                        if(filters.week.length) matchText &= filters.week.some(v => String(targetData[i][2]).includes(v));
+                        if(filters.tian.length) matchText &= filters.tian.some(v => String(targetData[i][3]).includes(v));
+                        if(filters.di.length) matchText &= filters.di.some(v => String(targetData[i][4]).includes(v));
+                        if(filters.solar.length) matchText &= filters.solar.some(v => String(targetData[i][5]).includes(v));
+                        
+                        if(matchText) {
+                            const win2 = isNext ? targetData[i+1].slice(6,11).map(Number) : win1;
+                            win2.forEach(n => { if(n>0) s[n]++; }); c++;
+                        }
                     }
                 }
-                if(c > 0) results.push({ label: `${currentMode}:${num}`, data: s, matches: c });
+                if(c > 0) results.push({ label: `號碼 ${num}`, data: s, matches: c });
             });
         }
 
         if(results.length) {
             saveAndRender(`${currentMode} - ${conditionText}`, results);
             switchPage('repo');
-        } else { alert("條件不足或查無資料"); }
+        } else { alert("查無資料"); }
+    }
+
+    function initYearBtns() {
+        const years = [...new Set(db.map(r => r[1].substring(0,4)))].sort((a,b)=>b-a);
+        const container = document.getElementById('yearList'); container.innerHTML = '';
+        years.forEach(y => {
+            if(!y) return;
+            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
+            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
+        });
+    }
+
+    function getFilterLabel() {
+        let l = [];
+        if (filters.year.length) l.push("年:"+filters.year);
+        if (filters.week.length) l.push("週:"+filters.week);
+        if (filters.nums.length) l.push("號:"+filters.nums);
+        return l.join('|') || "全域";
     }
 
     function saveAndRender(title, rows) {
@@ -239,61 +299,24 @@ async function loadCloudData() {
         });
     }
 
-    function handleItem(el, type, val) {
-        const arr = filters[type]; const idx = arr.indexOf(val);
-        if(idx > -1) {
-            arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order');
-        } else {
-            if(['tuopai','duipeng_curr','duipeng'].includes(currentMode) && ['week','tian','di','solar'].includes(type) && arr.length >= 2) return;
-            arr.push(val); el.classList.add('active');
-            if(type !== 'nums' && type !== 'year') el.setAttribute('data-order', arr.length);
-        }
-        applyFilter();
+    function getTop3Indices(data) {
+        const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v);
+        const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3);
+        return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i);
     }
 
-    function applyFilter() { 
-        if(!db.length) return; 
-        const limit = parseInt(document.getElementById('limitRows').value) || 0;
-        let counts = Array(40).fill(0); let visibleIdx = 0;
-        
-        for (let i = db.length - 1; i >= 0; i--) {
-            const data = db[i];
-            const tr = document.getElementById(`row-${i}`);
-            let ok = true; 
-            if(filters.year.length) ok &= filters.year.some(y => String(data[1]).startsWith(y));
-            ['week','tian','di','solar'].forEach(cat => { 
-                if(filters[cat].length) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); 
-            }); 
-            const win = data.slice(6, 11).map(Number);
-            if(filters.nums.length) ok &= filters.nums.every(n => win.includes(Number(n))); 
-
-            const show = ok && (limit === 0 || visibleIdx < limit);
-            tr.style.display = show ? '' : 'none';
-            if(show) {
-                visibleIdx++;
-                win.forEach(n => { if(n>0) counts[n]++; });
-                tr.querySelectorAll('.num-cell').forEach(td => { 
-                    const n = parseInt(td.dataset.n);
-                    td.innerText = win.includes(n) ? (n < 10 ? '0'+n : n) : '';
-                });
-            }
-        }
-        for(let i=1; i<=39; i++) {
-            const s = document.getElementById(`s-${i}`);
-            s.innerText = counts[i]; s.style.color = counts[i]>0 ? 'red' : 'blue';
-        }
+    function setMode(m) { 
+        currentMode = m; 
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+        const btnClass = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
+        document.querySelector(btnClass[m]).classList.add('active');
+        clearFilters(); 
     }
 
-    function renderGrid() { 
-        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
-        db.forEach((row, idx) => { 
-            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
-            for(let i=0; i<11; i++) tr.innerHTML += `<td>${row[i]||''}</td>`; 
-            for(let n=1; n<=39; n++) tr.innerHTML += `<td class="num-cell" data-n="${n}"></td>`;
-            body.appendChild(tr); 
-        }); 
-        applyFilter();
-    }
+    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => {el.classList.remove('active'); el.removeAttribute('data-order');}); applyFilter(); }
+    function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
+    function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
+    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
 
     function initUI() {
         const build = (type, list, containerId) => {
@@ -315,34 +338,10 @@ async function loadCloudData() {
             document.getElementById('thr').appendChild(th);
         }
         loadCloudData();
+        updateReportUI();
     }
-
-    function initYearBtns() {
-        const years = [...new Set(db.map(r => r[1].substring(0,4)))].sort((a,b)=>b-a);
-        const container = document.getElementById('yearList'); container.innerHTML = '';
-        years.forEach(y => {
-            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
-            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
-        });
-    }
-    function setMode(m) { 
-        currentMode = m; 
-        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-        const btnClass = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
-        document.querySelector(btnClass[m]).classList.add('active');
-        clearFilters(); 
-    }
-    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => {el.classList.remove('active'); el.removeAttribute('data-order');}); applyFilter(); }
-    function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
-    function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
-    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
-    function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
 
     initUI();
 </script>
 </body>
 </html>
-
-
-
-
