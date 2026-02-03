@@ -107,51 +107,43 @@
 async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
-            const arrayBuffer = await response.arrayBuffer();
-            
-            // 1. 使用更穩定的 Uint8Array 讀取，並強制 UTF-8 (65001)
-            const data = new Uint8Array(arrayBuffer);
-            const workbook = XLSX.read(data, { 
-                type: 'array',
-                codepage: 65001 
-            });
-            
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            // 2. 轉換為 JSON 陣列，不設 header: 1 以便直接取得物件，或是維持 header: 1 但放寬過濾條件
-            let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const blob = await response.blob();
+            const reader = new FileReader();
 
-            // 3. 修正過濾邏輯：確保能抓到您的「期號」與「日期」
-            db = rawData.filter(row => {
-                // 只要第一欄有值且不是標題文字「期號」，就納入資料
-                return row[0] && row[0] !== "期號" && row[0] !== "期數";
-            }).map(row => {
-                // 處理日期：如果 rawData 讀出來是數字（Excel天數），轉成 YYYY/MM/DD
-                if (!isNaN(row[1]) && row[1] > 40000) {
-                    row[1] = formatDate(row[1]);
-                }
+            reader.onload = function(e) {
+                // 強制使用 UTF-8 解碼字串，徹底解決週、天干地支亂碼
+                const decoder = new TextDecoder('utf-8');
+                const csvString = decoder.decode(e.target.result);
                 
-                // 處理亂碼：對「週、天干、地支、節氣」欄位強制轉字串並修剪
-                for(let i = 2; i <= 5; i++) {
-                    if (row[i]) {
-                        row[i] = String(row[i]).trim();
-                    } else {
-                        row[i] = ""; // 避免 undefined 造成後續報表出錯
-                    }
-                }
-                return row;
-            });
+                // 使用 XLSX 讀取純文字字串
+                const workbook = XLSX.read(csvString, { type: 'string' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-            // 4. 重新初始化 UI
-            initYearBtns(); 
-            renderGrid();
-            document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-            
-            // 確保有報表更新功能
-            if (typeof updateReportUI === "function") updateReportUI();
-            
+                // 重新對齊資料邏輯
+                db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
+                    // 日期轉換邏輯
+                    if (!isNaN(row[1]) && row[1] > 40000) {
+                        row[1] = formatDate(row[1]);
+                    }
+                    // 文字欄位去空白
+                    for(let i = 2; i <= 5; i++) {
+                        row[i] = row[i] ? String(row[i]).trim() : "";
+                    }
+                    return row;
+                });
+
+                // 重新渲染畫面
+                initYearBtns(); 
+                renderGrid();
+                document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
+                if (typeof updateReportUI === "function") updateReportUI();
+            };
+
+            reader.readAsArrayBuffer(blob);
         } catch (e) { 
-            console.error("載入失敗：", e);
-            document.getElementById('fileMsg').innerText = "載入失敗，請檢查網路或 CSV 連結"; 
+            console.error("Data Load Error:", e);
+            document.getElementById('fileMsg').innerText = "載入失敗"; 
         }
     }
 
@@ -344,5 +336,6 @@ async function loadCloudData() {
 </script>
 </body>
 </html>
+
 
 
