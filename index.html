@@ -25,11 +25,10 @@
         .scroll-area { overflow: auto; max-height: 600px; }
         table { border-collapse: collapse; width: 100%; white-space: nowrap; }
         th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-        #thr th { position: sticky; top: 0; background: #eee; z-index: 10; }
-        .num-cell { width: 25px; height: 25px; }
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; overflow: hidden; }
-        .report-title { background: #7da7d8; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; color: white; }
+        .report-title { background: #7da7d8; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; color: white; border-bottom: 2px solid #333; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
+        .combo-row { background-color: #fffde7; font-weight: bold; }
         .hidden { display: none; }
     </style>
 </head>
@@ -37,7 +36,7 @@
 
 <div class="main-layout">
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">💡 模式導引：歷史模式看機率，拖牌/對碰需選 2 個項目與號碼。</div>
+        <div id="modeGuide" class="guide-box">💡 模式導引：每個項目點選 2 個加上號碼即可成立拖牌邏輯。</div>
         <div class="filter-panel">
             <div class="f-label">年份</div><div class="f-btns" id="yearList" data-type="year"></div>
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
@@ -46,14 +45,15 @@
             <div class="f-label">節 (T)</div><div class="f-btns" id="solarT" data-type="solar"></div>
             <div class="f-label">氣 (S)</div><div class="f-btns" id="solarS" data-type="solar"></div>
             <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
-            <div class="f-label" style="background:#e3f2fd">表格期數</div>
+            <div class="f-label" style="background:#e3f2fd">自訂期數</div>
             <div class="f-btns">
-                <input type="number" id="limitRows" value="20" min="0" onchange="applyFilter()" style="width: 80px; padding: 6px;">
-                <span style="color: #666; font-size: 11px; margin-left:10px;">(0 代表全部)</span>
+                <input type="number" id="limitRows" value="0" min="0" onchange="applyFilter()" style="width: 80px; padding: 6px; border: 1px solid #ccc;">
+                <span style="color: #666; font-size: 11px; margin-left:10px;">(表格顯示期數，0代表全部)</span>
             </div>
             <div class="f-label" style="background:#e8f5e9">統計 N 期</div>
             <div class="f-btns">
-                <input type="number" id="recentN" value="0" min="0" style="width: 80px; padding: 6px;">
+                <input type="number" id="recentN" value="0" min="0" style="width: 80px; padding: 6px; border: 1px solid #4CAF50;">
+                <span style="color: #666; font-size: 11px; margin-left:10px;">(報表統計範圍，0代表全歷史資料)</span>
             </div>
         </div>
         <div class="action-bar">
@@ -62,9 +62,9 @@
             <button class="yellow-btn btn-mode-d_curr" onclick="setMode('duipeng_curr')">當期對碰</button>
             <button class="yellow-btn btn-mode-d" onclick="setMode('duipeng')">下期對碰</button>
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
-            <button onclick="clearFilters()" style="padding: 8px 15px; cursor:pointer;">清空篩選器</button>
-            <button onclick="switchPage('repo')" style="background:#607d8b; color:white; border-radius:4px; padding: 8px 15px; border:none; cursor:pointer;">切換報表</button>
-            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">讀取中...</span>
+            <button onclick="clearFilters()">清空篩選</button>
+            <button onclick="switchPage('repo')" style="background:#607d8b; color:white; border-radius:4px; padding: 5px 15px; border:none; cursor:pointer;">切換報表</button>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
         </div>
         <div class="scroll-area">
             <table>
@@ -89,187 +89,120 @@
     let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-    // 日期處理：修正年份篩選不到的問題
     function formatDate(val) {
         if (!val) return "";
         let d = val;
-        // 處理 Excel 序號
         if (!isNaN(val) && typeof val !== 'string') d = new Date((val - 25569) * 86400 * 1000);
-        else if (typeof val === 'string' && !val.includes('/') && !val.includes('-')) {
-            let n = parseFloat(val); if (!isNaN(n)) d = new Date((n - 25569) * 86400 * 1000);
+        else if (typeof val === 'string' && !val.includes('/')) {
+            let n = parseFloat(val);
+            if (!isNaN(n)) d = new Date((n - 25569) * 86400 * 1000);
         }
-        
         if (d instanceof Date && !isNaN(d)) {
-            let y = d.getFullYear(), m = ("0" + (d.getMonth() + 1)).slice(-2), day = ("0" + d.getDate()).slice(-2);
+            let y = d.getFullYear();
+            let m = ("0" + (d.getMonth() + 1)).slice(-2);
+            let day = ("0" + d.getDate()).slice(-2);
             return `${y}/${m}/${day}`;
         }
-        // 強制將 "-" 轉換為 "/"
-        return String(val).trim().replace(/-/g, '/');
+        return String(val);
     }
 
     async function loadCloudData() {
         try {
             const response = await fetch(GSHEET_CSV_URL);
             const arrayBuffer = await response.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const decoder = new TextDecoder('utf-8');
+            const csvString = decoder.decode(arrayBuffer);
+            const workbook = XLSX.read(csvString, { type: 'string' });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-            db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
-                row[1] = formatDate(row[1]); // 統一日期格式 YYYY/MM/DD
-                for(let i = 2; i <= 5; i++) row[i] = row[i] ? String(row[i]).trim() : "";
+            
+            db = rawData.filter(row => row[0] && !isNaN(row[0])).map(row => {
+                row[1] = formatDate(row[1]);
                 return row;
             });
-
-            initYearBtns(); 
-            renderGrid();
+            initYearBtns(); renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-        } catch (e) { 
-            console.error("加載失敗:", e); 
-            document.getElementById('fileMsg').innerText = "連線失敗";
-        }
+            updateReportUI();
+        } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
     }
 
-    function initYearBtns() {
-        // 從處理過的日期格式 YYYY/MM/DD 中提取年份
-        const years = [...new Set(db.map(r => String(r[1]).split('/')[0]))].filter(y => y.length === 4).sort((a,b)=>b-a);
-        const container = document.getElementById('yearList'); container.innerHTML = '';
-        years.forEach(y => {
-            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
-            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
-        });
-    }
-
-    function renderGrid() { 
-        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
-        db.forEach((row, idx) => { 
-            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
-            for(let i=0; i<11; i++) tr.innerHTML += `<td>${row[i]||''}</td>`; 
-            for(let n=1; n<=39; n++) tr.innerHTML += `<td class="num-cell" data-n="${n}"></td>`;
-            body.appendChild(tr); 
-        }); 
-        applyFilter();
-    }
-
-    function applyFilter() { 
-        if(!db.length) return; 
-        const limit = parseInt(document.getElementById('limitRows').value) || 0;
-        let counts = Array(40).fill(0); let visibleIdx = 0;
-        
-        for (let i = db.length - 1; i >= 0; i--) {
-            const data = db[i];
-            const tr = document.getElementById(`row-${i}`);
-            let ok = true; 
-            // 年份比對：檢查日期字串是否以年份開頭
-            if(filters.year.length) ok &= filters.year.some(y => String(data[1]).trim().includes(String(y)));
-            if(filters.week.length) ok &= filters.week.some(v => String(data[2]).includes(v));
-            if(filters.tian.length) ok &= filters.tian.some(v => String(data[3]).includes(v));
-            if(filters.di.length) ok &= filters.di.some(v => String(data[4]).includes(v));
-            if(filters.solar.length) ok &= filters.solar.some(v => String(data[5]).includes(v));
-
-            const win = data.slice(6, 11).map(Number);
-            if(filters.nums.length) ok &= filters.nums.every(n => win.includes(Number(n))); 
-
-            const show = ok && (limit === 0 || visibleIdx < limit);
-            tr.style.display = show ? '' : 'none';
-            if(show) {
-                visibleIdx++;
-                win.forEach(n => { if(n>0) counts[n]++; });
-                tr.querySelectorAll('.num-cell').forEach(td => { 
-                    const n = parseInt(td.dataset.n);
-                    td.innerText = win.includes(n) ? (n < 10 ? '0'+n : n) : '';
-                });
-            }
-        }
-        for(let i=1; i<=39; i++) {
-            const s = document.getElementById(`s-${i}`);
-            if(s) { s.innerText = counts[i]; s.style.color = counts[i]>0 ? 'red' : 'blue'; }
-        }
-    }
-
-    function handleItem(el, type, val) {
-        const arr = filters[type]; const idx = arr.indexOf(val);
-        if(idx > -1) {
-            arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order');
-        } else {
-            // 拖牌邏輯：文字類別最多選 2 個
-            if(currentMode !== 'history' && ['week','tian','di','solar'].includes(type) && arr.length >= 2) {
-                alert("此模式下該項目最多選 2 個"); return;
-            }
-            arr.push(val); el.classList.add('active');
-            if(type !== 'year') el.setAttribute('data-order', arr.length);
-        }
-        applyFilter();
+    // --- 修正2：整合標題顯示邏輯 ---
+    function getFilterLabel() {
+        const labels = [];
+        const n = parseInt(document.getElementById('recentN').value) || 0;
+        if (n > 0) labels.push(`範圍:最近${n}期`);
+        if (filters.year.length) labels.push(`年:${filters.year.join(',')}`);
+        if (filters.week.length) labels.push(`週:${filters.week.join(',')}`);
+        if (filters.tian.length) labels.push(`干:${filters.tian.join(',')}`);
+        if (filters.di.length) labels.push(`支:${filters.di.join(',')}`);
+        if (filters.solar.length) labels.push(`氣:${filters.solar.join(',')}`);
+        if (filters.nums.length) labels.push(`號:${filters.nums.join(',')}`);
+        return labels.length ? labels.join(' | ') : "全歷史統計";
     }
 
     function generateBatchReport() {
         if(!db.length) return;
+        const results = [];
+        const selectedNums = filters.nums.map(Number).sort((a,b)=>a-b);
+        const catNames = { week:'週', tian:'天干', di:'地支', solar:'節氣' };
+        
+        const reportConditionText = getFilterLabel();
+        const modeTitle = currentMode === 'tuopai' ? "[拖牌]" : "[歷史]";
+        const finalTitle = `${modeTitle} ${reportConditionText}`;
+
         const nLimit = parseInt(document.getElementById('recentN').value) || 0;
         let targetData = (nLimit > 0) ? db.slice(-nLimit) : db;
-        const results = [];
-
-        // 拖牌/對碰邏輯驗證：每個點選的類別必須剛好 2 個
-        if (currentMode !== 'history') {
-            const cats = ['week', 'tian', 'di', 'solar'];
-            const activeCats = cats.filter(cat => filters[cat].length > 0);
-            const isInvalid = activeCats.some(cat => filters[cat].length !== 2);
-            
-            if (isInvalid) {
-                alert("拖牌邏輯：點選的文字類別（週/天干/地支/節氣）必須剛好選 2 個才會成立！");
-                return;
-            }
-            if (filters.nums.length === 0) { alert("請選擇號碼"); return; }
-        }
 
         if (currentMode === 'history') {
-            // 歷史模式：按項目展開
             ['week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
                     let s = Array(40).fill(0), c = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
-                    targetData.forEach(row => {
-                        if(String(row[col]).includes(val)) {
-                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
-                        }
+                    targetData.forEach(row => { 
+                        // --- 修正1：年份篩選加入統計 ---
+                        if(filters.year.length > 0 && !filters.year.some(y => String(row[1]).startsWith(y))) return;
+                        if(String(row[col]).includes(val)) { 
+                            row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); 
+                            c++; 
+                        } 
                     });
-                    if(c > 0) results.push({ label: `${val}`, data: s, matches: c });
+                    if(c > 0) results.push({ label: `${catNames[cat]}:${val}`, data: s, matches: c });
                 });
             });
-        } else {
-            // 拖牌/對碰：每個號碼配文字條件為一組
-            const isNext = (currentMode === 'duipeng' || currentMode === 'tuopai');
-            filters.nums.forEach(num => {
+            // 干支組合邏輯
+            if(filters.tian.length === 1 && filters.di.length === 1) {
+                const t = filters.tian[0], d = filters.di[0];
                 let s = Array(40).fill(0), c = 0;
-                for(let i = 0; i < targetData.length - (isNext?1:0); i++) {
-                    const win1 = targetData[i].slice(6,11).map(Number);
-                    if(win1.includes(Number(num))) {
-                        let matchText = true;
-                        if(filters.week.length) matchText &= filters.week.every(v => String(targetData[i][2]).includes(v));
-                        if(filters.tian.length) matchText &= filters.tian.every(v => String(targetData[i][3]).includes(v));
-                        if(filters.di.length) matchText &= filters.di.every(v => String(targetData[i][4]).includes(v));
-                        if(filters.solar.length) matchText &= filters.solar.every(v => String(targetData[i][5]).includes(v));
-                        
-                        if(matchText) {
-                            const win2 = isNext ? targetData[i+1].slice(6,11).map(Number) : win1;
-                            win2.forEach(n => { if(n>0) s[n]++; }); c++;
-                        }
+                targetData.forEach(row => {
+                    if(filters.year.length > 0 && !filters.year.some(y => String(row[1]).startsWith(y))) return;
+                    if(String(row[3]).includes(t) && String(row[4]).includes(d)) {
+                        row.slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
                     }
+                });
+                if(c > 0) results.push({ label: `★組合:${t}${d}`, data: s, matches: c, isCombo: true });
+            }
+            if(results.length) saveAndRender(finalTitle, results);
+        } 
+        else if (currentMode === 'tuopai') {
+            ['week','tian','di','solar'].forEach(cat => {
+                if(filters[cat].length === 2) {
+                    const [v1, v2] = filters[cat], col = ['week','tian','di','solar'].indexOf(cat)+2;
+                    selectedNums.forEach(num => {
+                        let s = Array(40).fill(0), c = 0;
+                        for(let i=1; i<targetData.length; i++) {
+                            // 拖牌同樣檢查年份
+                            if(filters.year.length > 0 && !filters.year.some(y => String(targetData[i][1]).startsWith(y))) continue;
+                            if(String(targetData[i-1][col]).includes(v1) && String(targetData[i][col]).includes(v2) && targetData[i-1].slice(6,11).map(Number).includes(num)) {
+                                targetData[i].slice(6,11).map(Number).forEach(n => { if(n>0) s[n]++; }); c++;
+                            }
+                        }
+                        if(c>0) results.push({ label: `[拖:${num}] ${v1}→${v2}`, data: s, matches: c });
+                    });
                 }
-                if(c > 0) results.push({ label: `號碼 ${num}`, data: s, matches: c });
             });
+            if(results.length) saveAndRender(finalTitle, results);
+            else alert("拖牌模式：請點選 2 個條件項目（如週一、週二）且至少選 1 個號碼。");
         }
-
-        if(results.length) {
-            saveAndRender(`${currentMode} - ${getFilterLabel()}`, results);
-            switchPage('repo');
-        } else { alert("查無資料"); }
-    }
-
-    function getFilterLabel() {
-        let l = [];
-        if (filters.year.length) l.push("年:"+filters.year);
-        if (filters.week.length) l.push("週:"+filters.week);
-        if (filters.tian.length) l.push("天:"+filters.tian);
-        return l.join('|') || "全域";
+        switchPage('repo');
     }
 
     function saveAndRender(title, rows) {
@@ -282,17 +215,14 @@
         const list = document.getElementById('repo-list'); list.innerHTML = '';
         savedReports.forEach(report => {
             const card = document.createElement('div'); card.className = 'report-card';
-            let h = `<div class="report-title"><span>${report.title}</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-            h += `<div class="scroll-area"><table><thead><tr><td>項目(期)</td>`;
+            let h = `<div class="report-title"><span>${report.title}</span><button onclick="deleteReport(${report.id})" style="background:#fff; color:#333; border:none; padding:4px 10px; border-radius:3px; cursor:pointer;">刪除</button></div>`;
+            h += `<div class="scroll-area"><table><thead><tr style="background:#eee;"><td>項目(期數)</td>`;
             for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
             h += `</tr></thead><tbody>`;
             report.rows.forEach(r => {
                 const top3 = getTop3Indices(r.data);
-                h += `<tr><td>${r.label}(${r.matches})</td>`;
-                for(let i=1; i<=39; i++) {
-                    const v = r.data[i] || 0;
-                    h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`;
-                }
+                h += `<tr class="${r.isCombo?'combo-row':''}"><td>${r.label}(${r.matches})</td>`;
+                for(let i=1; i<=39; i++) { const v = r.data[i] || 0; h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`; }
                 h += `</tr>`;
             });
             h += `</tbody></table></div>`;
@@ -300,29 +230,79 @@
         });
     }
 
-    function getTop3Indices(data) {
-        const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v);
-        const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3);
-        return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i);
-    }
-
-    function setMode(m) { 
-        currentMode = m; 
-        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-        const btnClass = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
-        document.querySelector(btnClass[m]).classList.add('active');
-        clearFilters(); 
-    }
-
-    function clearFilters() { 
-        filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; 
-        document.querySelectorAll('.f-item').forEach(el => {el.classList.remove('active'); el.removeAttribute('data-order');}); 
-        applyFilter(); 
-    }
-    
-    function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
     function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
-    function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
+    function clearAllReports() { if(confirm("確定刪除所有報表？")) { savedReports = []; localStorage.removeItem('539_reports'); updateReportUI(); } }
+
+    function handleItem(el, type, val) {
+        const arr = filters[type]; const idx = arr.indexOf(val);
+        if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
+        else {
+            if((currentMode === 'tuopai' || currentMode === 'duipeng') && ['week','tian','di','solar'].includes(type) && arr.length >= 2) return;
+            arr.push(val); el.classList.add('active');
+            if((currentMode === 'tuopai' || currentMode === 'duipeng') && type !== 'nums' && type !== 'year') el.setAttribute('data-order', arr.length);
+        }
+        applyFilter();
+    }
+
+    function applyFilter() { 
+        if(!db.length) return; 
+        const limit = parseInt(document.getElementById('limitRows').value) || 0;
+        let counts = Array(40).fill(0); let visibleIdx = 0;
+        
+        for (let i = db.length - 1; i >= 0; i--) {
+            const data = db[i];
+            const tr = document.getElementById(`row-${i}`);
+            if (!tr) continue;
+
+            let ok = true; 
+            if(filters.year.length > 0) ok &= filters.year.some(y => String(data[1]).startsWith(y));
+            ['week','tian','di','solar'].forEach(cat => { 
+                if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v)); 
+            }); 
+            const win = data.slice(6, 11).map(Number); 
+            if(filters.nums.length > 0) ok &= filters.nums.every(n => win.includes(Number(n))); 
+            
+            const finalShow = ok && (limit === 0 || visibleIdx < limit);
+            tr.style.display = finalShow ? '' : 'none'; 
+            if(finalShow) {
+                visibleIdx++;
+                tr.querySelectorAll('.num-cell').forEach(td => { 
+                    const n = parseInt(td.getAttribute('data-n')); 
+                    if(win.includes(n)) { td.innerText = n < 10 ? '0'+n : n; counts[n]++; } 
+                    else td.innerText = ''; 
+                });
+            }
+        } 
+        for(let i=1; i<=39; i++) {
+            const s = document.getElementById(`s-${i}`);
+            s.innerText = counts[i];
+            s.style.color = counts[i] > 0 ? 'red' : 'blue';
+        }
+    }
+
+    function initYearBtns() {
+        const yearSet = new Set();
+        db.forEach(row => {
+            const y = String(row[1]).substring(0, 4);
+            if (y.length === 4 && !isNaN(y)) yearSet.add(y);
+        });
+        const container = document.getElementById('yearList'); container.innerHTML = '';
+        Array.from(yearSet).sort((a,b)=>b-a).forEach(y => {
+            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
+            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
+        });
+    }
+
+    function renderGrid() { 
+        const body = document.getElementById('gridBody'); body.innerHTML = ''; 
+        db.forEach((row, idx) => { 
+            const tr = document.createElement('tr'); tr.id = `row-${idx}`; 
+            for(let i=0; i<11; i++){ const td = document.createElement('td'); td.innerText = row[i] || ''; tr.appendChild(td); } 
+            for(let n=1; n<=39; n++){ const td = document.createElement('td'); td.className = 'num-cell'; td.setAttribute('data-n', n); tr.appendChild(td); } 
+            body.appendChild(tr); 
+        }); 
+        applyFilter();
+    }
 
     function initUI() {
         const build = (type, list, containerId) => {
@@ -338,18 +318,26 @@
         let tlist = [], slist = []; for(let i=0; i<=15; i++) { tlist.push('T'+i); slist.push('S'+i); }
         build('solar', tlist, 'solarT'); build('solar', slist, 'solarS');
         build('nums', Array.from({length:39}, (_,i)=>i+1));
-        
         for(let i=1; i<=39; i++) {
             const th = document.createElement('th'); th.style.background = '#ffc107';
             th.innerHTML = `${i}<br><span id="s-${i}" style="font-size:10px; color:blue">0</span>`;
             document.getElementById('thr').appendChild(th);
         }
         loadCloudData();
-        updateReportUI();
     }
+
+    function setMode(m) { 
+        currentMode = m; 
+        document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active')); 
+        const btnMap = { history:'.btn-mode-h', tuopai:'.btn-mode-t', duipeng_curr:'.btn-mode-d_curr', duipeng:'.btn-mode-d' };
+        if(document.querySelector(btnMap[m])) document.querySelector(btnMap[m]).classList.add('active');
+        clearFilters(); 
+    }
+    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active')); applyFilter(); }
+    function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
+    function getTop3Indices(data) { const sorted = data.slice(1).map((v, i) => ({v, i: i+1})).sort((a, b) => b.v - a.v); const vals = [...new Set(sorted.map(x => x.v))].filter(v => v > 0).slice(0, 3); return sorted.filter(x => x.v > 0 && vals.includes(x.v)).map(x => x.i); }
 
     initUI();
 </script>
 </body>
 </html>
-
