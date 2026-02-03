@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 報表加總版</title>
+    <title>539 專業回測系統 - 年份整合版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; }
@@ -26,7 +26,6 @@
         .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
         .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
-        .total-row { background-color: #fce4ec; font-weight: bold; color: #c2185b; }
         .hidden { display: none; }
     </style>
 </head>
@@ -74,7 +73,9 @@
     let currentMode = 'history';
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
+    // 初始化與讀取
     async function init() {
+        // 建立靜態按鈕
         build('week', ['週一','週二','週三','週四','週五','週六']);
         build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
         build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
@@ -82,6 +83,7 @@
         build('solar', slist);
         build('nums', Array.from({length:39}, (_,i)=>i+1));
         
+        // 建立號碼標頭
         for(let i=1; i<=39; i++) {
             const th = document.createElement('th'); th.style.background = '#ffc107';
             th.innerHTML = `${i}<br><span id="s-${i}" style="font-size:10px; color:blue">0</span>`;
@@ -95,6 +97,7 @@
             db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0].toString().substring(0,3)));
 
+            // 抓取 B 欄年份並顯示 YYYY
             const years = [...new Set(db.map(row => row[1].toString().split('/')[0]))].sort((a,b)=>b-a);
             build('year', years);
 
@@ -127,11 +130,13 @@
         db.forEach((row, idx) => {
             const tr = document.createElement('tr');
             tr.id = `row-${idx}`;
+            // 處理 A-F 欄與球號 G-K 欄
             for(let i=0; i<11; i++) {
                 const td = document.createElement('td');
                 td.innerText = row[i] || '';
                 tr.appendChild(td);
             }
+            // 建立 1-39 號碼格
             for(let n=1; n<=39; n++) {
                 const td = document.createElement('td');
                 td.className = 'num-cell';
@@ -149,10 +154,13 @@
         rows.forEach(tr => {
             const data = db[tr.id.split('-')[1]];
             let ok = true;
+            // 年份過濾 (B欄)
             if(filters.year.length > 0) ok &= filters.year.includes(data[1].toString().split('/')[0]);
+            // 週、天干、地支、節氣 (C,D,E,F欄)
             ['week','tian','di','solar'].forEach((cat, i) => {
                 if(filters[cat].length > 0) ok &= filters[cat].some(v => data[i+2].toString().includes(v));
             });
+            // 號碼過濾 (G-K欄)
             const winNums = data.slice(6,11).map(Number);
             if(filters.nums.length > 0) ok &= filters.nums.every(n => winNums.includes(Number(n)));
 
@@ -190,6 +198,7 @@
             saveAndRender("歷史統計報表", results);
         } 
         else if (currentMode === 'tuopai') {
+            // 拖牌邏輯：每個項目點選2個成立
             ['week','tian','di','solar'].forEach(cat => {
                 if(filters[cat].length === 2) {
                     const [v1, v2] = filters[cat];
@@ -222,31 +231,15 @@
             const card = document.createElement('div');
             card.className = 'report-card';
             let h = `<div class="report-title"><span>${report.title}</span><button onclick="deleteRepo(${report.id})">刪除</button></div>`;
-            h += `<div class="scroll-area"><table><thead><tr><th>項目</th>`;
-            for(let i=1; i<=39; i++) h += `<th>${i}</th>`;
-            h += `</tr></thead><tbody>`;
-
-            // 計算加總用的陣列
-            let totals = Array(40).fill(0);
-
+            h += `<div class="scroll-area"><table><tr><td>項目</td>`;
+            for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
+            h += `</tr>`;
             report.rows.forEach(r => {
                 h += `<tr><td>${r.label}(${r.matches}期)</td>`;
-                for(let i=1; i<=39; i++) {
-                    let val = r.data[i] || 0;
-                    h += `<td>${val || ''}</td>`;
-                    totals[i] += val; // 累加至總計
-                }
+                for(let i=1; i<=39; i++) h += `<td>${r.data[i]||''}</td>`;
                 h += `</tr>`;
             });
-
-            // 新增：最後一列加總列
-            h += `<tr class="total-row"><td>加總次數</td>`;
-            for(let i=1; i<=39; i++) {
-                h += `<td>${totals[i] || ''}</td>`;
-            }
-            h += `</tr>`;
-
-            h += `</tbody></table></div>`;
+            h += `</table></div>`;
             card.innerHTML = h;
             list.appendChild(card);
         });
