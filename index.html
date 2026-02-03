@@ -37,7 +37,7 @@
 
 <div class="main-layout">
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">💡 模式導引：歷史模式看機率，拖牌/對碰需選2個項目與號碼。</div>
+        <div id="modeGuide" class="guide-box">💡 模式導引：歷史模式看機率，拖牌/對碰需選 2 個項目與號碼。</div>
         <div class="filter-panel">
             <div class="f-label">年份</div><div class="f-btns" id="yearList" data-type="year"></div>
             <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
@@ -49,7 +49,7 @@
             <div class="f-label" style="background:#e3f2fd">表格期數</div>
             <div class="f-btns">
                 <input type="number" id="limitRows" value="20" min="0" onchange="applyFilter()" style="width: 80px; padding: 6px;">
-                <span style="color: #666; font-size: 11px; margin-left:10px;">(開啟預設20期，0代表全部)</span>
+                <span style="color: #666; font-size: 11px; margin-left:10px;">(0 代表全部)</span>
             </div>
             <div class="f-label" style="background:#e8f5e9">統計 N 期</div>
             <div class="f-btns">
@@ -64,7 +64,7 @@
             <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
             <button onclick="clearFilters()" style="padding: 8px 15px; cursor:pointer;">清空篩選器</button>
             <button onclick="switchPage('repo')" style="background:#607d8b; color:white; border-radius:4px; padding: 8px 15px; border:none; cursor:pointer;">切換報表</button>
-            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
+            <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">讀取中...</span>
         </div>
         <div class="scroll-area">
             <table>
@@ -89,59 +89,56 @@
     let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
     let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
+    // 日期處理：修正年份篩選不到的問題
     function formatDate(val) {
         if (!val) return "";
         let d = val;
+        // 處理 Excel 序號
         if (!isNaN(val) && typeof val !== 'string') d = new Date((val - 25569) * 86400 * 1000);
-        else if (typeof val === 'string' && !val.includes('/')) {
+        else if (typeof val === 'string' && !val.includes('/') && !val.includes('-')) {
             let n = parseFloat(val); if (!isNaN(n)) d = new Date((n - 25569) * 86400 * 1000);
         }
+        
         if (d instanceof Date && !isNaN(d)) {
             let y = d.getFullYear(), m = ("0" + (d.getMonth() + 1)).slice(-2), day = ("0" + d.getDate()).slice(-2);
             return `${y}/${m}/${day}`;
         }
+        // 強制將 "-" 轉換為 "/"
         return String(val).trim().replace(/-/g, '/');
     }
 
     async function loadCloudData() {
-    try {
-        const response = await fetch(GSHEET_CSV_URL);
-        const blob = await response.blob();
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            // 強制使用 UTF-8 解碼，解決週、天干、地支亂碼問題
-            const decoder = new TextDecoder('utf-8');
-            const csvString = decoder.decode(e.target.result);
-            const workbook = XLSX.read(csvString, { type: 'string' });
+        try {
+            const response = await fetch(GSHEET_CSV_URL);
+            const arrayBuffer = await response.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             let rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-            // 資料清洗：過濾標題列並統一日期格式
             db = rawData.filter(row => row[0] && row[0] !== "期號").map(row => {
-                // 處理日期：確保轉換為 "YYYY/MM/DD" 字串
-                let dateVal = row[1];
-                if (!isNaN(dateVal) && Number(dateVal) > 40000) {
-                    dateVal = formatDate(dateVal); // 處理 Excel 序號
-                } else {
-                    dateVal = String(dateVal).trim().replace(/-/g, '/');
-                }
-                row[1] = dateVal;
-
-                // 清洗週、天干、地支 (Index 2, 3, 4)
-                for(let i = 2; i <= 5; i++) {
-                    row[i] = row[i] ? String(row[i]).trim() : "";
-                }
+                row[1] = formatDate(row[1]); // 統一日期格式 YYYY/MM/DD
+                for(let i = 2; i <= 5; i++) row[i] = row[i] ? String(row[i]).trim() : "";
                 return row;
             });
 
-            initYearBtns(); // 動態生成 2026 等年份按鈕
-            renderGrid();   // 渲染表格
+            initYearBtns(); 
+            renderGrid();
             document.getElementById('fileMsg').innerText = `數據：${db.length} 期`;
-        };
-        reader.readAsArrayBuffer(blob);
-    } catch (e) { console.error("加載失敗:", e); }
-}
+        } catch (e) { 
+            console.error("加載失敗:", e); 
+            document.getElementById('fileMsg').innerText = "連線失敗";
+        }
+    }
+
+    function initYearBtns() {
+        // 從處理過的日期格式 YYYY/MM/DD 中提取年份
+        const years = [...new Set(db.map(r => String(r[1]).split('/')[0]))].filter(y => y.length === 4).sort((a,b)=>b-a);
+        const container = document.getElementById('yearList'); container.innerHTML = '';
+        years.forEach(y => {
+            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
+            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
+        });
+    }
 
     function renderGrid() { 
         const body = document.getElementById('gridBody'); body.innerHTML = ''; 
@@ -163,6 +160,7 @@
             const data = db[i];
             const tr = document.getElementById(`row-${i}`);
             let ok = true; 
+            // 年份比對：檢查日期字串是否以年份開頭
             if(filters.year.length) ok &= filters.year.some(y => String(data[1]).startsWith(y));
             if(filters.week.length) ok &= filters.week.some(v => String(data[2]).includes(v));
             if(filters.tian.length) ok &= filters.tian.some(v => String(data[3]).includes(v));
@@ -185,7 +183,7 @@
         }
         for(let i=1; i<=39; i++) {
             const s = document.getElementById(`s-${i}`);
-            s.innerText = counts[i]; s.style.color = counts[i]>0 ? 'red' : 'blue';
+            if(s) { s.innerText = counts[i]; s.style.color = counts[i]>0 ? 'red' : 'blue'; }
         }
     }
 
@@ -194,37 +192,37 @@
         if(idx > -1) {
             arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order');
         } else {
-            // 拖牌/對碰模式限制：每個文字類別最多點選 2 個
-            if(['tuopai','duipeng_curr','duipeng'].includes(currentMode) && ['week','tian','di','solar'].includes(type) && arr.length >= 2) {
-                alert("此模式下該項目最多選2個"); return;
+            // 拖牌邏輯：文字類別最多選 2 個
+            if(currentMode !== 'history' && ['week','tian','di','solar'].includes(type) && arr.length >= 2) {
+                alert("此模式下該項目最多選 2 個"); return;
             }
             arr.push(val); el.classList.add('active');
-            if(type !== 'nums' && type !== 'year') el.setAttribute('data-order', arr.length);
+            if(type !== 'year') el.setAttribute('data-order', arr.length);
         }
         applyFilter();
     }
 
     function generateBatchReport() {
         if(!db.length) return;
-        const results = [];
         const nLimit = parseInt(document.getElementById('recentN').value) || 0;
         let targetData = (nLimit > 0) ? db.slice(-nLimit) : db;
-        const conditionText = getFilterLabel();
+        const results = [];
 
-        // 拖牌邏輯驗證：每個點選的項目（週、天干、地支、節氣）必須點選 2 個才會成立
+        // 拖牌/對碰邏輯驗證：每個點選的類別必須剛好 2 個
         if (currentMode !== 'history') {
             const cats = ['week', 'tian', 'di', 'solar'];
-            const invalidCat = cats.find(cat => filters[cat].length > 0 && filters[cat].length !== 2);
-            if (invalidCat) {
-                alert(`拖牌邏輯：${invalidCat} 類別必須點選 2 個才會成立！`);
+            const activeCats = cats.filter(cat => filters[cat].length > 0);
+            const isInvalid = activeCats.some(cat => filters[cat].length !== 2);
+            
+            if (isInvalid) {
+                alert("拖牌邏輯：點選的文字類別（週/天干/地支/節氣）必須剛好選 2 個才會成立！");
                 return;
             }
-            if (filters.nums.length === 0) {
-                alert("請至少選擇一個號碼進行拖牌"); return;
-            }
+            if (filters.nums.length === 0) { alert("請選擇號碼"); return; }
         }
 
         if (currentMode === 'history') {
+            // 歷史模式：按項目展開
             ['week','tian','di','solar'].forEach(cat => {
                 filters[cat].forEach(val => {
                     let s = Array(40).fill(0), c = 0, col = ['week','tian','di','solar'].indexOf(cat)+2;
@@ -237,18 +235,18 @@
                 });
             });
         } else {
+            // 拖牌/對碰：每個號碼配文字條件為一組
             const isNext = (currentMode === 'duipeng' || currentMode === 'tuopai');
             filters.nums.forEach(num => {
                 let s = Array(40).fill(0), c = 0;
                 for(let i = 0; i < targetData.length - (isNext?1:0); i++) {
                     const win1 = targetData[i].slice(6,11).map(Number);
                     if(win1.includes(Number(num))) {
-                        // 檢查其他文字過濾條件
                         let matchText = true;
-                        if(filters.week.length) matchText &= filters.week.some(v => String(targetData[i][2]).includes(v));
-                        if(filters.tian.length) matchText &= filters.tian.some(v => String(targetData[i][3]).includes(v));
-                        if(filters.di.length) matchText &= filters.di.some(v => String(targetData[i][4]).includes(v));
-                        if(filters.solar.length) matchText &= filters.solar.some(v => String(targetData[i][5]).includes(v));
+                        if(filters.week.length) matchText &= filters.week.every(v => String(targetData[i][2]).includes(v));
+                        if(filters.tian.length) matchText &= filters.tian.every(v => String(targetData[i][3]).includes(v));
+                        if(filters.di.length) matchText &= filters.di.every(v => String(targetData[i][4]).includes(v));
+                        if(filters.solar.length) matchText &= filters.solar.every(v => String(targetData[i][5]).includes(v));
                         
                         if(matchText) {
                             const win2 = isNext ? targetData[i+1].slice(6,11).map(Number) : win1;
@@ -261,26 +259,16 @@
         }
 
         if(results.length) {
-            saveAndRender(`${currentMode} - ${conditionText}`, results);
+            saveAndRender(`${currentMode} - ${getFilterLabel()}`, results);
             switchPage('repo');
         } else { alert("查無資料"); }
-    }
-
-    function initYearBtns() {
-        const years = [...new Set(db.map(r => r[1].substring(0,4)))].sort((a,b)=>b-a);
-        const container = document.getElementById('yearList'); container.innerHTML = '';
-        years.forEach(y => {
-            if(!y) return;
-            const div = document.createElement('div'); div.className = 'f-item'; div.innerText = y;
-            div.onclick = () => handleItem(div, 'year', y); container.appendChild(div);
-        });
     }
 
     function getFilterLabel() {
         let l = [];
         if (filters.year.length) l.push("年:"+filters.year);
         if (filters.week.length) l.push("週:"+filters.week);
-        if (filters.nums.length) l.push("號:"+filters.nums);
+        if (filters.tian.length) l.push("天:"+filters.tian);
         return l.join('|') || "全域";
     }
 
@@ -326,7 +314,12 @@
         clearFilters(); 
     }
 
-    function clearFilters() { filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; document.querySelectorAll('.f-item').forEach(el => {el.classList.remove('active'); el.removeAttribute('data-order');}); applyFilter(); }
+    function clearFilters() { 
+        filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] }; 
+        document.querySelectorAll('.f-item').forEach(el => {el.classList.remove('active'); el.removeAttribute('data-order');}); 
+        applyFilter(); 
+    }
+    
     function switchPage(p) { document.getElementById('page-dist').classList.toggle('hidden', p !== 'dist'); document.getElementById('page-repo').classList.toggle('hidden', p !== 'repo'); }
     function deleteReport(id) { savedReports = savedReports.filter(r => r.id !== id); localStorage.setItem('539_reports', JSON.stringify(savedReports)); updateReportUI(); }
     function clearAllReports() { if(confirm("確定清空？")) { savedReports=[]; localStorage.removeItem('539_reports'); updateReportUI(); } }
@@ -345,6 +338,7 @@
         let tlist = [], slist = []; for(let i=0; i<=15; i++) { tlist.push('T'+i); slist.push('S'+i); }
         build('solar', tlist, 'solarT'); build('solar', slist, 'solarS');
         build('nums', Array.from({length:39}, (_,i)=>i+1));
+        
         for(let i=1; i<=39; i++) {
             const th = document.createElement('th'); th.style.background = '#ffc107';
             th.innerHTML = `${i}<br><span id="s-${i}" style="font-size:10px; color:blue">0</span>`;
@@ -358,4 +352,3 @@
 </script>
 </body>
 </html>
-
