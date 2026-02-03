@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>539 專業回測系統 - 年份按鈕修正版</title>
+    <title>539 專業回測系統 - 自動年份版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --total-row: #ffebee; }
@@ -29,7 +29,6 @@
         .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
         .total-row { background-color: var(--total-row); font-weight: bold; }
         .hidden { display: none; }
-        input[type="number"] { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -41,8 +40,8 @@
     </div>
 
     <div id="page-dist" class="view-container">
-        <div id="modeGuide" class="guide-box">
-            💡 <span>統計範圍：最近 <input type="number" id="recentN" value="0" onchange="applyFilter()"> 期 (輸入 0 則計算全部數據)</span>
+        <div class="guide-box">
+            💡 <span>統計範圍：最近 <input type="number" id="recentN" value="0" style="width:60px" onchange="applyFilter()"> 期 (0代表全部)</span>
         </div>
         <div class="filter-panel">
             <div class="f-label">年份</div><div class="f-btns" data-type="year"></div>
@@ -90,11 +89,11 @@
             db = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
                  .filter(row => row[0] && !isNaN(row[0]));
             
-            // 關鍵修正：從日期欄位 B (索引1) 正確抓取年份前四碼 YYYY
+            // 自動偵測年份邏輯：抓取 B 欄位 (索引1)
             const years = [...new Set(db.map(row => {
                 const dateStr = String(row[1]);
-                return dateStr.substring(0, 4);
-            }))].filter(y => y.length === 4 && !isNaN(y)).sort((a,b)=>b-a);
+                return dateStr.substring(0, 4); // 抓取 YYYY
+            }))].filter(y => /^\d{4}$/.test(y)).sort((a,b)=>b-a);
             
             build('year', years);
             renderGrid();
@@ -178,7 +177,7 @@
             });
         }
         const titleMap = { history: "歷史統計", tuopai: "拖牌回測", current: "當期對碰", next: "下期對碰" };
-        if(results.length) saveAndRender(titleMap[currentMode] || "統計報表", results);
+        if(results.length) saveAndRender(titleMap[currentMode], results);
         switchPage('repo');
     }
 
@@ -206,6 +205,7 @@
                 h += `</tr>`;
             });
 
+            // 報表最後一行自動加總 (SUM)
             h += `</tbody><tfoot class="total-row"><tr><td>總計 (SUM)</td>`;
             for(let i=1; i<=39; i++) h += `<td>${totals[i] || ''}</td>`;
             h += `</tr></tfoot></table></div>`;
@@ -243,11 +243,14 @@
         const body = document.getElementById('gridBody'); body.innerHTML = '';
         db.forEach((row, idx) => {
             const tr = document.createElement('tr'); tr.id = `row-${idx}`;
-            // 修正：日期欄位顯示格式固定為 YYYY/MM/DD
+            // 修正：日期格式顯示 YYYY/MM/DD
             for(let i=0; i<11; i++){ 
                 const td = document.createElement('td'); 
                 let val = row[i] || '';
-                if(i === 1) val = String(val).split(' ')[0].replace(/-/g, '/');
+                if(i === 1) { // 日期欄位處理
+                    const rawDate = String(val).split(' ')[0]; // 移除時間
+                    val = rawDate.replace(/-/g, '/'); // 轉為斜線格式
+                }
                 td.innerText = val; 
                 tr.appendChild(td); 
             }
@@ -267,11 +270,7 @@
             if(idx < startIdx) { tr.style.display = 'none'; return; }
             const data = db[idx];
             let ok = true;
-            // 修正：年份篩選邏輯
-            if(filters.year.length > 0) {
-                const rowYear = String(data[1]).substring(0,4);
-                ok &= filters.year.includes(rowYear);
-            }
+            if(filters.year.length > 0) ok &= filters.year.includes(String(data[1]).substring(0,4));
             ['week','tian','di','solar'].forEach(cat => {
                 if(filters[cat].length > 0) ok &= filters[cat].some(v => String(data[['week','tian','di','solar'].indexOf(cat)+2]).includes(v));
             });
