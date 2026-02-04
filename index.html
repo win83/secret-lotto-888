@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>539 專業回測系統 - 拖牌與對碰強化版</title>
+  <title>539 專業回測系統 - 精準統計版</title>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
     :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --total-row: #ffebee; }
@@ -24,13 +24,10 @@
     table { border-collapse: collapse; width: 100%; white-space: nowrap; }
     th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
     .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
-    .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .report-mid { flex: 1; text-align: center; font-weight: bold; color: #0b1b3a; white-space: pre-line; }
+    .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
     .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
     .total-row { background-color: var(--total-row); font-weight: bold; }
     .hidden { display: none; }
-    .solar-wrap{ display:flex; flex-direction:column; gap:6px; }
-    .solar-row{ display:flex; flex-wrap:wrap; gap:4px; }
   </style>
 </head>
 <body>
@@ -43,7 +40,6 @@
 
   <div id="page-dist" class="view-container">
     <div class="filter-panel">
-      <div class="f-label">年份</div><div class="f-btns" data-type="year"></div>
       <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
       <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
       <div class="f-label">地支</div><div class="f-btns" data-type="di"></div>
@@ -52,17 +48,16 @@
     </div>
 
     <div class="action-bar">
-      <button class="yellow-btn btn-mode-h" onclick="setMode('history')">歷史統計</button>
+      <button class="yellow-btn btn-mode-h active" onclick="setMode('history')">歷史統計</button>
       <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
       <button class="yellow-btn btn-mode-cur" onclick="setMode('current')">當期對碰</button>
-      <button class="yellow-btn btn-mode-next" onclick="setMode('next')">下期對碰</button>
       <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
       <button onclick="clearFilters()">清空篩選</button>
       <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
     </div>
 
     <div class="scroll-area">
-      <table>
+      <table id="mainTable">
         <thead>
           <tr id="thr">
             <th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th>
@@ -75,9 +70,6 @@
   </div>
 
   <div id="page-repo" class="view-container hidden">
-    <div style="margin-bottom:10px;">
-      <button onclick="clearAllReports()" style="background:#d32f2f; color:white; padding:8px 15px; cursor:pointer; font-weight:bold;">⚠️ 清空所有報表</button>
-    </div>
     <div id="repo-list"></div>
   </div>
 </div>
@@ -86,91 +78,62 @@
   const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
   let db = [];
   let currentMode = 'history';
-  let filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
+  let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
   let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
 
-  // --- 資料處理與標準化 ---
-  function normalizeDate(val){
-    if(!val) return { ymd:'', year:'' };
-    let s = String(val).trim();
-    if(/^\d{8}$/.test(s)) return { ymd: `${s.slice(0,4)}/${s.slice(4,6)}/${s.slice(6,8)}`, year: s.slice(0,4) };
-    let d = new Date(val);
-    if(isNaN(d.getTime())) return { ymd: s, year: s.slice(0,4) };
-    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
-    return { ymd: `${y}/${m}/${dd}`, year: String(y) };
-  }
-
-  // --- 核心邏輯引擎 ---
+  // --- 核心邏輯修正 ---
   function generateBatchReport() {
-    if(db.length === 0) return;
     const results = [];
-    const titleMap = { history: "歷史統計", tuopai: "拖牌模式", current: "當期對碰", next: "下期對碰" };
-    
-    // 依據規則：點選幾個號碼就是幾組。若沒選號碼，則跑空號碼組
     const selectedNums = filters.nums.length > 0 ? filters.nums : [null];
 
     selectedNums.forEach(num => {
-      ['week','tian','di','solar'].forEach(cat => {
-        const selectedValues = filters[cat];
+      ['week', 'tian', 'di', 'solar'].forEach(cat => {
+        const vals = filters[cat];
         
-        // 拖牌邏輯：必須點選 2 個才成立 (T -> T+1)
+        // 拖牌邏輯修正：每個項目必須點選2個才會成立
         if (currentMode === 'tuopai') {
-          if (selectedValues.length === 2) {
-            const [v1, v2] = selectedValues;
+          if (vals.length === 2) {
+            const [v1, v2] = vals;
             let s = Array(40).fill(0), count = 0;
             for (let i = 0; i < db.length - 1; i++) {
-              if (checkRowMatch(db[i], cat, v1, num) && checkRowMatch(db[i+1], cat, v2)) {
+              if (checkMatch(db[i], cat, v1, num) && checkMatch(db[i+1], cat, v2)) {
                 db[i+1].slice(6,11).forEach(n => { if(n>0) s[n]++; });
                 count++;
               }
             }
-            if(count > 0) results.push({ label: `${num?num+'+':''}${cat}:${v1}→${v2}`, data: s, matches: count });
+            if(count > 0) results.push({ label: `拖牌:${num?num+'+':''}${cat}(${v1}→${v2})`, data: s, matches: count });
           }
-        } 
-        // 對碰或歷史邏輯
-        else {
-          selectedValues.forEach(v => {
+        } else {
+          // 歷史與對碰邏輯
+          vals.forEach(v => {
             let s = Array(40).fill(0), count = 0;
-            for (let i = 0; i < db.length; i++) {
-              let isMatch = false;
-              if (currentMode === 'current' || currentMode === 'history') {
-                isMatch = checkRowMatch(db[i], cat, v, num);
-                if (isMatch) {
-                    db[i].slice(6,11).forEach(n => { if(n>0) s[n]++; });
-                    count++;
-                }
-              } else if (currentMode === 'next') {
-                isMatch = checkRowMatch(db[i], cat, v, num);
-                if (isMatch && db[i+1]) {
-                    db[i+1].slice(6,11).forEach(n => { if(n>0) s[n]++; });
-                    count++;
-                }
+            db.forEach(row => {
+              if (checkMatch(row, cat, v, num)) {
+                row.slice(6,11).forEach(n => { if(n>0) s[n]++; });
+                count++;
               }
-            }
+            });
             if(count > 0) results.push({ label: `${num?num+'+':''}${cat}:${v}`, data: s, matches: count });
           });
         }
       });
     });
 
-    if(results.length > 0) {
-      saveAndRender(titleMap[currentMode], results, getFilterSummary());
+    if (results.length) {
+      savedReports.unshift({ title: currentMode, rows: results, id: Date.now() });
+      localStorage.setItem('539_reports', JSON.stringify(savedReports));
+      updateReportUI();
       switchPage('repo');
-    } else {
-      alert("目前的篩選條件無符合數據 (拖牌模式需在同一類別點選2個項目)");
     }
   }
 
-  function checkRowMatch(row, cat, val, mustHaveNum = null) {
-    const colMap = { 'week': 2, 'tian': 3, 'di': 4, 'solar': 5 };
-    let match = String(row[colMap[cat]]).includes(val);
-    if (mustHaveNum) {
-      match = match && row.slice(6, 11).map(Number).includes(Number(mustHaveNum));
-    }
+  function checkMatch(row, cat, val, num) {
+    const colIdx = { week: 2, tian: 3, di: 4, solar: 5 }[cat];
+    let match = String(row[colIdx]).includes(val);
+    if (num) match = match && row.slice(6, 11).map(Number).includes(Number(num));
     return match;
   }
 
-  // --- UI 與 報表渲染 ---
   function updateReportUI() {
     const list = document.getElementById('repo-list');
     list.innerHTML = '';
@@ -178,131 +141,81 @@
       const card = document.createElement('div');
       card.className = 'report-card';
       let totals = Array(40).fill(0);
-      let h = `<div class="report-title"><span>【${report.title}】</span><div class="report-mid">${report.summary}</div><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-      h += `<div class="scroll-area"><table><thead><tr style="background:#eee"><td>項目</td>`;
+      let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
+      h += `<table><thead><tr style="background:#eee"><td>項目</td>`;
       for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
       h += `</tr></thead><tbody>`;
       report.rows.forEach(r => {
-        const top3 = getTop3Indices(r.data);
-        h += `<tr><td style="font-weight:bold;">${r.label} (${r.matches}期)</td>`;
+        h += `<tr><td>${r.label} (${r.matches}期)</td>`;
         for(let i=1; i<=39; i++) {
-          const v = r.data[i] || 0;
+          let v = r.data[i] || 0;
           totals[i] += v;
-          h += `<td class="${top3.includes(i)?'top-hit':''}">${v||''}</td>`;
+          h += `<td>${v || ''}</td>`;
         }
         h += `</tr>`;
       });
+      // 每一份報表最後一行執行加總 (SUM)
       h += `</tbody><tfoot class="total-row"><tr><td>總計 (SUM)</td>`;
       for(let i=1; i<=39; i++) h += `<td>${totals[i] || ''}</td>`;
-      h += `</tr></tfoot></table></div>`;
+      h += `</tr></tfoot></table>`;
       card.innerHTML = h;
       list.appendChild(card);
     });
   }
 
-  function getTop3Indices(data) {
-    let arr = data.map((v, i) => ({v, i})).filter(x => x.i > 0 && x.v > 0).sort((a,b)=>b.v - a.v);
-    let topVals = [...new Set(arr.map(x=>x.v))].slice(0, 3);
-    return arr.filter(x => topVals.includes(x.v)).map(x => x.i);
-  }
-
+  // --- 初始化與 UI 輔助 ---
   function handleItem(el, type, val) {
     const arr = filters[type];
     const idx = arr.indexOf(val);
-    if(idx > -1) {
-      arr.splice(idx, 1);
-      el.classList.remove('active');
-      el.removeAttribute('data-order');
-    } else {
-      // 拖牌模式下限制點選 2 個
-      if(currentMode === 'tuopai' && !['nums','year'].includes(type) && arr.length >= 2) return;
-      arr.push(val);
-      el.classList.add('active');
-      el.setAttribute('data-order', arr.length);
-    }
-    applyFilter();
-  }
-
-  function applyFilter() {
-    const rows = document.querySelectorAll('#gridBody tr');
-    rows.forEach((tr, idx) => {
-      const data = db[idx];
-      let ok = true;
-      if(filters.year.length > 0) ok &= filters.year.includes(normalizeDate(data[1]).year);
-      ['week','tian','di','solar'].forEach(cat => {
-        if(filters[cat].length > 0) {
-          const colIdx = ['week','tian','di','solar'].indexOf(cat)+2;
-          ok &= filters[cat].some(v => String(data[colIdx]).includes(v));
-        }
-      });
-      const win = data.slice(6, 11).map(Number);
-      if(filters.nums.length > 0) ok &= filters.nums.every(num => win.includes(Number(num)));
-      tr.style.display = ok ? '' : 'none';
-    });
-  }
-
-  function setMode(m) {
-    currentMode = m;
-    document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-    const btnClass = { history: 'h', tuopai: 't', current: 'cur', next: 'next' };
-    document.querySelector(`.btn-mode-${btnClass[m]}`).classList.add('active');
-    clearFilters();
-  }
-
-  function getFilterSummary() {
-    const parts = [];
-    for(let k in filters) if(filters[k].length) parts.push(`${k}:${filters[k].join(',')}`);
-    return `模式:${currentMode}\n條件:${parts.join(' | ')}`;
-  }
-
-  async function loadCloudData() {
-    try {
-      const response = await fetch(GSHEET_CSV_URL);
-      const csvText = await response.text();
-      const workbook = XLSX.read(csvText, { type: 'string' });
-      db = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
-           .filter(row => row[0] && !isNaN(row[0]));
-      
-      const years = [...new Set(db.map(row => normalizeDate(row[1]).year))].filter(y => y).sort((a,b)=>b-a);
-      build('year', years);
-      renderGrid();
-      document.getElementById('fileMsg').innerText = `數據庫: ${db.length} 期`;
-      setMode('history');
-      updateReportUI();
-    } catch (e) { document.getElementById('fileMsg').innerText = "載入失敗"; }
-  }
-
-  function build(type, list) {
-    const container = document.querySelector(`[data-type="${type}"]`);
-    if(!container) return;
-    container.innerHTML = '';
-    list.forEach(v => {
-      const div = document.createElement('div');
-      div.className = 'f-item';
-      div.innerText = v;
-      div.onclick = () => handleItem(div, type, v);
-      container.appendChild(div);
-    });
+    if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); }
+    else { arr.push(val); el.classList.add('active'); el.setAttribute('data-order', arr.length); }
+    renderGrid();
   }
 
   function renderGrid() {
     const body = document.getElementById('gridBody');
     body.innerHTML = '';
-    db.slice(-50).forEach(row => { // 僅預覽最後50期提高效能
+    db.slice(-30).forEach(row => { // 僅顯示最近30期預覽
       const tr = document.createElement('tr');
-      row.slice(0, 11).forEach((val, i) => {
-        const td = document.createElement('td');
-        td.innerText = (i === 1) ? normalizeDate(val).ymd : val;
-        tr.appendChild(td);
-      });
+      row.slice(0, 11).forEach(v => { const td = document.createElement('td'); td.innerText = v; tr.appendChild(td); });
       body.appendChild(tr);
     });
   }
 
-  function saveAndRender(title, rows, summary) {
-    savedReports.unshift({ title, rows, summary, id: Date.now() });
-    localStorage.setItem('539_reports', JSON.stringify(savedReports));
-    updateReportUI();
+  async function loadData() {
+    const res = await fetch(GSHEET_CSV_URL);
+    const text = await res.text();
+    const wb = XLSX.read(text, {type:'string'});
+    db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(r => r[0] && !isNaN(r[0]));
+    document.getElementById('fileMsg').innerText = `已載入 ${db.length} 期`;
+    renderGrid();
+  }
+
+  function buildBtns(type, list) {
+    const container = document.querySelector(`[data-type="${type}"]`);
+    list.forEach(v => {
+      const d = document.createElement('div');
+      d.className = 'f-item'; d.innerText = v;
+      d.onclick = () => handleItem(d, type, v);
+      container.appendChild(d);
+    });
+  }
+
+  function setMode(m) { 
+    currentMode = m; 
+    document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.btn-mode-${m === 'history' ? 'h' : m === 'tuopai' ? 't' : 'cur'}`).classList.add('active');
+  }
+
+  function switchPage(p) {
+    document.getElementById('page-dist').className = p==='dist' ? 'view-container' : 'hidden';
+    document.getElementById('page-repo').className = p==='repo' ? 'view-container' : 'hidden';
+  }
+
+  function clearFilters() {
+    filters = { week:[], tian:[], di:[], solar:[], nums:[] };
+    document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active'));
+    renderGrid();
   }
 
   function deleteReport(id) {
@@ -311,34 +224,14 @@
     updateReportUI();
   }
 
-  function clearAllReports() { if(confirm("清空報表？")) { savedReports = []; localStorage.removeItem('539_reports'); updateReportUI(); } }
-  function switchPage(p) { 
-    document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden');
-    document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden');
-  }
-  function clearFilters() {
-    filters = { year:[], week:[], tian:[], di:[], solar:[], nums:[] };
-    document.querySelectorAll('.f-item').forEach(el => { el.classList.remove('active'); el.removeAttribute('data-order'); });
-    applyFilter();
-  }
-
-  // 初始化 UI
-  (function init(){
-    build('week', ['一','二','三','四','五','六','日']);
-    build('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
-    build('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
-    build('nums', Array.from({length:39}, (_,i)=>String(i+1).padStart(2,'0')));
-    
-    // 節氣特殊佈局
-    const solarContainer = document.querySelector('[data-type="solar"]');
-    let sHTML = '<div class="solar-wrap"><div class="solar-row">';
-    for(let i=0; i<=15; i++) sHTML += `<div class="f-item" onclick="handleItem(this,'solar','T${i}')">T${i}</div>`;
-    sHTML += '</div><div class="solar-row">';
-    for(let i=0; i<=15; i++) sHTML += `<div class="f-item" onclick="handleItem(this,'solar','S${i}')">S${i}</div>`;
-    solarContainer.innerHTML = sHTML + '</div></div>';
-
-    loadCloudData();
-  })();
+  window.onload = () => {
+    buildBtns('week', ['週一','週二','週三','週四','週五','週六']);
+    buildBtns('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
+    buildBtns('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
+    buildBtns('nums', Array.from({length:39}, (_,i)=>String(i+1).padStart(2,'0')));
+    loadData();
+    updateReportUI();
+  };
 </script>
 </body>
 </html>
