@@ -2,30 +2,27 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>539 專業回測系統 - 精準統計版</title>
+  <title>539 精準統計系統 - 邏輯校正版</title>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
-    :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --gold: #ffc107; --total-row: #ffebee; }
+    :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --total-row: #ffebee; }
     body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
-    .main-layout { display: flex; flex-direction: column; gap: 10px; }
-    .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 80px 1fr; gap: 8px; border-radius: 8px; }
+    .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 80px 1fr; gap: 8px; border-radius: 8px; margin-bottom:10px; }
     .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
     .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
-    .f-item { padding: 4px 12px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
+    .f-item { padding: 4px 10px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
     .f-item.active { background: var(--blue-t); color: white; }
     .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
-    .action-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 8px; }
-    .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+    .action-bar { display: flex; gap: 10px; align-items: center; padding: 10px; background: rgba(255,255,255,0.5); border-radius: 8px; }
+    .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; }
     .yellow-btn.active { background: #ff9800 !important; color: white; }
-    .add-btn { background: #4CAF50; color: white; border: 1px solid #000; padding: 8px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
-    .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; min-height: 500px; }
-    .scroll-area { overflow: auto; max-height: 600px; }
-    table { border-collapse: collapse; width: 100%; white-space: nowrap; }
-    th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-    .report-card { border: 2px solid #333; background: #fff; margin-bottom: 25px; border-radius: 4px; }
-    .report-title { background: #7da7d8; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-    .top-hit { background-color: #ffff00 !important; font-weight: bold; color: #d32f2f; }
+    .add-btn { background: #4CAF50; color: white; padding: 8px 20px; font-weight: bold; cursor: pointer; }
+    .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+    .report-card { border: 2px solid #333; background: #fff; margin-top: 20px; }
+    .report-title { background: #7da7d8; padding: 8px; font-weight: bold; display: flex; justify-content: space-between; }
+    .top-hit { background-color: #ffff00 !important; font-weight: bold; }
     .total-row { background-color: var(--total-row); font-weight: bold; }
     .hidden { display: none; }
   </style>
@@ -33,9 +30,9 @@
 <body>
 
 <div class="main-layout">
-  <div style="display:flex; gap:5px;">
-    <button onclick="switchPage('dist')" style="flex:1; padding:12px; font-weight:bold; cursor:pointer;">數據分佈圖</button>
-    <button onclick="switchPage('repo')" style="flex:1; padding:12px; font-weight:bold; cursor:pointer;">匯總報表</button>
+  <div style="display:flex; gap:5px; margin-bottom:10px;">
+    <button onclick="switchPage('dist')" style="flex:1; padding:10px;">數據分佈圖</button>
+    <button onclick="switchPage('repo')" style="flex:1; padding:10px;">匯總報表</button>
   </div>
 
   <div id="page-dist" class="view-container">
@@ -51,89 +48,97 @@
       <button class="yellow-btn btn-mode-h active" onclick="setMode('history')">歷史統計</button>
       <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
       <button class="yellow-btn btn-mode-cur" onclick="setMode('current')">當期對碰</button>
+      <button class="yellow-btn btn-mode-next" onclick="setMode('next')">下期對碰</button>
       <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
       <button onclick="clearFilters()">清空篩選</button>
-      <span id="fileMsg" style="margin-left:auto; font-weight:bold; color:red;">連線中...</span>
+      <span id="fileMsg" style="color:red; font-weight:bold;">載入中...</span>
     </div>
 
-    <div class="scroll-area">
+    <div style="overflow:auto; max-height:400px; margin-top:10px;">
       <table id="mainTable">
-        <thead>
-          <tr id="thr">
-            <th>期號</th><th>日期</th><th>週</th><th>天干</th><th>地支</th><th>節氣</th>
-            <th>球1</th><th>球2</th><th>球3</th><th>球4</th><th>球5</th>
-          </tr>
-        </thead>
+        <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天</th><th>地</th><th>節</th><th colspan="5">開獎號碼</th></tr></thead>
         <tbody id="gridBody"></tbody>
       </table>
     </div>
   </div>
 
   <div id="page-repo" class="view-container hidden">
+    <button onclick="clearAllReports()" style="background:red; color:white; padding:5px;">清空所有報表</button>
     <div id="repo-list"></div>
   </div>
 </div>
 
 <script>
-  const GSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
+  const GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
   let db = [];
   let currentMode = 'history';
   let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
-  let savedReports = JSON.parse(localStorage.getItem('539_reports') || "[]");
+  let savedReports = JSON.parse(localStorage.getItem('539_reports_v2') || "[]");
 
   // --- 核心邏輯修正 ---
   function generateBatchReport() {
+    if(!db.length) return;
     const results = [];
-    const selectedNums = filters.nums.length > 0 ? filters.nums : [null];
+    const numSeeds = filters.nums.length > 0 ? filters.nums : [null];
 
-    selectedNums.forEach(num => {
+    numSeeds.forEach(numSeed => {
       ['week', 'tian', 'di', 'solar'].forEach(cat => {
-        const vals = filters[cat];
-        
-        // 拖牌邏輯修正：每個項目必須點選2個才會成立
-        if (currentMode === 'tuopai') {
-          if (vals.length === 2) {
-            const [v1, v2] = vals;
+        const activeVals = filters[cat];
+        if(!activeVals.length) return;
+
+        if(currentMode === 'tuopai') {
+          // 拖牌邏輯：必須選2個。T期滿足 (Val1 + Num) -> T+1期滿足 (Val2) 的號碼分佈
+          if(activeVals.length === 2) {
+            const [v1, v2] = activeVals;
             let s = Array(40).fill(0), count = 0;
-            for (let i = 0; i < db.length - 1; i++) {
-              if (checkMatch(db[i], cat, v1, num) && checkMatch(db[i+1], cat, v2)) {
+            for(let i=0; i<db.length-1; i++) {
+              if(checkMatch(db[i], cat, v1, numSeed) && checkMatch(db[i+1], cat, v2)) {
                 db[i+1].slice(6,11).forEach(n => { if(n>0) s[n]++; });
                 count++;
               }
             }
-            if(count > 0) results.push({ label: `拖牌:${num?num+'+':''}${cat}(${v1}→${v2})`, data: s, matches: count });
+            if(count > 0) results.push({ label: `${numSeed?numSeed+'+':''}${cat}(${v1}→${v2})`, data: s, matches: count });
           }
         } else {
-          // 歷史與對碰邏輯
-          vals.forEach(v => {
+          // 歷史/當期/下期
+          activeVals.forEach(v => {
             let s = Array(40).fill(0), count = 0;
-            db.forEach(row => {
-              if (checkMatch(row, cat, v, num)) {
-                row.slice(6,11).forEach(n => { if(n>0) s[n]++; });
-                count++;
+            for(let i=0; i<db.length; i++) {
+              if(checkMatch(db[i], cat, v, numSeed)) {
+                const targetRow = (currentMode === 'next') ? db[i+1] : db[i];
+                if(targetRow) {
+                  targetRow.slice(6,11).forEach(n => { if(n>0) s[n]++; });
+                  count++;
+                }
               }
-            });
-            if(count > 0) results.push({ label: `${num?num+'+':''}${cat}:${v}`, data: s, matches: count });
+            }
+            if(count > 0) results.push({ label: `${numSeed?numSeed+'+':''}${cat}:${v}`, data: s, matches: count });
           });
         }
       });
     });
 
-    if (results.length) {
-      savedReports.unshift({ title: currentMode, rows: results, id: Date.now() });
-      localStorage.setItem('539_reports', JSON.stringify(savedReports));
+    if(results.length) {
+      savedReports.unshift({ title: currentMode.toUpperCase(), rows: results, id: Date.now() });
+      localStorage.setItem('539_reports_v2', JSON.stringify(savedReports));
       updateReportUI();
       switchPage('repo');
+    } else {
+      alert("查無數據！請確認篩選條件（拖牌模式需在同分類選2個項目）");
     }
   }
 
-  function checkMatch(row, cat, val, num) {
+  function checkMatch(row, cat, val, seed) {
     const colIdx = { week: 2, tian: 3, di: 4, solar: 5 }[cat];
-    let match = String(row[colIdx]).includes(val);
-    if (num) match = match && row.slice(6, 11).map(Number).includes(Number(num));
-    return match;
+    let isMatch = String(row[colIdx]).includes(val);
+    if(seed) {
+      const nums = row.slice(6,11).map(Number);
+      isMatch = isMatch && nums.includes(Number(seed));
+    }
+    return isMatch;
   }
 
+  // --- UI 渲染 ---
   function updateReportUI() {
     const list = document.getElementById('repo-list');
     list.innerHTML = '';
@@ -141,97 +146,102 @@
       const card = document.createElement('div');
       card.className = 'report-card';
       let totals = Array(40).fill(0);
-      let h = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-      h += `<table><thead><tr style="background:#eee"><td>項目</td>`;
-      for(let i=1; i<=39; i++) h += `<td>${i}</td>`;
-      h += `</tr></thead><tbody>`;
+      let html = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
+      html += `<table><thead><tr style="background:#eee"><td>項目</td>`;
+      for(let i=1; i<=39; i++) html += `<td>${i}</td>`;
+      html += `</tr></thead><tbody>`;
+      
       report.rows.forEach(r => {
-        h += `<tr><td>${r.label} (${r.matches}期)</td>`;
+        html += `<tr><td style="white-space:nowrap; background:#f9f9f9;">${r.label} (${r.matches})</td>`;
         for(let i=1; i<=39; i++) {
-          let v = r.data[i] || 0;
-          totals[i] += v;
-          h += `<td>${v || ''}</td>`;
+          const val = r.data[i] || 0;
+          totals[i] += val;
+          html += `<td>${val || ''}</td>`;
         }
-        h += `</tr>`;
+        html += `</tr>`;
       });
-      // 每一份報表最後一行執行加總 (SUM)
-      h += `</tbody><tfoot class="total-row"><tr><td>總計 (SUM)</td>`;
-      for(let i=1; i<=39; i++) h += `<td>${totals[i] || ''}</td>`;
-      h += `</tr></tfoot></table>`;
-      card.innerHTML = h;
+      
+      html += `</tbody><tfoot class="total-row"><tr><td>總計 (SUM)</td>`;
+      for(let i=1; i<=39; i++) html += `<td>${totals[i] || ''}</td>`;
+      html += `</tr></tfoot></table>`;
+      card.innerHTML = html;
       list.appendChild(card);
     });
   }
 
-  // --- 初始化與 UI 輔助 ---
-  function handleItem(el, type, val) {
+  // --- 初始化與基礎功能 ---
+  async function init() {
+    const res = await fetch(GSHEET_URL);
+    const text = await res.text();
+    const wb = XLSX.read(text, {type:'string'});
+    db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(r => r[0] && !isNaN(r[0]));
+    document.getElementById('fileMsg').innerText = `已連線: ${db.length} 期`;
+    
+    buildBtns('week', ['週一','週二','週三','週四','週五','週六']);
+    buildBtns('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
+    buildBtns('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
+    buildBtns('nums', Array.from({length:39}, (_,i)=>String(i+1).padStart(2,'0')));
+    
+    const solarWrap = document.querySelector('[data-type="solar"]');
+    for(let i=0; i<=15; i++) {
+      ['T','S'].forEach(prefix => {
+        const d = document.createElement('div'); d.className='f-item'; d.innerText=prefix+i;
+        d.onclick=()=>toggleFilter(d, 'solar', prefix+i); solarWrap.appendChild(d);
+      });
+    }
+    renderGrid();
+    updateReportUI();
+  }
+
+  function toggleFilter(el, type, val) {
     const arr = filters[type];
     const idx = arr.indexOf(val);
-    if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); }
-    else { arr.push(val); el.classList.add('active'); el.setAttribute('data-order', arr.length); }
+    if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
+    else { 
+      if(currentMode==='tuopai' && !['nums'].includes(type) && arr.length >= 2) return;
+      arr.push(val); el.classList.add('active'); el.setAttribute('data-order', arr.length);
+    }
     renderGrid();
   }
 
   function renderGrid() {
     const body = document.getElementById('gridBody');
     body.innerHTML = '';
-    db.slice(-30).forEach(row => { // 僅顯示最近30期預覽
+    db.slice(-20).forEach(row => {
       const tr = document.createElement('tr');
-      row.slice(0, 11).forEach(v => { const td = document.createElement('td'); td.innerText = v; tr.appendChild(td); });
+      row.slice(0,11).forEach(v => { const td=document.createElement('td'); td.innerText=v; tr.appendChild(td); });
       body.appendChild(tr);
     });
   }
 
-  async function loadData() {
-    const res = await fetch(GSHEET_CSV_URL);
-    const text = await res.text();
-    const wb = XLSX.read(text, {type:'string'});
-    db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(r => r[0] && !isNaN(r[0]));
-    document.getElementById('fileMsg').innerText = `已載入 ${db.length} 期`;
-    renderGrid();
+  function setMode(m) {
+    currentMode = m;
+    document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.btn-mode-${m==='history'?'h':m==='tuopai'?'t':m==='current'?'cur':'next'}`).classList.add('active');
+    clearFilters();
   }
 
   function buildBtns(type, list) {
     const container = document.querySelector(`[data-type="${type}"]`);
     list.forEach(v => {
-      const d = document.createElement('div');
-      d.className = 'f-item'; d.innerText = v;
-      d.onclick = () => handleItem(d, type, v);
-      container.appendChild(d);
+      const d = document.createElement('div'); d.className='f-item'; d.innerText=v;
+      d.onclick=()=>toggleFilter(d, type, v); container.appendChild(d);
     });
   }
 
-  function setMode(m) { 
-    currentMode = m; 
-    document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.btn-mode-${m === 'history' ? 'h' : m === 'tuopai' ? 't' : 'cur'}`).classList.add('active');
-  }
-
   function switchPage(p) {
-    document.getElementById('page-dist').className = p==='dist' ? 'view-container' : 'hidden';
-    document.getElementById('page-repo').className = p==='repo' ? 'view-container' : 'hidden';
+    document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden');
+    document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden');
   }
-
   function clearFilters() {
     filters = { week:[], tian:[], di:[], solar:[], nums:[] };
-    document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.f-item').forEach(el=>{el.classList.remove('active'); el.removeAttribute('data-order');});
     renderGrid();
   }
+  function deleteReport(id) { savedReports = savedReports.filter(r=>r.id!==id); localStorage.setItem('539_reports_v2', JSON.stringify(savedReports)); updateReportUI(); }
+  function clearAllReports() { savedReports=[]; localStorage.removeItem('539_reports_v2'); updateReportUI(); }
 
-  function deleteReport(id) {
-    savedReports = savedReports.filter(r => r.id !== id);
-    localStorage.setItem('539_reports', JSON.stringify(savedReports));
-    updateReportUI();
-  }
-
-  window.onload = () => {
-    buildBtns('week', ['週一','週二','週三','週四','週五','週六']);
-    buildBtns('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
-    buildBtns('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
-    buildBtns('nums', Array.from({length:39}, (_,i)=>String(i+1).padStart(2,'0')));
-    loadData();
-    updateReportUI();
-  };
+  init();
 </script>
 </body>
 </html>
