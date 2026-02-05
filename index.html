@@ -38,6 +38,7 @@
     .stat-table th { background: var(--stat-green); }
     .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
     .report-item { margin-bottom: 30px; border: 1px solid #000; background: #fff; overflow-x: auto; }
+    .report-header { background: var(--report-header-bg); padding: 5px; font-weight: bold; border-bottom: 1px solid #000; }
     .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
     .report-table td { border:1px solid #000; text-align:center; padding:2px; }
     .cond-col { background:#ffff00; font-weight: bold; width: 150px; text-align: left; padding-left: 5px; }
@@ -66,10 +67,10 @@
     </div>
     <div class="filters-box"><div class="grid" id="filterGrid"></div></div>
     <div class="btnbar">
-      <button class="btn btn-orange" onclick="changeMode('歷史模式', this)">歷史模式</button>
-      <button class="btn btn-yellow" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
-      <button class="btn btn-yellow" onclick="changeMode('當期對碰', this)">當期對碰</button>
-      <button class="btn btn-yellow" onclick="changeMode('下期對碰', this)">下期對碰</button>
+      <button class="btn btn-orange mode-btn" onclick="changeMode('歷史模式', this)">歷史模式</button>
+      <button class="btn btn-yellow mode-btn" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
+      <button class="btn btn-yellow mode-btn" onclick="changeMode('當期對碰', this)">當期對碰</button>
+      <button class="btn btn-yellow mode-btn" onclick="changeMode('下期對碰', this)">下期對碰</button>
       <button class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
       <button class="btn" onclick="clearFilters()">清空篩選</button>
     </div>
@@ -82,9 +83,18 @@
     <div class="stat-title">全域未出期數</div>
     <div style="overflow-x:auto"><table class="stat-table"><thead><tr id="stat-head-2"></tr></thead><tbody><tr id="stat-body-2"></tr></tbody></table></div>
   </div>
+
   <div id="reportPage" class="page">
-    <div id="reportControl" style="background:#ffd966; padding:8px; display:flex; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
+    <div id="reportControl" style="background:#ffd966; padding:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
       <button class="btn btn-green" onclick="exportToExcel()">匯出 Excel</button>
+      
+      <div style="display:flex; gap:5px; border-left: 2px solid #888; padding-left: 10px;">
+        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('歷史模式', this)">歷史</button>
+        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('拖牌模式', this)">拖牌</button>
+        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('當期對碰', this)">當期對碰</button>
+        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('下期對碰', this)">下期對碰</button>
+      </div>
+
       <button class="btn" style="margin-left:auto; background:yellow" onclick="clearAllReports()">清空報表</button>
     </div>
     <div id="reportContainer"></div>
@@ -128,6 +138,7 @@ function initFilters() {
         grid.innerHTML += html + `</div>`;
     });
     updateStatTableUI();
+    syncModeButtons();
 }
 
 function updateStatTableUI() {
@@ -164,7 +175,6 @@ function updateStats() {
     const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent));
     const counts = Array(maxNum + 1).fill(0);
 
-    // 真實邏輯運算
     cloudData.forEach((row, idx) => {
         const p = row[1].split('/');
         const rd = { "年份": p[0], "月份": p[1], "日期": p[2], "星期": p[3]?p[3].replace('週',''):"", "天干": row[2], "地支": row[3] };
@@ -177,7 +187,7 @@ function updateStats() {
         if (currentMode === "歷史模式") {
             rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
         } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
-            if (catCount >= 2 && selNums.length > 0 && selNums.some(sn => rowNums.includes(sn))) {
+            if (selNums.length > 0 && selNums.some(sn => rowNums.includes(sn))) {
                 const nxt = cloudData[idx+1];
                 if(nxt) nxt.slice(4).forEach(n => { if(parseInt(n)<=maxNum) counts[parseInt(n)]++; });
             }
@@ -188,11 +198,9 @@ function updateStats() {
         }
     });
 
-    // 取得 TOP5 門檻
     const sorted = [...counts].sort((a,b)=>b-a);
     const threshold = sorted[4] > 0 ? sorted[4] : 999;
 
-    // 更新介面
     document.getElementById('filterCounter').textContent = `模式:${currentMode} | 條件數:${catCount} | 已選號碼:${selNums.length}`;
     for(let i=1; i<=maxNum; i++){
         const td = document.getElementById(`val1-${i}`);
@@ -233,7 +241,6 @@ function addToReport() {
             reportStorage[currentUser][currentGame].push({ mode: currentMode, cond: condTxt, num: sn, data: counts });
         });
     } else {
-        // 歷史或當期對碰：直接存入一列
         const counts = Array(maxNum + 1).fill(0);
         cloudData.forEach((row) => {
             const p = row[1].split('/');
@@ -268,6 +275,28 @@ function renderCurrentReports() {
     });
 }
 
+function changeMode(mode, btn) {
+    currentMode = mode;
+    syncModeButtons();
+    if(document.getElementById('mainPage').classList.contains('active')) {
+        updateStats();
+    } else {
+        renderCurrentReports();
+    }
+    document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
+}
+
+function syncModeButtons() {
+    // 同步主介面按鈕
+    document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('btn-orange', b.textContent === currentMode);
+    });
+    // 同步報表介面按鈕
+    document.querySelectorAll('.rpt-mode-btn').forEach(b => {
+        b.classList.toggle('btn-orange', b.textContent === currentMode || (b.textContent==='歷史' && currentMode==='歷史模式') || (b.textContent==='拖牌' && currentMode==='拖牌模式'));
+    });
+}
+
 function selectToday() {
     clearFilters();
     fetchSheetData((lastRow) => {
@@ -294,7 +323,6 @@ function exportToExcel() {
 
 function clearFilters() { document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on')); updateStats(); }
 function clearAllReports() { if(confirm("確定清空？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); } }
-function changeMode(mode, btn) { currentMode = mode; btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-orange')); btn.classList.add('btn-orange'); initFilters(); }
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -302,10 +330,18 @@ document.querySelectorAll('.tab').forEach(tab => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById(tab.dataset.target).classList.add('active');
-        if(tab.dataset.target === 'mainPage') initFilters(); else renderCurrentReports();
+        if(tab.dataset.target === 'mainPage') {
+            initFilters();
+            updateStats();
+        } else {
+            renderCurrentReports();
+            syncModeButtons();
+        }
     });
 });
+
 initFilters();
+if (cloudData.length === 0) fetchSheetData();
 </script>
 </body>
 </html>
