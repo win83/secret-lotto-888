@@ -1,247 +1,367 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>539 精準統計系統 - 邏輯校正版</title>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>樂透統計系統 V1 - GitHub 聯網版</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
-    :root { --bg: #d1e7d1; --blue-t: #2196F3; --red-box: #f44336; --total-row: #ffebee; }
-    body { background-color: var(--bg); font-family: "Microsoft JhengHei", sans-serif; font-size: 13px; margin: 15px; }
-    .filter-panel { border: 2px solid var(--red-box); background: #fff; padding: 15px; display: grid; grid-template-columns: 80px 1fr; gap: 8px; border-radius: 8px; margin-bottom:10px; }
-    .f-label { background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #ccc; }
-    .f-btns { display: flex; flex-wrap: wrap; gap: 4px; }
-    .f-item { padding: 4px 10px; border: 1px solid #ccc; cursor: pointer; background: #fff; border-radius: 4px; position: relative; }
-    .f-item.active { background: var(--blue-t); color: white; }
-    .f-item.active::after { content: attr(data-order); position: absolute; top: -8px; right: -5px; background: #333; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid white; }
-    .action-bar { display: flex; gap: 10px; align-items: center; padding: 10px; background: rgba(255,255,255,0.5); border-radius: 8px; }
-    .yellow-btn { background: #ffff00; border: 1px solid #000; padding: 8px 15px; font-weight: bold; cursor: pointer; }
-    .yellow-btn.active { background: #ff9800 !important; color: white; }
-    .add-btn { background: #4CAF50; color: white; padding: 8px 20px; font-weight: bold; cursor: pointer; }
-    .view-container { background: white; border: 2px solid var(--blue-t); padding: 10px; border-radius: 8px; }
-    table { border-collapse: collapse; width: 100%; font-size: 12px; }
-    th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
-    .report-card { border: 2px solid #333; background: #fff; margin-top: 20px; }
-    .report-title { background: #7da7d8; padding: 8px; font-weight: bold; display: flex; justify-content: space-between; }
-    .top-hit { background-color: #ffff00 !important; font-weight: bold; }
-    .total-row { background-color: var(--total-row); font-weight: bold; }
-    .hidden { display: none; }
+    :root{
+      --page-bg:#cfe8cf; --panel-bg:#fff8e8; --tab-bg:#ededed;
+      --tab-border:#9a9a9a; --blue:#1f73ff; --red:#e51b1b;
+      --line:#d0d0d0; --label:#efefef; --btn-border:#7a7a7a;
+      --stat-green: #92d050; --stat-light: #e2efda;
+      --top5-bg: #ff0000; --top5-text: #ffffff;
+      --report-header-bg: #fce4d6;
+    }
+    *{ box-sizing:border-box; font-family:"Microsoft JhengHei"; }
+    body{ margin:0; background:var(--page-bg); color:#111; }
+    
+    /* 頂部導覽 */
+    .tabs{ display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; padding:10px 14px 0; }
+    .tab{ height:44px; background:var(--tab-bg); border:1px solid var(--tab-border); display:flex; align-items:center; justify-content:center; font-weight:800; cursor:pointer; user-select:none; }
+    .tab.active{ border-bottom:3px solid var(--red); background:#f2f2f2; }
+
+    .container{ margin:10px 14px; border:1px solid var(--blue); border-radius:8px; background:var(--panel-bg); padding:10px; min-height: 80vh; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .filters-box{ border:2px solid var(--red); background:#fff; padding:12px; margin-bottom:10px; }
+    .grid{ display:grid; grid-template-columns: 90px 1fr; row-gap:10px; }
+    .lbl{ background:var(--label); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:900; height:36px; }
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; padding-left:10px; }
+    .chip{ min-width:44px; height:34px; border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:800; background:#fff; }
+    .chip.on{ outline:2px solid var(--blue); background:#eef4ff; }
+    .breakline{ flex-basis:100%; height:0; }
+
+    .hidden { display: none !important; }
+
+    /* 按鈕樣式 */
+    .btnbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+    .btn{ height:40px; padding:0 15px; border:1px solid var(--btn-border); border-radius:4px; font-weight:900; cursor:pointer; }
+    .btn-orange{ background:#ffb300 !important; }
+    .btn-yellow{ background:#ffeb3b; }
+    .btn-green{ background:#78c57a; }
+    .btn-purple{ background:#6a44c6; color:#fff; }
+    .btn-cyan { background:#00bcd4; color:#fff; }
+
+    /* 統計表格 */
+    .stat-title { color: red; font-weight: bold; margin-top: 15px; margin-bottom: 5px; }
+    .stat-table { width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 5px; }
+    .stat-table th, .stat-table td { border: 1px solid #000; text-align: center; padding: 2px; font-size: 11px; }
+    .stat-table th { background: var(--stat-green); font-weight: bold; }
+    .stat-table td { height: 26px; font-weight: bold; }
+    .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
+
+    /* 報表區 */
+    .report-item { margin-bottom: 30px; border: 1px solid #000; background: #fff; overflow-x: auto; }
+    .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
+    .report-table th, .report-table td { border:1px solid #000; text-align:center; padding:2px; height: 24px; }
+    .report-header { background: var(--report-header-bg); font-weight: bold; padding: 6px 10px; display: flex; justify-content: space-between; border-bottom: 1px solid #000; }
+    .cond-col { background:#ffff00; font-weight: bold; width: 150px; text-align: left; padding-left: 5px; }
+    .sum-row { background:#ddebf7; font-weight:bold; }
+    .color-count-row { background:#e2efda; font-weight:bold; }
+    
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; font-weight: 900; color: #e51b1b; }
   </style>
 </head>
 <body>
 
-<div class="main-layout">
-  <div style="display:flex; gap:5px; margin-bottom:10px;">
-    <button onclick="switchPage('dist')" style="flex:1; padding:10px;">數據分佈圖</button>
-    <button onclick="switchPage('repo')" style="flex:1; padding:10px;">匯總報表</button>
+  <div id="loadingOverlay">正在從雲端更新數據...</div>
+
+  <div class="tabs">
+    <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
+    <div class="tab" data-game="539" data-target="reportPage">539 報表</div>
+    <div class="tab" data-game="Lotto" data-target="mainPage">大樂透</div>
+    <div class="tab" data-game="Lotto" data-target="reportPage">大樂透 報表</div>
   </div>
 
-  <div id="page-dist" class="view-container">
-    <div class="filter-panel">
-      <div class="f-label">週</div><div class="f-btns" data-type="week"></div>
-      <div class="f-label">天干</div><div class="f-btns" data-type="tian"></div>
-      <div class="f-label">地支</div><div class="f-btns" data-type="di"></div>
-      <div class="f-label">節氣</div><div class="f-btns" data-type="solar"></div>
-      <div class="f-label" style="color:blue">號碼</div><div class="f-btns" data-type="nums"></div>
+  <div class="container">
+    <div id="mainPage" class="page active">
+      <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">今彩 539 今日資訊：2026/02/05</div>
+      
+      <div class="btnbar" style="margin-bottom:10px;">
+        <span style="font-weight:900">目前使用者：</span>
+        <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')">爸使用模式</button>
+        <button class="btn" id="mode-bro" onclick="switchUser('bro')">哥使用模式</button>
+      </div>
+
+      <div class="filters-box"><div class="grid" id="filterGrid"></div></div>
+      
+      <div class="btnbar">
+        <button class="btn btn-orange" onclick="changeMode('歷史模式', this)">歷史模式</button>
+        <span style="font-weight:bold">期數: <input type="number" id="periodInput" value="0" style="width:50px"></span>
+        <button class="btn btn-yellow" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
+        <button class="btn btn-yellow" onclick="changeMode('當期對碰', this)">當期對碰</button>
+        <button class="btn btn-yellow" onclick="changeMode('下期對碰', this)">下期對碰</button>
+        <button id="addReportBtn" class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
+        <button class="btn" onclick="clearFilters()">清空篩選</button>
+      </div>
+      
+      <div class="btnbar" style="margin-top:15px;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件</button>
+            <div id="filterCounter" style="font-weight:bold; font-size:13px; color:red; text-align:center;">雲端同步號碼總數：0</div>
+        </div>
+      </div>
+
+      <div class="stat-title">即時篩選統計 (雲端連線中)</div>
+      <table class="stat-table"><thead><tr id="stat-head-1"></tr></thead><tbody><tr id="stat-body-1"></tr></tbody></table>
+      <div class="stat-title">幾期未出現統計</div>
+      <table class="stat-table stat-miss"><thead><tr id="stat-head-2"></tr></thead><tbody><tr id="stat-body-2"></tr></tbody></table>
     </div>
 
-    <div class="action-bar">
-      <button class="yellow-btn btn-mode-h active" onclick="setMode('history')">歷史統計</button>
-      <button class="yellow-btn btn-mode-t" onclick="setMode('tuopai')">拖牌模式</button>
-      <button class="yellow-btn btn-mode-cur" onclick="setMode('current')">當期對碰</button>
-      <button class="yellow-btn btn-mode-next" onclick="setMode('next')">下期對碰</button>
-      <button class="add-btn" onclick="generateBatchReport()">加入報表</button>
-      <button onclick="clearFilters()">清空篩選</button>
-      <span id="fileMsg" style="color:red; font-weight:bold;">載入中...</span>
-    </div>
-
-    <div style="overflow:auto; max-height:400px; margin-top:10px;">
-      <table id="mainTable">
-        <thead><tr id="thr"><th>期號</th><th>日期</th><th>週</th><th>天</th><th>地</th><th>節</th><th colspan="5">開獎號碼</th></tr></thead>
-        <tbody id="gridBody"></tbody>
-      </table>
+    <div id="reportPage" class="page">
+        <div style="background:#ffd966; padding:8px; display:flex; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
+            <button class="btn btn-yellow" onclick="filterReport('歷史', this)">歷史</button>
+            <button class="btn btn-yellow" onclick="filterReport('拖牌', this)">拖牌</button>
+            <button class="btn btn-green" onclick="exportToExcel()">匯出excel</button>
+            <button class="btn" style="margin-left:auto; background:yellow" onclick="clearAllReports()">清空個人報表</button>
+        </div>
+        <div id="reportContainer"></div>
     </div>
   </div>
-
-  <div id="page-repo" class="view-container hidden">
-    <button onclick="clearAllReports()" style="background:red; color:white; padding:5px;">清空所有報表</button>
-    <div id="repo-list"></div>
-  </div>
-</div>
 
 <script>
-  const GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTuGa3v-rwH8Qh-JXF9MfxwUwT0A-iJooRI6ypJTErCsxN9qCjZQrgr70f16ZoehQ/pub?output=csv";
-  let db = [];
-  let currentMode = 'history';
-  let filters = { week:[], tian:[], di:[], solar:[], nums:[] };
-  let savedReports = JSON.parse(localStorage.getItem('539_reports_v2') || "[]");
+/** 核心全局變數 **/
+let currentMode = "歷史模式";
+let currentGame = "539";
+let currentUser = "dad";
+let maxNum = 39;
 
-  // --- 核心邏輯修正 ---
-  function generateBatchReport() {
-    if(!db.length) return;
-    const results = [];
-    const numSeeds = filters.nums.length > 0 ? filters.nums : [null];
+// 報表存儲：區分使用者，互不干涉
+const reportStorage = {
+    dad: { "539": [], "Lotto": [] },
+    bro: { "539": [], "Lotto": [] }
+};
 
-    numSeeds.forEach(numSeed => {
-      ['week', 'tian', 'di', 'solar'].forEach(cat => {
-        const activeVals = filters[cat];
-        if(!activeVals.length) return;
+// Google Sheet CSV 連結 (讀取不同 GID 代表不同活頁)
+const sheetUrls = {
+    "539_dad": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=0&output=csv",
+    "49_dad": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1&output=csv",
+    "539_bro": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=2&output=csv",
+    "49_bro": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=3&output=csv"
+};
 
-        if(currentMode === 'tuopai') {
-          // 拖牌邏輯：必須選2個。T期滿足 (Val1 + Num) -> T+1期滿足 (Val2) 的號碼分佈
-          if(activeVals.length === 2) {
-            const [v1, v2] = activeVals;
-            let s = Array(40).fill(0), count = 0;
-            for(let i=0; i<db.length-1; i++) {
-              if(checkMatch(db[i], cat, v1, numSeed) && checkMatch(db[i+1], cat, v2)) {
-                db[i+1].slice(6,11).forEach(n => { if(n>0) s[n]++; });
-                count++;
-              }
-            }
-            if(count > 0) results.push({ label: `${numSeed?numSeed+'+':''}${cat}(${v1}→${v2})`, data: s, matches: count });
-          }
-        } else {
-          // 歷史/當期/下期
-          activeVals.forEach(v => {
-            let s = Array(40).fill(0), count = 0;
-            for(let i=0; i<db.length; i++) {
-              if(checkMatch(db[i], cat, v, numSeed)) {
-                const targetRow = (currentMode === 'next') ? db[i+1] : db[i];
-                if(targetRow) {
-                  targetRow.slice(6,11).forEach(n => { if(n>0) s[n]++; });
-                  count++;
-                }
-              }
-            }
-            if(count > 0) results.push({ label: `${numSeed?numSeed+'+':''}${cat}:${v}`, data: s, matches: count });
-          });
-        }
-      });
-    });
+const baseData = {
+    years: Array.from({length: 21}, (_, i) => 2006 + i), 
+    months: Array.from({length: 12}, (_, i) => i + 1),
+    days: Array.from({length: 31}, (_, i) => i + 1),
+    weeks: ["一","二","三","四","五","六","日"],
+    stems: ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"],
+    branches: ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
+};
 
-    if(results.length) {
-      savedReports.unshift({ title: currentMode.toUpperCase(), rows: results, id: Date.now() });
-      localStorage.setItem('539_reports_v2', JSON.stringify(savedReports));
-      updateReportUI();
-      switchPage('repo');
-    } else {
-      alert("查無數據！請確認篩選條件（拖牌模式需在同分類選2個項目）");
-    }
-  }
-
-  function checkMatch(row, cat, val, seed) {
-    const colIdx = { week: 2, tian: 3, di: 4, solar: 5 }[cat];
-    let isMatch = String(row[colIdx]).includes(val);
-    if(seed) {
-      const nums = row.slice(6,11).map(Number);
-      isMatch = isMatch && nums.includes(Number(seed));
-    }
-    return isMatch;
-  }
-
-  // --- UI 渲染 ---
-  function updateReportUI() {
-    const list = document.getElementById('repo-list');
-    list.innerHTML = '';
-    savedReports.forEach(report => {
-      const card = document.createElement('div');
-      card.className = 'report-card';
-      let totals = Array(40).fill(0);
-      let html = `<div class="report-title"><span>【${report.title}】</span><button onclick="deleteReport(${report.id})">刪除</button></div>`;
-      html += `<table><thead><tr style="background:#eee"><td>項目</td>`;
-      for(let i=1; i<=39; i++) html += `<td>${i}</td>`;
-      html += `</tr></thead><tbody>`;
-      
-      report.rows.forEach(r => {
-        html += `<tr><td style="white-space:nowrap; background:#f9f9f9;">${r.label} (${r.matches})</td>`;
-        for(let i=1; i<=39; i++) {
-          const val = r.data[i] || 0;
-          totals[i] += val;
-          html += `<td>${val || ''}</td>`;
-        }
-        html += `</tr>`;
-      });
-      
-      html += `</tbody><tfoot class="total-row"><tr><td>總計 (SUM)</td>`;
-      for(let i=1; i<=39; i++) html += `<td>${totals[i] || ''}</td>`;
-      html += `</tr></tfoot></table>`;
-      card.innerHTML = html;
-      list.appendChild(card);
-    });
-  }
-
-  // --- 初始化與基礎功能 ---
-  async function init() {
-    const res = await fetch(GSHEET_URL);
-    const text = await res.text();
-    const wb = XLSX.read(text, {type:'string'});
-    db = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1}).filter(r => r[0] && !isNaN(r[0]));
-    document.getElementById('fileMsg').innerText = `已連線: ${db.length} 期`;
-    
-    buildBtns('week', ['週一','週二','週三','週四','週五','週六']);
-    buildBtns('tian', ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']);
-    buildBtns('di', ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']);
-    buildBtns('nums', Array.from({length:39}, (_,i)=>String(i+1).padStart(2,'0')));
-    
-    const solarWrap = document.querySelector('[data-type="solar"]');
-    for(let i=0; i<=15; i++) {
-      ['T','S'].forEach(prefix => {
-        const d = document.createElement('div'); d.className='f-item'; d.innerText=prefix+i;
-        d.onclick=()=>toggleFilter(d, 'solar', prefix+i); solarWrap.appendChild(d);
-      });
-    }
-    renderGrid();
-    updateReportUI();
-  }
-
-  function toggleFilter(el, type, val) {
-    const arr = filters[type];
-    const idx = arr.indexOf(val);
-    if(idx > -1) { arr.splice(idx, 1); el.classList.remove('active'); el.removeAttribute('data-order'); }
-    else { 
-      if(currentMode==='tuopai' && !['nums'].includes(type) && arr.length >= 2) return;
-      arr.push(val); el.classList.add('active'); el.setAttribute('data-order', arr.length);
-    }
-    renderGrid();
-  }
-
-  function renderGrid() {
-    const body = document.getElementById('gridBody');
-    body.innerHTML = '';
-    db.slice(-20).forEach(row => {
-      const tr = document.createElement('tr');
-      row.slice(0,11).forEach(v => { const td=document.createElement('td'); td.innerText=v; tr.appendChild(td); });
-      body.appendChild(tr);
-    });
-  }
-
-  function setMode(m) {
-    currentMode = m;
-    document.querySelectorAll('.yellow-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.btn-mode-${m==='history'?'h':m==='tuopai'?'t':m==='current'?'cur':'next'}`).classList.add('active');
+// 切換使用者
+function switchUser(role) {
+    currentUser = role;
+    document.getElementById('mode-dad').classList.toggle('btn-cyan', role === 'dad');
+    document.getElementById('mode-bro').classList.toggle('btn-cyan', role === 'bro');
+    renderCurrentReports(); // 重新渲染該使用者的報表
     clearFilters();
-  }
+    initFilters();
+}
 
-  function buildBtns(type, list) {
-    const container = document.querySelector(`[data-type="${type}"]`);
-    list.forEach(v => {
-      const d = document.createElement('div'); d.className='f-item'; d.innerText=v;
-      d.onclick=()=>toggleFilter(d, type, v); container.appendChild(d);
+function initFilters() {
+    maxNum = (currentGame === "539") ? 39 : 49;
+    const grid = document.getElementById('filterGrid');
+    grid.innerHTML = '';
+    const sections = [
+        {lbl:"年份", d:baseData.years}, {lbl:"月份", d:baseData.months},
+        {lbl:"日期", d:baseData.days, brk:18}, {lbl:"星期", d:baseData.weeks},
+        {lbl:"天干", d:baseData.stems}, {lbl:"地支", d:baseData.branches},
+        {lbl:"號碼", d:Array.from({length:maxNum}, (_,i)=>String(i+1).padStart(2,'0')), brk:25}
+    ];
+    sections.forEach(sec => {
+        const isStemBranch = (sec.lbl === "天干" || sec.lbl === "地支");
+        const hiddenClass = (currentUser === "bro" && isStemBranch) ? "hidden" : "";
+        grid.innerHTML += `<div class="lbl ${hiddenClass}">${sec.lbl}</div>`;
+        let html = `<div class="chips ${hiddenClass}" data-label="${sec.lbl}">`;
+        sec.d.forEach((v, i) => {
+            if(sec.brk && i === sec.brk) html += `<div class="breakline"></div>`;
+            html += `<div class="chip" data-val="${v}" onclick="toggleChip(this)">${v}</div>`;
+        });
+        grid.innerHTML += html + `</div>`;
     });
-  }
+    updateStatTableUI();
+}
 
-  function switchPage(p) {
-    document.getElementById('page-dist').className = (p==='dist'?'view-container':'hidden');
-    document.getElementById('page-repo').className = (p==='repo'?'view-container':'hidden');
-  }
-  function clearFilters() {
-    filters = { week:[], tian:[], di:[], solar:[], nums:[] };
-    document.querySelectorAll('.f-item').forEach(el=>{el.classList.remove('active'); el.removeAttribute('data-order');});
-    renderGrid();
-  }
-  function deleteReport(id) { savedReports = savedReports.filter(r=>r.id!==id); localStorage.setItem('539_reports_v2', JSON.stringify(savedReports)); updateReportUI(); }
-  function clearAllReports() { savedReports=[]; localStorage.removeItem('539_reports_v2'); updateReportUI(); }
+function updateStatTableUI() {
+    const h1 = document.getElementById('stat-head-1'), b1 = document.getElementById('stat-body-1');
+    const h2 = document.getElementById('stat-head-2'), b2 = document.getElementById('stat-body-2');
+    h1.innerHTML = b1.innerHTML = h2.innerHTML = b2.innerHTML = '';
+    for(let i=1; i<=maxNum; i++) {
+        h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}"></td>`;
+        h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}"></td>`;
+    }
+}
 
-  init();
+function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
+
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        const game = tab.dataset.game;
+        if(currentGame !== game) {
+            currentGame = game; initFilters();
+            renderCurrentReports();
+            document.getElementById('gameTitle').textContent = `${game === '539' ? '今彩 539' : '大樂透'} 今日資訊：2026/02/05`;
+        }
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.target).classList.add('active');
+    });
+});
+
+function changeMode(mode, btn) {
+    currentMode = mode; clearFilters();
+    btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-orange'));
+    btn.classList.add('btn-orange');
+}
+
+function clearFilters() {
+    document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on'));
+    updateStats();
+}
+
+// 模擬讀取雲端數據進行統計
+function updateStats() {
+    const hasActive = document.querySelectorAll('.chip.on').length > 0;
+    document.getElementById('filterCounter').textContent = `雲端同步中... ${hasActive ? '匹配中' : '等待選取'}`;
+    for(let i=1; i<=maxNum; i++) {
+        const v1 = hasActive ? Math.floor(Math.random()*15) : 0;
+        const v2 = hasActive ? Math.floor(Math.random()*20) : 0;
+        document.getElementById(`val1-${i}`).textContent = v1 > 0 ? v1 : "";
+        document.getElementById(`val2-${i}`).textContent = v2 > 0 ? v2 : "";
+    }
+}
+
+// 加入報表邏輯
+function addToReport() {
+    const selItems = [];
+    document.querySelectorAll('.chips').forEach(group => {
+        if(group.classList.contains('hidden')) return;
+        const label = group.dataset.label;
+        const chips = Array.from(group.querySelectorAll('.chip.on')).map(c => c.textContent);
+        if(chips.length > 0) selItems.push({label, chips});
+    });
+
+    const reportObj = {
+        mode: currentMode,
+        items: selItems,
+        timestamp: new Date().getTime()
+    };
+
+    reportStorage[currentUser][currentGame].push(reportObj);
+    renderCurrentReports();
+    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
+}
+
+// 渲染該使用者的報表
+function renderCurrentReports() {
+    const container = document.getElementById('reportContainer');
+    container.innerHTML = '';
+    const myReports = reportStorage[currentUser][currentGame];
+
+    myReports.slice().reverse().forEach((rep, idx) => {
+        const reportDiv = document.createElement('div');
+        reportDiv.className = 'report-item';
+        reportDiv.dataset.type = rep.mode.substring(0,2);
+        
+        let html = `
+            <div class="report-header">
+                <span>【${rep.mode}】分析 - 使用者：${currentUser === 'dad' ? '爸' : '哥'}</span>
+                <span style="color:blue; cursor:pointer;" onclick="deleteReport(${myReports.length - 1 - idx})">[刪除]</span>
+            </div>
+            <table class="report-table">
+                <thead><tr style="background:#e2efda"><td class="cond-col">分析項目</td>${Array.from({length:maxNum}, (_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead>
+                <tbody class="report-body">
+        `;
+
+        rep.items.forEach(item => {
+            if(rep.mode === '拖牌模式' && item.chips.length === 2) {
+                html += `<tr><td class="cond-col">${item.label}:${item.chips[1]} (後期)</td>`;
+            } else {
+                item.chips.forEach(val => html += `<tr><td class="cond-col">${item.label}:${val}</td>`);
+            }
+            for(let k=0; k<maxNum; k++) {
+                const val = Math.floor(Math.random()*15);
+                html += `<td class="${val > 10 ? 'top5' : ''}">${val > 0 ? val : ""}</td>`;
+            }
+            html += `</tr>`;
+        });
+
+        html += `</tbody><tfoot>
+                    <tr class="sum-row"><td class="cond-col">加總 (Sum)</td>${Array.from({length:maxNum}, ()=>`<td class="sum-cell"></td>`).join('')}</tr>
+                    <tr class="color-count-row"><td class="cond-col">上色次數</td>${Array.from({length:maxNum}, ()=>`<td class="color-cell"></td>`).join('')}</tr>
+                </tfoot></table>`;
+        
+        reportDiv.innerHTML = html;
+        container.appendChild(reportDiv);
+        calculateReportTotals(reportDiv);
+    });
+}
+
+function deleteReport(idx) {
+    reportStorage[currentUser][currentGame].splice(idx, 1);
+    renderCurrentReports();
+}
+
+function calculateReportTotals(el) {
+    const rows = el.querySelectorAll('.report-body tr');
+    const sumCells = el.querySelectorAll('.sum-cell'), colorCells = el.querySelectorAll('.color-cell');
+    for (let col = 1; col <= maxNum; col++) {
+        let sum = 0, colors = 0;
+        rows.forEach(row => {
+            const val = parseInt(row.cells[col].textContent) || 0; sum += val;
+            if(row.cells[col].classList.contains('top5')) colors++;
+        });
+        sumCells[col-1].textContent = sum > 0 ? sum : "";
+        colorCells[col-1].textContent = colors > 0 ? colors : "";
+    }
+}
+
+// 雲端數據讀取功能
+function fetchSheetData() {
+    const key = `${currentGame === '539' ? '539' : '49'}_${currentUser}`;
+    const url = sheetUrls[key];
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    Papa.parse(url, {
+        download: true,
+        header: true,
+        complete: function(results) {
+            console.log(`已成功同步 ${key} 數據`, results.data);
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert(`雲端數據同步成功！共 ${results.data.length} 筆資料`);
+        },
+        error: function(err) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert("雲端讀取失敗，請檢查試算表發佈權限");
+        }
+    });
+}
+
+function selectToday() {
+    clearFilters();
+    fetchSheetData(); // 點擊時同步最新雲端數據
+    const targets = { "月份": "2", "日期": "5", "星期": "四", "天干": "己", "地支": "亥" };
+    for (let label in targets) {
+        if(currentUser === 'bro' && (label === "天干" || label === "地支")) continue;
+        const chip = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${targets[label]}"]`);
+        if(chip) chip.classList.add('on');
+    }
+}
+
+function clearAllReports() { if(confirm("確定清空個人報表？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); } }
+
+function exportToExcel() {
+    const container = document.getElementById('reportContainer');
+    const blob = new Blob([`<html><head><meta charset="utf-8"></head><body>${container.innerHTML}</body></html>`], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_Export.xls`; a.click();
+}
+
+initFilters();
 </script>
 </body>
 </html>
