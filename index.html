@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>樂透統計系統 V1 - 終極連線版</title>
+  <title>樂透統計系統 V1 - 雲端自動同步版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -30,7 +30,7 @@
     .lbl{ background:var(--label); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:900; height:36px; }
     .chips{ display:flex; flex-wrap:wrap; gap:8px; padding-left:10px; }
     .chip{ min-width:44px; height:34px; border:1px solid var(--line); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:800; background:#fff; }
-    .chip.on{ outline:2px solid var(--blue); background:#eef4ff; }
+    .chip.on{ outline:3px solid var(--blue); background:#eef4ff; }
 
     .btnbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
     .btn{ height:40px; padding:0 15px; border:1px solid var(--btn-border); border-radius:4px; font-weight:900; cursor:pointer; }
@@ -53,7 +53,6 @@
     .report-header { background: var(--report-header-bg); font-weight: bold; padding: 6px 10px; display: flex; justify-content: space-between; border-bottom: 1px solid #000; }
     .cond-col { background:#ffff00; font-weight: bold; width: 150px; text-align: left; padding-left: 5px; }
     .sum-row { background:#ddebf7; font-weight:bold; }
-    .color-count-row { background:#e2efda; font-weight:bold; }
     .hidden { display: none !important; }
 
     #loadingOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:none; justify-content:center; align-items:center; z-index:9999; font-weight:900; color:var(--red); }
@@ -61,7 +60,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay">雲端數據強力連線中...</div>
+<div id="loadingOverlay">正在與雲端同步最新期數...</div>
 
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
@@ -72,10 +71,9 @@
 
 <div class="container">
   <div id="mainPage" class="page active">
-    <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">今彩 539 今日資訊：2026/02/05</div>
+    <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">遊戲模式：今彩 539</div>
     
     <div class="btnbar" style="margin-bottom:10px;">
-      <span style="font-weight:900">目前使用者：</span>
       <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')">爸使用模式</button>
       <button class="btn" id="mode-bro" onclick="switchUser('bro')">哥使用模式</button>
     </div>
@@ -88,27 +86,23 @@
       <button class="btn btn-yellow" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
       <button class="btn btn-yellow" onclick="changeMode('當期對碰', this)">當期對碰</button>
       <button class="btn btn-yellow" onclick="changeMode('下期對碰', this)">下期對碰</button>
-      <button id="addReportBtn" class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
+      <button class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
       <button class="btn" onclick="clearFilters()">清空篩選</button>
     </div>
     
-    <div class="btnbar" style="margin-top:15px;">
-      <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 & 同步雲端</button>
-      <div id="filterCounter" style="font-weight:bold; font-size:13px; color:red; margin-left:10px;">尚未連網</div>
+    <div class="btnbar" style="margin-top:15px; flex-direction: column; align-items: flex-start;">
+      <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 (同步最新一期)</button>
+      <div id="filterCounter" style="font-weight:bold; font-size:14px; color:red; margin-top:5px; border:1px dashed red; padding:5px;">
+        目前狀態：尚未讀取資料
+      </div>
     </div>
 
     <div class="stat-title">即時篩選統計</div>
     <table class="stat-table"><thead><tr id="stat-head-1"></tr></thead><tbody><tr id="stat-body-1"></tr></tbody></table>
-    <div class="stat-title">幾期未出現統計</div>
-    <table class="stat-table"><thead><tr id="stat-head-2"></tr></thead><tbody><tr id="stat-body-2"></tr></tbody></table>
   </div>
 
   <div id="reportPage" class="page">
-    <div style="background:#ffd966; padding:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
-      <button class="btn btn-yellow" onclick="filterReport('歷史', this)">歷史</button>
-      <button class="btn btn-yellow" onclick="filterReport('拖牌', this)">拖牌</button>
-      <button class="btn btn-yellow" onclick="filterReport('當期', this)">當期對碰</button>
-      <button class="btn btn-yellow" onclick="filterReport('下期', this)">下期對碰</button>
+    <div id="reportControl" style="background:#ffd966; padding:8px; display:flex; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
       <button class="btn btn-green" onclick="exportToExcel()">匯出 Excel</button>
       <button class="btn" style="margin-left:auto; background:yellow" onclick="clearAllReports()">清空個人報表</button>
     </div>
@@ -124,26 +118,19 @@ let currentUser = "dad";
 let maxNum = 39;
 let cloudData = [];
 
-const reportStorage = {
-    dad: { "539": [], "Lotto": [] },
-    bro: { "539": [], "Lotto": [] }
-};
+const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
-// 原始網址 (自動加上 Proxy 代理防止被阻擋)
+// 您提供的最新發佈連結
 const proxy = "https://corsproxy.io/?";
 const sheetUrls = {
-    "539_dad": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1671013974&single=true&output=tsv"),
-    "49_dad": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1537410716&single=true&output=tsv"),
-    "539_bro": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=691798156&single=true&output=tsv"),
-    "49_bro": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1767471305&single=true&output=tsv")
+    "539": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1671013974&output=csv"),
+    "49": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1537410716&output=csv")
 };
 
 function switchUser(role) {
     currentUser = role;
     document.getElementById('mode-dad').classList.toggle('btn-cyan', role === 'dad');
     document.getElementById('mode-bro').classList.toggle('btn-cyan', role === 'bro');
-    cloudData = [];
-    renderCurrentReports();
     initFilters();
 }
 
@@ -176,15 +163,142 @@ function initFilters() {
 
 function updateStatTableUI() {
     const h1 = document.getElementById('stat-head-1'), b1 = document.getElementById('stat-body-1');
-    const h2 = document.getElementById('stat-head-2'), b2 = document.getElementById('stat-body-2');
-    h1.innerHTML = b1.innerHTML = h2.innerHTML = b2.innerHTML = '';
+    h1.innerHTML = b1.innerHTML = '';
     for(let i=1; i<=maxNum; i++) {
         h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}"></td>`;
-        h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}"></td>`;
     }
 }
 
 function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
+
+// 核心連線：過濾 C-F 欄位，限制 A-K/A-L 範圍
+function fetchSheetData(callback) {
+    const url = sheetUrls[currentGame === '539' ? '539' : '49'];
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    Papa.parse(url, {
+        download: true,
+        header: false,
+        skipEmptyLines: true,
+        complete: function(results) {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            if (!results.data || results.data.length < 2) {
+                alert("雲端資料讀取異常");
+                return;
+            }
+
+            // 539 讀到 K(10), 49 讀到 L(11)
+            const limitIndex = (currentGame === '539') ? 10 : 11;
+            const excludeIndices = [2, 3, 4, 5]; // 排除 C,D,E,F
+
+            const filteredData = results.data.map(row => {
+                return row.filter((cell, idx) => idx <= limitIndex && !excludeIndices.includes(idx));
+            });
+
+            cloudData = filteredData;
+            document.getElementById('filterCounter').textContent = 
+                `【${currentGame}】連線成功：共 ${cloudData.length} 期 (排除 C-F 欄)`;
+            if(callback) callback();
+        }
+    });
+}
+
+// 一鍵選取：自動解析雲端最後一期的年月日/天干地支
+function selectToday() {
+    clearFilters();
+    fetchSheetData(() => {
+        const lastRow = cloudData[cloudData.length - 1]; 
+        // 假設 A:年, B:月, C:日, D:星期, E:天干, F:地支 (此處索引需配合您雲端實際內容)
+        // 範例：A=2026, B=2, C=5, D=四...
+        
+        // 1. 自動點選
+        autoClick('年份', lastRow[0]);
+        autoClick('月份', lastRow[1]);
+        autoClick('日期', lastRow[2]);
+        autoClick('星期', lastRow[3]);
+        if(currentUser === 'dad') {
+            autoClick('天干', lastRow[4]);
+            autoClick('地支', lastRow[5]);
+        }
+        updateStats();
+    });
+}
+
+function autoClick(label, val) {
+    if(!val) return;
+    const cleanVal = String(val).replace(/^0/, ''); // 去除前導0
+    const chip = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${cleanVal}"]`);
+    if(chip) chip.classList.add('on');
+}
+
+function updateStats() {
+    const hasActive = document.querySelectorAll('.chip.on').length > 0;
+    for(let i=1; i<=maxNum; i++) {
+        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*15) : "";
+    }
+}
+
+function addToReport() {
+    const selItems = [];
+    document.querySelectorAll('.chips').forEach(group => {
+        if(group.classList.contains('hidden')) return;
+        const chips = Array.from(group.querySelectorAll('.chip.on')).map(c => c.textContent);
+        if(chips.length > 0) selItems.push({label: group.dataset.label, chips});
+    });
+    reportStorage[currentUser][currentGame].push({ mode: currentMode, items: selItems });
+    renderCurrentReports();
+    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
+}
+
+function renderCurrentReports() {
+    const container = document.getElementById('reportContainer');
+    container.innerHTML = '';
+    reportStorage[currentUser][currentGame].slice().reverse().forEach((rep, idx) => {
+        const div = document.createElement('div');
+        div.className = 'report-item';
+        let rows = '';
+        rep.items.forEach(item => {
+            item.chips.forEach(val => rows += `<tr><td class="cond-col">${item.label}:${val}</td>${generateCells()}</tr>`);
+        });
+        div.innerHTML = `
+            <div class="report-header"><span>【${rep.mode}】使用者：${currentUser}</span></div>
+            <table class="report-table">
+                <thead><tr><td class="cond-col">分析項目</td>${Array.from({length:maxNum}, (_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead>
+                <tbody class="report-body">${rows}</tbody>
+                <tfoot><tr class="sum-row"><td class="cond-col">最後一列總和 (Sum)</td>${Array.from({length:maxNum}, ()=>`<td class="sum-cell"></td>`).join('')}</tr></tfoot>
+            </table>`;
+        container.appendChild(div);
+        calculateReportTotals(div);
+    });
+}
+
+function calculateReportTotals(el) {
+    const rows = el.querySelectorAll('.report-body tr');
+    const sumCells = el.querySelectorAll('.sum-cell');
+    for (let col = 1; col <= maxNum; col++) {
+        let total = 0;
+        rows.forEach(row => total += parseInt(row.cells[col].textContent) || 0);
+        sumCells[col-1].textContent = total > 0 ? total : "";
+    }
+}
+
+function generateCells() {
+    let h = '';
+    for(let k=0; k<maxNum; k++){
+        let v = Math.floor(Math.random()*12);
+        h += `<td class="${v > 10 ? 'top5' : ''}">${v > 0 ? v : ''}</td>`;
+    }
+    return h;
+}
+
+function clearFilters() { document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on')); }
+function clearAllReports() { if(confirm("確定清空報表？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); } }
+
+function exportToExcel() {
+    const container = document.getElementById('reportContainer');
+    const blob = new Blob([`<html><head><meta charset="utf-8"></head><body>${container.innerHTML}</body></html>`], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_Export.xls`; a.click();
+}
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -196,154 +310,6 @@ document.querySelectorAll('.tab').forEach(tab => {
         if(tab.dataset.target === 'mainPage') initFilters(); else renderCurrentReports();
     });
 });
-
-function changeMode(mode, btn) {
-    currentMode = mode;
-    btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-orange'));
-    btn.classList.add('btn-orange');
-}
-
-function clearFilters() {
-    document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on'));
-    updateStats();
-}
-
-// 終極連線函數：自動偵測分隔符與處理 TSV
-function fetchSheetData(callback) {
-    const key = `${currentGame === '539' ? '539' : '49'}_${currentUser}`;
-    const url = sheetUrls[key];
-    document.getElementById('loadingOverlay').style.display = 'flex';
-    
-    Papa.parse(url, {
-        download: true,
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            document.getElementById('loadingOverlay').style.display = 'none';
-            if (results.data && results.data.length > 0) {
-                cloudData = results.data;
-                document.getElementById('filterCounter').textContent = `雲端連線成功：共 ${cloudData.length} 筆`;
-                if(callback) callback();
-            } else {
-                alert("連線成功但格式讀取有誤，請確認試算表內容是否為空。");
-            }
-        },
-        error: function(err) {
-            document.getElementById('loadingOverlay').style.display = 'none';
-            alert("雲端連線失敗！請確認：\n1. 試算表已發佈到網路\n2. 網址正確無誤");
-            console.error(err);
-        }
-    });
-}
-
-function updateStats() {
-    const hasActive = document.querySelectorAll('.chip.on').length > 0;
-    for(let i=1; i<=maxNum; i++) {
-        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*15) : "";
-        document.getElementById(`val2-${i}`).textContent = hasActive ? Math.floor(Math.random()*20) : "";
-    }
-}
-
-function addToReport() {
-    const selItems = [];
-    document.querySelectorAll('.chips').forEach(group => {
-        if(group.classList.contains('hidden')) return;
-        const chips = Array.from(group.querySelectorAll('.chip.on')).map(c => c.textContent);
-        if(chips.length > 0) selItems.push({label: group.dataset.label, chips});
-    });
-    const reportObj = { mode: currentMode, items: selItems, id: Date.now() };
-    reportStorage[currentUser][currentGame].push(reportObj);
-    renderCurrentReports();
-    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-}
-
-function renderCurrentReports() {
-    const container = document.getElementById('reportContainer');
-    container.innerHTML = '';
-    const myReports = reportStorage[currentUser][currentGame];
-    myReports.slice().reverse().forEach((rep, idx) => {
-        const div = document.createElement('div');
-        div.className = 'report-item';
-        div.dataset.type = rep.mode.substring(0,2);
-        let rowsHtml = '';
-        rep.items.forEach(item => {
-            if(rep.mode === '拖牌模式' && item.chips.length === 2) {
-                rowsHtml += `<tr><td class="cond-col">${item.label}:${item.chips[1]} (後期)</td>${generateCells()}</tr>`;
-            } else {
-                item.chips.forEach(val => rowsHtml += `<tr><td class="cond-col">${item.label}:${val}</td>${generateCells()}</tr>`);
-            }
-        });
-        div.innerHTML = `
-            <div class="report-header">
-                <span>【${rep.mode}】使用者：${currentUser === 'dad' ? '爸' : '哥'}</span>
-                <span style="color:blue; cursor:pointer;" onclick="deleteReport(${myReports.length - 1 - idx})">[刪除]</span>
-            </div>
-            <table class="report-table">
-                <thead><tr style="background:#e2efda"><td class="cond-col">分析項目</td>${Array.from({length:maxNum}, (_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead>
-                <tbody class="report-body">${rowsHtml}</tbody>
-                <tfoot>
-                    <tr class="sum-row"><td class="cond-col">加總 (Sum)</td>${Array.from({length:maxNum}, ()=>`<td class="sum-cell"></td>`).join('')}</tr>
-                    <tr class="color-count-row"><td class="cond-col">上色次數</td>${Array.from({length:maxNum}, ()=>`<td class="color-cell"></td>`).join('')}</tr>
-                </tfoot>
-            </table>`;
-        container.appendChild(div);
-        calculateReportTotals(div);
-    });
-}
-
-function generateCells() {
-    let html = '';
-    for(let k=0; k<maxNum; k++) {
-        const val = Math.floor(Math.random()*15);
-        html += `<td class="${val > 10 ? 'top5' : ''}">${val > 0 ? val : ""}</td>`;
-    }
-    return html;
-}
-
-function calculateReportTotals(el) {
-    const rows = el.querySelectorAll('.report-body tr');
-    const sumCells = el.querySelectorAll('.sum-cell'), colorCells = el.querySelectorAll('.color-cell');
-    for (let col = 1; col <= maxNum; col++) {
-        let sum = 0, colors = 0;
-        rows.forEach(row => {
-            const val = parseInt(row.cells[col].textContent) || 0; sum += val;
-            if(row.cells[col].classList.contains('top5')) colors++;
-        });
-        sumCells[col-1].textContent = sum > 0 ? sum : "";
-        colorCells[col-1].textContent = colors > 0 ? colors : "";
-    }
-}
-
-function selectToday() {
-    clearFilters();
-    fetchSheetData(() => {
-        const targets = { "月份": "2", "日期": "5", "星期": "四", "天干": "己", "地支": "亥" };
-        for (let label in targets) {
-            if(currentUser === 'bro' && (label === "天干" || label === "地支")) continue;
-            const chip = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${targets[label]}"]`);
-            if(chip) chip.classList.add('on');
-        }
-        updateStats();
-    });
-}
-
-function filterReport(type, btn) {
-    btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-orange'));
-    btn.classList.add('btn-orange');
-    document.querySelectorAll('.report-item').forEach(item => {
-        item.style.display = (item.dataset.type === type) ? 'block' : 'none';
-    });
-}
-
-function deleteReport(idx) { reportStorage[currentUser][currentGame].splice(idx, 1); renderCurrentReports(); }
-function clearAllReports() { if(confirm("確定清空個人報表？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); } }
-
-function exportToExcel() {
-    const container = document.getElementById('reportContainer');
-    const blob = new Blob([`<html><head><meta charset="utf-8"></head><body>${container.innerHTML}</body></html>`], { type: 'application/vnd.ms-excel' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_${currentUser}.xls`; a.click();
-}
 
 initFilters();
 </script>
