@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>專業樂透統計系統 V2.2 - Excel 精確篩選版</title>
+  <title>專業樂透統計系統 V2.3 - 數據精確修正版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -49,7 +49,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay">雲端大數據運算中...</div>
+<div id="loadingOverlay">大數據計算中...</div>
 
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
@@ -87,12 +87,6 @@
   <div id="reportPage" class="page">
     <div id="reportControl" style="background:#ffd966; padding:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
       <button class="btn btn-green" onclick="exportToExcel()">匯出 Excel</button>
-      <div style="display:flex; gap:5px; border-left: 2px solid #888; padding-left: 10px;">
-        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('歷史模式', this)">歷史</button>
-        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('拖牌模式', this)">拖牌</button>
-        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('當期對碰', this)">當期對碰</button>
-        <button class="btn btn-yellow rpt-mode-btn" onclick="changeMode('下期對碰', this)">下期對碰</button>
-      </div>
       <button class="btn" style="margin-left:auto; background:yellow" onclick="clearAllReports()">清空報表</button>
     </div>
     <div id="reportContainer"></div>
@@ -158,21 +152,21 @@ function fetchSheetData(callback) {
         download: true, header: false, skipEmptyLines: true,
         complete: function(results) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            cloudData = results.data.slice(1); 
-            if(callback) callback(results.data[results.data.length - 1]);
+            cloudData = results.data.filter(r => r.length > 5); // 過濾無效短行
+            if(callback) callback(cloudData[cloudData.length - 1]);
             updateStats();
         }
     });
 }
 
-// 核心過濾器：處理爸模式空值與號碼對位
 function getFilteredRows() {
-    return cloudData.filter(row => {
+    const dataOnly = (cloudData[0] && isNaN(parseInt(cloudData[0][0]))) ? cloudData.slice(1) : cloudData;
+    return dataOnly.filter(row => {
         if (currentUser === "dad") {
-            const hasEmptyCell = !row[2] || !row[3] || !row[4] || !row[5] || 
-                                 row[2].trim() === "" || row[3].trim() === "" || 
-                                 row[4].trim() === "" || row[5].trim() === "";
-            if (hasEmptyCell) return false;
+            // C,D,E,F 只要有一格是空就不算
+            return row[2] && row[3] && row[4] && row[5] && 
+                   row[2].trim() !== "" && row[3].trim() !== "" && 
+                   row[4].trim() !== "" && row[5].trim() !== "";
         }
         return true;
     });
@@ -181,26 +175,34 @@ function getFilteredRows() {
 function updateStats() {
     if(!cloudData.length) return;
     const filters = {}; 
+    let hasFilter = false;
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
-        if(sel.length > 0) filters[lbl] = sel;
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.dataset.val);
+        if(sel.length > 0) { filters[lbl] = sel; hasFilter = true; }
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent));
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.dataset.val));
     const counts = Array(maxNum + 1).fill(0);
-
     const validRows = getFilteredRows();
 
     validRows.forEach((row, idx) => {
         const dp = (row[1] || "").split('/');
+        if(dp.length < 3) return;
         const rd = { 
-            "年份": dp[0], "月份": (dp[1] || "").replace(/^0/,''), "日期": (dp[2] || "").replace(/^0/,''), 
-            "星期": dp[3] ? dp[3].replace('週','') : "", "天干": row[2], "地支": row[3] 
+            "年份": dp[0].toString(), 
+            "月份": parseInt(dp[1]).toString(), 
+            "日期": parseInt(dp[2]).toString(), 
+            "星期": dp[3] ? dp[3].replace('週','') : "", 
+            "天干": row[2] ? row[2].trim() : "", 
+            "地支": row[3] ? row[3].trim() : "" 
         };
-        const rowNums = row.slice(6, 13).map(n => parseInt(n)).filter(n => !isNaN(n) && n > 0);
         
         let m = true;
-        for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
+        for(let k in filters) {
+            if(!filters[k].includes(rd[k])) { m = false; break; }
+        }
         if(!m) return;
+
+        const rowNums = row.slice(6, 13).map(n => parseInt(n)).filter(n => !isNaN(n) && n > 0);
 
         if (currentMode === "歷史模式") {
             rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
@@ -239,41 +241,45 @@ function updateStats() {
 function addToReport() {
     const filters = {}; 
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.dataset.val);
         if(sel.length > 0) filters[lbl] = sel;
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent));
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.dataset.val));
     const condTxt = Object.entries(filters).map(([k,v])=>`${k}:${v}`).join('+') || "無條件";
     const validRows = getFilteredRows();
+    const resultCounts = Array(maxNum + 1).fill(0);
 
-    if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
-        if (selNums.length === 0) return alert("拖牌模式請至少選一個號碼");
-        selNums.forEach(sn => {
-            const counts = Array(maxNum + 1).fill(0);
-            validRows.forEach((row, idx) => {
-                const dp = (row[1] || "").split('/');
-                const rd = { "年份": dp[0], "月份": (dp[1]||"").replace(/^0/,''), "日期": (dp[2]||"").replace(/^0/,''), "星期": dp[3]?dp[3].replace('週',''):"", "天干": row[2], "地支": row[3] };
-                let m = true; for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
-                if(m && row.slice(6, 13).map(Number).includes(sn)) {
-                    const nxt = validRows[idx+1];
-                    if(nxt) nxt.slice(6, 13).map(Number).forEach(n => { if(n <= maxNum) counts[n]++; });
-                }
-            });
-            reportStorage[currentUser][currentGame].push({ mode: currentMode, cond: condTxt, num: sn, data: counts });
-        });
-    } else {
-        const counts = Array(maxNum + 1).fill(0);
-        validRows.forEach((row) => {
-            const dp = (row[1] || "").split('/');
-            const rd = { "年份": dp[0], "月份": (dp[1]||"").replace(/^0/,''), "日期": (dp[2]||"").replace(/^0/,''), "星期": dp[3]?dp[3].replace('週',''):"", "天干": row[2], "地支": row[3] };
-            const rowNums = row.slice(6, 13).map(Number);
-            let m = true; for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
-            if(!m) return;
-            if(currentMode === "歷史模式") rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
-            else if(currentMode === "當期對碰") if(selNums.every(sn => rowNums.includes(sn))) rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
-        });
-        reportStorage[currentUser][currentGame].push({ mode: currentMode, cond: condTxt, num: selNums.join(',') || "全選", data: counts });
-    }
+    validRows.forEach((row, idx) => {
+        const dp = (row[1] || "").split('/');
+        if(dp.length < 3) return;
+        const rd = { "年份": dp[0].toString(), "月份": parseInt(dp[1]).toString(), "日期": parseInt(dp[2]).toString(), "星期": dp[3]?dp[3].replace('週',''):"", "天干": row[2]?row[2].trim():"", "地支": row[3]?row[3].trim():"" };
+        const rowNums = row.slice(6, 13).map(n => parseInt(n)).filter(n => !isNaN(n));
+        
+        let m = true;
+        for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
+        if(!m) return;
+
+        if (currentMode === "歷史模式") {
+            rowNums.forEach(n => { if(n <= maxNum) resultCounts[n]++; });
+        } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
+            if (selNums.length > 0 && selNums.some(sn => rowNums.includes(sn))) {
+                const nxt = validRows[idx+1];
+                if(nxt) nxt.slice(6, 13).map(n => parseInt(n)).filter(n => !isNaN(n)).forEach(n => { if(n <= maxNum) resultCounts[n]++; });
+            }
+        } else if (currentMode === "當期對碰") {
+            if (selNums.length > 0 && selNums.every(sn => rowNums.includes(sn))) {
+                rowNums.forEach(n => { if(n <= maxNum) resultCounts[n]++; });
+            }
+        }
+    });
+
+    reportStorage[currentUser][currentGame].push({ 
+        mode: currentMode, 
+        cond: condTxt, 
+        num: selNums.join(',') || "全選", 
+        data: [...resultCounts] 
+    });
+    
     renderCurrentReports();
     document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
 }
@@ -297,24 +303,22 @@ function renderCurrentReports() {
 }
 
 function changeMode(mode, btn) {
-    currentMode = (mode.includes('模式')) ? mode : mode + '模式';
+    currentMode = mode.includes('模式') ? mode : mode + '模式';
     syncModeButtons();
-    if(document.getElementById('mainPage').classList.contains('active')) updateStats(); else renderCurrentReports();
+    if(document.getElementById('mainPage').classList.contains('active')) updateStats();
 }
 
 function syncModeButtons() {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('btn-orange', b.textContent === currentMode));
-    document.querySelectorAll('.rpt-mode-btn').forEach(b => {
-        const simple = currentMode.replace('模式', '');
-        b.classList.toggle('btn-orange', b.textContent === simple);
-    });
 }
 
 function selectToday() {
     clearFilters();
     fetchSheetData((lastRow) => {
         const p = lastRow[1].split('/');
-        autoClick('月份', p[1]); autoClick('日期', p[2]);
+        autoClick('年份', p[0]);
+        autoClick('月份', parseInt(p[1]));
+        autoClick('日期', parseInt(p[2]));
         if(p[3]) autoClick('星期', p[3].replace('週',''));
         if(currentUser === 'dad') { autoClick('天干', lastRow[2]); autoClick('地支', lastRow[3]); }
         updateStats();
@@ -323,7 +327,7 @@ function selectToday() {
 
 function autoClick(label, val) {
     if(!val) return;
-    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${val.trim().replace(/^0/, '')}"]`);
+    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${val.toString().trim()}"]`);
     if(c) c.classList.add('on');
 }
 
