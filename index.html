@@ -36,7 +36,7 @@
     .stat-table { width: 100%; border-collapse: collapse; background: #fff; min-width: 800px; }
     .stat-table th, .stat-table td { border: 1px solid #000; text-align: center; padding: 2px; font-size: 11px; font-weight: bold; }
     .stat-table th { background: var(--stat-green); }
-    .top5 { background-color: #ff0000 !important; color: #ffffff !important; }
+    .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
     .report-item { margin-bottom: 30px; border: 1px solid #000; background: #fff; overflow-x: auto; }
     .report-header { background: var(--report-header-bg); padding: 5px; font-weight: bold; border-bottom: 1px solid #000; }
     .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
@@ -107,42 +107,36 @@ const sheetUrls = {
     "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
 };
 
-// ✅ 修正點：統一把 "01" → "1"
-function normIntStr(x){
-  if(x === null || x === undefined) return "";
-  const s = String(x).trim();
-  const n = parseInt(s, 10);
-  return Number.isFinite(n) ? String(n) : s;
+// ====== ✅ 新增：爸從2020起算、哥從2006起算（不再用C~F是否有值來砍資料） ======
+function getRowYear(row){
+  if(!row || !row[1]) return NaN;
+  const s = String(row[1]).trim();
+  const parts = s.includes('/') ? s.split('/') : (s.includes('-') ? s.split('-') : []);
+  const y = parseInt(parts[0], 10);
+  return Number.isFinite(y) ? y : NaN;
 }
 
-// ✅ 修正點：從 row[1] 真正解析日期，並計算星期（一二三四五六日）
-function parseRowMeta(row){
-  const raw = (row && row[1]) ? String(row[1]).trim() : "";
-  // 支援 YYYY/MM/DD 或 YYYY-MM-DD
-  const parts = raw.includes('/') ? raw.split('/') : (raw.includes('-') ? raw.split('-') : []);
-  const y = parts[0] ? normIntStr(parts[0]) : "";
-  const m = parts[1] ? normIntStr(parts[1]) : "";
-  const d = parts[2] ? normIntStr(parts[2]) : "";
-
-  // JS: 0(日)~6(六)；你的 UI 是 一..日
-  let w = "";
-  if(y && m && d){
-    const dt = new Date(Number(y), Number(m)-1, Number(d));
-    if(!Number.isNaN(dt.getTime())){
-      const map = ["日","一","二","三","四","五","六"];
-      w = map[dt.getDay()];
-    }
-  }
-
-  return {
-    "年份": y,
-    "月份": m,
-    "日期": d,
-    "星期": w,
-    "天干": row[2] ? String(row[2]).trim() : "",
-    "地支": row[3] ? String(row[3]).trim() : ""
-  };
+function has5Balls(row){
+  // 你表球號在 G~K => index 6~10
+  const nums = row.slice(6, 11).map(v => parseInt(v,10)).filter(n => n > 0);
+  return nums.length >= 5;
 }
+
+function getStartYearByUser(){
+  return (currentUser === "dad") ? 2020 : 2006;
+}
+
+function getValidRows(){
+  const startYear = getStartYearByUser();
+  return cloudData.filter(row => {
+    const y = getRowYear(row);
+    if(!Number.isFinite(y) || y < startYear) return false;
+    if(!row[1]) return false;
+    if(!has5Balls(row)) return false;
+    return true;
+  });
+}
+// ===================================================================
 
 function switchUser(role) {
     currentUser = role;
@@ -156,12 +150,22 @@ function initFilters() {
     maxNum = (currentGame === "539") ? 39 : 49;
     document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
     const grid = document.getElementById('filterGrid'); grid.innerHTML = '';
+
+    // ✅ 年份依爸/哥起算
+    const yStart = getStartYearByUser();
+    const yEnd = 2026; // 若要動態：new Date().getFullYear()
+    const years = Array.from({length: yEnd - yStart + 1}, (_, i) => yStart + i);
+
     const sections = [
-        {lbl:"年份", d:Array.from({length: 21}, (_, i) => 2006 + i)}, {lbl:"月份", d:Array.from({length: 12}, (_, i) => i + 1)},
-        {lbl:"日期", d:Array.from({length: 31}, (_, i) => i + 1), brk:18}, {lbl:"星期", d: ["一","二","三","四","五","六","日"]},
-        {lbl:"天干", d: ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"]}, {lbl:"地支", d: ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]},
+        {lbl:"年份", d: years},
+        {lbl:"月份", d:Array.from({length: 12}, (_, i) => i + 1)},
+        {lbl:"日期", d:Array.from({length: 31}, (_, i) => i + 1), brk:18},
+        {lbl:"星期", d: ["一","二","三","四","五","六","日"]},
+        {lbl:"天干", d: ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"]},
+        {lbl:"地支", d: ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]},
         {lbl:"號碼", d: Array.from({length:maxNum}, (_,i)=>String(i+1).padStart(2,'0')), brk:25}
     ];
+
     sections.forEach(sec => {
         const isSB = (sec.lbl === "天干" || sec.lbl === "地支");
         const hidden = (currentUser === "bro" && isSB) ? "hidden" : "";
@@ -204,24 +208,43 @@ function fetchSheetData(callback) {
 
 function updateStats() {
     if(!cloudData.length) return;
+
     const filters = {}; let catCount = 0;
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => String(c.textContent).trim());
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
         if(sel.length > 0) { filters[lbl] = sel; catCount++; }
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent, 10));
+
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent,10));
     const counts = Array(maxNum + 1).fill(0);
 
-    const validRows = cloudData.filter(row => {
-        if (currentUser === "dad") {
-            if (!row[2] || !row[3] || !row[4] || !row[5]) return false;
-        }
-        return true;
-    });
+    // ✅ 爸/哥有效資料列：爸>=2020，哥>=2006，且需有5顆球
+    const validRows = getValidRows();
 
     validRows.forEach((row, idx) => {
-        const rd = parseRowMeta(row);
-        const rowNums = row.slice(6, 12).map(Number).filter(n => n > 0);
+        const dateParts = String(row[1]).trim().split('/');
+        const y = String(parseInt(dateParts[0],10));
+        const m = String(parseInt(dateParts[1],10));
+        const d = String(parseInt(dateParts[2],10));
+
+        // 星期改用日期計算（避免C欄空值）
+        let w = "";
+        const dt = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+        if(!Number.isNaN(dt.getTime())){
+          const map = ["日","一","二","三","四","五","六"];
+          w = map[dt.getDay()];
+        }
+
+        const rd = {
+          "年份": y,
+          "月份": m,
+          "日期": d,
+          "星期": w,
+          "天干": row[3] ? String(row[3]).trim() : "", // D欄（多數空）
+          "地支": row[4] ? String(row[4]).trim() : ""  // E欄（多數空）
+        };
+
+        const rowNums = row.slice(6, 11).map(Number).filter(n => n > 0);
 
         let mCond = true;
         for(let k in filters){
@@ -234,7 +257,7 @@ function updateStats() {
         } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
             if (selNums.length > 0 && selNums.some(sn => rowNums.includes(sn))) {
                 const nxt = validRows[idx+1];
-                if(nxt) nxt.slice(6, 12).map(Number).forEach(n => { if(n <= maxNum) counts[n]++; });
+                if(nxt) nxt.slice(6, 11).map(Number).forEach(n => { if(n <= maxNum) counts[n]++; });
             }
         } else if (currentMode === "當期對碰") {
             if (selNums.length > 0 && selNums.every(sn => rowNums.includes(sn))) {
@@ -246,7 +269,8 @@ function updateStats() {
     const sorted = [...counts].sort((a,b)=>b-a);
     const threshold = sorted[4] > 0 ? sorted[4] : 999;
 
-    document.getElementById('filterCounter').textContent = `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length}`;
+    document.getElementById('filterCounter').textContent =
+      `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length} | 起算年:${getStartYearByUser()}`;
 
     for(let i=1; i<=maxNum; i++){
         const td = document.getElementById(`val1-${i}`);
@@ -255,7 +279,7 @@ function updateStats() {
 
         let gap = 0;
         for(let j=validRows.length-1; j>=0; j--){
-            if(validRows[j].slice(6, 12).map(Number).includes(i)) break;
+            if(validRows[j].slice(6, 11).map(Number).includes(i)) break;
             gap++;
         }
         document.getElementById(`val2-${i}`).textContent = gap;
@@ -265,27 +289,43 @@ function updateStats() {
 function addToReport() {
     const filters = {}; let catCount = 0;
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => String(c.textContent).trim());
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
         if(sel.length > 0) { filters[lbl] = sel; catCount++; }
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent, 10));
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent,10));
     const condTxt = Object.entries(filters).map(([k,v])=>`${k}:${v}`).join('+') || "無條件";
 
-    const validRows = cloudData.filter(row => {
-        if (currentUser === "dad") if (!row[2] || !row[3] || !row[4] || !row[5]) return false;
-        return true;
-    });
+    // ✅ 爸/哥有效資料列：爸>=2020，哥>=2006，且需有5顆球
+    const validRows = getValidRows();
 
     if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
         if (catCount < 2 || selNums.length === 0) return alert("拖牌模式需 2 條件 + 號碼");
         selNums.forEach(sn => {
             const counts = Array(maxNum + 1).fill(0);
             validRows.forEach((row, idx) => {
-                const rd = parseRowMeta(row);
-                let m = true; for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
-                if(m && row.slice(6, 12).map(Number).includes(sn)) {
+                const dateParts = String(row[1]).trim().split('/');
+                const y = String(parseInt(dateParts[0],10));
+                const m = String(parseInt(dateParts[1],10));
+                const d = String(parseInt(dateParts[2],10));
+                let w = "";
+                const dt = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+                if(!Number.isNaN(dt.getTime())){
+                  const map = ["日","一","二","三","四","五","六"];
+                  w = map[dt.getDay()];
+                }
+                const rd = {
+                  "年份": y, "月份": m, "日期": d, "星期": w,
+                  "天干": row[3] ? String(row[3]).trim() : "",
+                  "地支": row[4] ? String(row[4]).trim() : ""
+                };
+
+                let ok = true; for(let k in filters) if(!filters[k].includes(rd[k])) { ok = false; break; }
+                if(!ok) return;
+
+                const rowNums = row.slice(6, 11).map(Number).filter(n=>n>0);
+                if(rowNums.includes(sn)) {
                     const nxt = validRows[idx+1];
-                    if(nxt) nxt.slice(6, 12).map(Number).forEach(n => { if(n <= maxNum) counts[n]++; });
+                    if(nxt) nxt.slice(6, 11).map(Number).forEach(n => { if(n <= maxNum) counts[n]++; });
                 }
             });
             reportStorage[currentUser][currentGame].push({ mode: currentMode, cond: condTxt, num: sn, data: counts });
@@ -293,12 +333,33 @@ function addToReport() {
     } else {
         const counts = Array(maxNum + 1).fill(0);
         validRows.forEach((row) => {
-            const rd = parseRowMeta(row);
-            const rowNums = row.slice(6, 12).map(Number);
+            const dateParts = String(row[1]).trim().split('/');
+            const y = String(parseInt(dateParts[0],10));
+            const m = String(parseInt(dateParts[1],10));
+            const d = String(parseInt(dateParts[2],10));
+            let w = "";
+            const dt = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+            if(!Number.isNaN(dt.getTime())){
+              const map = ["日","一","二","三","四","五","六"];
+              w = map[dt.getDay()];
+            }
+            const rd = {
+              "年份": y, "月份": m, "日期": d, "星期": w,
+              "天干": row[3] ? String(row[3]).trim() : "",
+              "地支": row[4] ? String(row[4]).trim() : ""
+            };
+
             let mCond = true; for(let k in filters) if(!filters[k].includes(rd[k])) { mCond = false; break; }
             if(!mCond) return;
+
+            const rowNums = row.slice(6, 11).map(Number).filter(n=>n>0);
+
             if(currentMode === "歷史模式") rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
-            else if(currentMode === "當期對碰") if(selNums.every(sn => rowNums.includes(sn))) rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
+            else if(currentMode === "當期對碰") {
+              if(selNums.length > 0 && selNums.every(sn => rowNums.includes(sn))) {
+                rowNums.forEach(n => { if(n <= maxNum) counts[n]++; });
+              }
+            }
         });
         reportStorage[currentUser][currentGame].push({ mode: currentMode, cond: condTxt, num: selNums.join(',') || "全選", data: counts });
     }
@@ -309,7 +370,7 @@ function addToReport() {
 function renderCurrentReports() {
     const cont = document.getElementById('reportContainer'); cont.innerHTML = '';
     const list = reportStorage[currentUser][currentGame]; if(!list.length) return;
-    let html = `<div class="report-item"><div class="report-header">【分析報表】模式：${currentMode} | 使用者：${currentUser==='dad'?'爸':'哥'}</div><table class="report-table"><thead><tr><td class="cond-col">分析條件+號碼</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
+    let html = `<div class="report-item"><div class="report-header">【分析報表】模式：${currentMode} | 使用者：${currentUser==='dad'?'爸':'哥'} | 起算年:${getStartYearByUser()}</div><table class="report-table"><thead><tr><td class="cond-col">分析條件+號碼</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
     list.forEach(item => {
         const sorted = [...item.data].sort((a,b)=>b-a);
         const threshold = sorted[4] > 0 ? sorted[4] : 999;
@@ -347,20 +408,31 @@ function syncModeButtons() {
 function selectToday() {
     clearFilters();
     fetchSheetData((lastRow) => {
-        // lastRow[1] 可能只有 YYYY/MM/DD：這裡也用同一套解析
-        const meta = parseRowMeta(lastRow);
-        autoClick('月份', meta["月份"]);
-        autoClick('日期', meta["日期"]);
-        if(meta["星期"]) autoClick('星期', meta["星期"]);
-        if(currentUser === 'dad') { autoClick('天干', lastRow[2]); autoClick('地支', lastRow[3]); }
+        const dp = String(lastRow[1]).trim().split('/');
+        const m = String(parseInt(dp[1],10));
+        const d = String(parseInt(dp[2],10));
+        autoClick('月份', m);
+        autoClick('日期', d);
+
+        const y = String(parseInt(dp[0],10));
+        const dt = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+        if(!Number.isNaN(dt.getTime())){
+          const map = ["日","一","二","三","四","五","六"];
+          autoClick('星期', map[dt.getDay()]);
+        }
+
+        if(currentUser === 'dad') {
+          // 若你之後真的有填天干地支，才會選得到
+          if(lastRow[3]) autoClick('天干', String(lastRow[3]).trim());
+          if(lastRow[4]) autoClick('地支', String(lastRow[4]).trim());
+        }
         updateStats();
     });
 }
 
 function autoClick(label, val) {
-    if(val === null || val === undefined || val === "") return;
-    const vv = String(val).trim();
-    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${vv}"]`);
+    if(!val) return;
+    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${String(val).trim()}"]`);
     if(c) c.classList.add('on');
 }
 
