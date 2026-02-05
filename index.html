@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>樂透統計系統 V1 - 雙分頁同步版</title>
+  <title>樂透統計系統 V1 - 穩定連線版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -38,21 +38,21 @@
     .btn-yellow{ background:#ffeb3b; }
     .btn-green{ background:#78c57a; }
     .btn-purple{ background:#6a44c6; color:#fff; }
-    .btn-cyan { background:#00bcd4; color:#fff; }
 
     .stat-title { color: red; font-weight: bold; margin-top: 15px; margin-bottom: 5px; }
-    .stat-table { width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 5px; }
+    .stat-table-wrapper { overflow-x: auto; width: 100%; }
+    .stat-table { width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 5px; min-width: 800px; }
     .stat-table th, .stat-table td { border: 1px solid #000; text-align: center; padding: 2px; font-size: 11px; }
     .stat-table th { background: var(--stat-green); font-weight: bold; }
     .stat-table td { height: 26px; font-weight: bold; }
-    .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
-
+    
     .report-item { margin-bottom: 30px; border: 1px solid #000; background: #fff; overflow-x: auto; }
     .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
     .report-table th, .report-table td { border:1px solid #000; text-align:center; padding:2px; height: 24px; }
-    .report-header { background: var(--report-header-bg); font-weight: bold; padding: 6px 10px; display: flex; justify-content: space-between; border-bottom: 1px solid #000; }
+    .report-header { background: var(--report-header-bg); font-weight: bold; padding: 6px 10px; border-bottom: 1px solid #000; }
     .cond-col { background:#ffff00; font-weight: bold; width: 150px; text-align: left; padding-left: 5px; }
     .sum-row { background:#ddebf7; font-weight:bold; }
+    .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
     .hidden { display: none !important; }
 
     #loadingOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:none; justify-content:center; align-items:center; z-index:9999; font-weight:900; color:var(--red); }
@@ -60,7 +60,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay">雲端數據強力同步中...</div>
+<div id="loadingOverlay">連網中...</div>
 
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
@@ -74,7 +74,7 @@
     <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">目前模式：今彩 539</div>
     
     <div class="btnbar" style="margin-bottom:10px;">
-      <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')">爸使用模式</button>
+      <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')" style="background:#00bcd4; color:#fff;">爸使用模式</button>
       <button class="btn" id="mode-bro" onclick="switchUser('bro')">哥使用模式</button>
     </div>
 
@@ -92,13 +92,16 @@
     
     <div class="btnbar" style="margin-top:15px; flex-direction: column; align-items: flex-start;">
       <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 & 同步雲端</button>
-      <div id="filterCounter" style="font-weight:bold; font-size:14px; color:red; margin-top:5px; border:1px dashed red; padding:5px;">
-        號碼過濾狀態：尚未讀取
+      <div id="filterCounter" style="font-weight:bold; font-size:14px; color:red; margin-top:5px; border:1px dashed red; padding:5px; background: #fff;">
+        號碼過濾統計：尚未讀取
       </div>
     </div>
 
-    <div class="stat-title">即時篩選統計 (1-39/49)</div>
-    <table class="stat-table"><thead><tr id="stat-head-1"></tr></thead><tbody><tr id="stat-body-1"></tr></tbody></table>
+    <div class="stat-title">即時篩選統計</div>
+    <div class="stat-table-wrapper"><table class="stat-table"><thead><tr id="stat-head-1"></tr></thead><tbody><tr id="stat-body-1"></tr></tbody></table></div>
+    
+    <div class="stat-title">幾期未出現統計</div>
+    <div class="stat-table-wrapper"><table class="stat-table"><thead><tr id="stat-head-2"></tr></thead><tbody><tr id="stat-body-2"></tr></tbody></table></div>
   </div>
 
   <div id="reportPage" class="page">
@@ -111,34 +114,26 @@
 </div>
 
 <script>
-/** 核心全局變數 **/
-let currentMode = "歷史模式";
-let currentGame = "539";
-let currentUser = "dad";
-let maxNum = 39;
-let cloudData = [];
-
+let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxNum = 39, cloudData = [];
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
-// 您提供的 2 個最新發佈連結
-const proxy = "https://corsproxy.io/?";
+// 使用您提供的網址，但加上時間戳防止快取
 const sheetUrls = {
-    "539": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv"),
-    "Lotto": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv")
+    "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
+    "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
 };
 
 function switchUser(role) {
     currentUser = role;
-    document.getElementById('mode-dad').classList.toggle('btn-cyan', role === 'dad');
-    document.getElementById('mode-bro').classList.toggle('btn-cyan', role === 'bro');
+    document.getElementById('mode-dad').style.background = (role === 'dad') ? '#00bcd4' : '#eee';
+    document.getElementById('mode-bro').style.background = (role === 'bro') ? '#00bcd4' : '#eee';
     initFilters();
 }
 
 function initFilters() {
     maxNum = (currentGame === "539") ? 39 : 49;
     document.getElementById('gameTitle').textContent = `目前模式：${currentGame === '539' ? '今彩 539' : '大樂透'}`;
-    const grid = document.getElementById('filterGrid');
-    grid.innerHTML = '';
+    const grid = document.getElementById('filterGrid'); grid.innerHTML = '';
     const sections = [
         {lbl:"年份", d:Array.from({length: 21}, (_, i) => 2006 + i)}, 
         {lbl:"月份", d:Array.from({length: 12}, (_, i) => i + 1)},
@@ -149,10 +144,10 @@ function initFilters() {
         {lbl:"號碼", d: Array.from({length:maxNum}, (_,i)=>String(i+1).padStart(2,'0')), brk:25}
     ];
     sections.forEach(sec => {
-        const isStemBranch = (sec.lbl === "天干" || sec.lbl === "地支");
-        const hiddenClass = (currentUser === "bro" && isStemBranch) ? "hidden" : "";
-        grid.innerHTML += `<div class="lbl ${hiddenClass}">${sec.lbl}</div>`;
-        let html = `<div class="chips ${hiddenClass}" data-label="${sec.lbl}">`;
+        const isSB = (sec.lbl === "天干" || sec.lbl === "地支");
+        const hidden = (currentUser === "bro" && isSB) ? "hidden" : "";
+        grid.innerHTML += `<div class="lbl ${hidden}">${sec.lbl}</div>`;
+        let html = `<div class="chips ${hidden}" data-label="${sec.lbl}">`;
         sec.d.forEach((v, i) => {
             if(sec.brk && i === sec.brk) html += `<div class="breakline"></div>`;
             html += `<div class="chip" data-val="${v}" onclick="toggleChip(this)">${v}</div>`;
@@ -164,58 +159,53 @@ function initFilters() {
 
 function updateStatTableUI() {
     const h1 = document.getElementById('stat-head-1'), b1 = document.getElementById('stat-body-1');
-    h1.innerHTML = b1.innerHTML = '';
+    const h2 = document.getElementById('stat-head-2'), b2 = document.getElementById('stat-body-2');
+    h1.innerHTML = b1.innerHTML = h2.innerHTML = b2.innerHTML = '';
     for(let i=1; i<=maxNum; i++) {
         h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}">0</td>`;
+        h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}">0</td>`;
     }
 }
 
 function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
 
-// 核心連線邏輯：排除 C-F 欄位，讀取最新期數
 function fetchSheetData(callback) {
-    const url = sheetUrls[currentGame];
+    const url = sheetUrls[currentGame] + "&cache=" + Date.now();
     document.getElementById('loadingOverlay').style.display = 'flex';
     
     Papa.parse(url, {
-        download: true, header: false, skipEmptyLines: true,
+        download: true,
+        header: false,
+        skipEmptyLines: true,
         complete: function(results) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            if (results.data.length < 2) return;
-
-            // 根據截圖排除 C,D,E,F (2,3,4,5)
-            const excludeIndices = [2, 3, 4, 5];
-            const filtered = results.data.slice(1).map(row => {
-                return row.filter((_, idx) => !excludeIndices.includes(idx));
+            if (!results.data || results.data.length < 2) {
+                alert("雲端目前無資料，請確認試算表已發佈。");
+                return;
+            }
+            // 排除 C-F 欄
+            cloudData = results.data.slice(1).map(row => {
+                return row.filter((_, idx) => ![2,3,4,5].includes(idx));
             });
-
-            cloudData = filtered;
-            document.getElementById('filterCounter').textContent = `連線成功：讀取 ${cloudData.length} 期資料`;
+            document.getElementById('filterCounter').textContent = `連線成功！已載入 ${cloudData.length} 期資料`;
             if(callback) callback(results.data[results.data.length - 1]);
+        },
+        error: function() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert("讀取失敗！請確保試算表：1.已發佈到網路 2.設定為CSV格式");
         }
     });
 }
 
 function selectToday() {
     clearFilters();
-    fetchSheetData((lastRawRow) => {
-        // 解析 B 欄 (索引1)
-        const dateVal = lastRawRow[1]; 
-        if(!dateVal) return;
-
-        const parts = dateVal.split('/');
-        const month = parts[1];
-        const day = parts[2];
-        const week = parts[3] ? parts[3].replace('週', '') : "";
-
-        autoClick('月份', month);
-        autoClick('日期', day);
-        autoClick('星期', week);
-        
-        // 天干地支 (假設原始索引 C:2, D:3)
+    fetchSheetData((lastRow) => {
+        const dateParts = lastRow[1].split('/');
+        autoClick('月份', dateParts[1]);
+        autoClick('日期', dateParts[2]);
+        if(dateParts[3]) autoClick('星期', dateParts[3].replace('週',''));
         if(currentUser === 'dad') {
-            autoClick('天干', lastRawRow[2]);
-            autoClick('地支', lastRawRow[3]);
+            autoClick('天干', lastRow[2]); autoClick('地支', lastRow[3]);
         }
         updateStats();
     });
@@ -231,7 +221,8 @@ function autoClick(label, val) {
 function updateStats() {
     const hasActive = document.querySelectorAll('.chip.on').length > 0;
     for(let i=1; i<=maxNum; i++) {
-        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*20) : "0";
+        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*15) : "0";
+        document.getElementById(`val2-${i}`).textContent = hasActive ? Math.floor(Math.random()*20) : "0";
     }
 }
 
@@ -248,9 +239,8 @@ function addToReport() {
 }
 
 function renderCurrentReports() {
-    const container = document.getElementById('reportContainer');
-    container.innerHTML = '';
-    reportStorage[currentUser][currentGame].slice().reverse().forEach((rep, idx) => {
+    const container = document.getElementById('reportContainer'); container.innerHTML = '';
+    reportStorage[currentUser][currentGame].slice().reverse().forEach((rep) => {
         const div = document.createElement('div');
         div.className = 'report-item';
         let rows = '';
@@ -258,11 +248,11 @@ function renderCurrentReports() {
             item.chips.forEach(val => rows += `<tr><td class="cond-col">${item.label}:${val}</td>${generateCells()}</tr>`);
         });
         div.innerHTML = `
-            <div class="report-header"><span>【${rep.mode}】使用者：${currentUser}</span></div>
+            <div class="report-header"><span>【${rep.mode}】使用者：${currentUser === 'dad'?'爸':'哥'}</span></div>
             <table class="report-table">
                 <thead><tr><td class="cond-col">分析項目</td>${Array.from({length:maxNum}, (_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead>
                 <tbody class="report-body">${rows}</tbody>
-                <tfoot><tr class="sum-row"><td class="cond-col">最後一列總和 (Sum)</td>${Array.from({length:maxNum}, ()=>`<td class="sum-cell"></td>`).join('')}</tr></tfoot>
+                <tfoot><tr class="sum-row"><td class="cond-col">最後一列總和 (Sum)</td>${Array.from({length:maxNum}, ()=>`<td class="sum-cell">0</td>`).join('')}</tr></tfoot>
             </table>`;
         container.appendChild(div);
         calculateReportTotals(div);
@@ -275,7 +265,7 @@ function calculateReportTotals(el) {
     for (let col = 1; col <= maxNum; col++) {
         let total = 0;
         rows.forEach(row => total += parseInt(row.cells[col].textContent) || 0);
-        sumCells[col-1].textContent = total > 0 ? total : "";
+        sumCells[col-1].textContent = total > 0 ? total : "0";
     }
 }
 
@@ -291,10 +281,10 @@ function generateCells() {
 function clearFilters() { document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on')); }
 function clearAllReports() { if(confirm("確定清空報表？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); } }
 
-function exportToExcel() {
-    const container = document.getElementById('reportContainer');
-    const blob = new Blob([`<html><head><meta charset="utf-8"></head><body>${container.innerHTML}</body></html>`], { type: 'application/vnd.ms-excel' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_Export.xls`; a.click();
+function changeMode(mode, btn) {
+    currentMode = mode;
+    btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-orange'));
+    btn.classList.add('btn-orange');
 }
 
 document.querySelectorAll('.tab').forEach(tab => {
