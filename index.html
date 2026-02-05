@@ -36,7 +36,7 @@
     .stat-table { width: 100%; border-collapse: collapse; background: #fff; min-width: 800px; }
     .stat-table th, .stat-table td { border: 1px solid #000; text-align: center; padding: 2px; font-size: 11px; font-weight: bold; }
     .stat-table th { background: var(--stat-green); }
-    .top5 { background-color: var(--top5-bg) !important; color: var(--top5-text) !important; }
+    .top5 { background-color: #ff0000 !important; color: #ffffff !important; }
     .report-item { margin-bottom: 30px; border: 1px solid #000; background: #fff; overflow-x: auto; }
     .report-header { background: var(--report-header-bg); padding: 5px; font-weight: bold; border-bottom: 1px solid #000; }
     .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
@@ -107,6 +107,43 @@ const sheetUrls = {
     "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
 };
 
+// ✅ 修正點：統一把 "01" → "1"
+function normIntStr(x){
+  if(x === null || x === undefined) return "";
+  const s = String(x).trim();
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? String(n) : s;
+}
+
+// ✅ 修正點：從 row[1] 真正解析日期，並計算星期（一二三四五六日）
+function parseRowMeta(row){
+  const raw = (row && row[1]) ? String(row[1]).trim() : "";
+  // 支援 YYYY/MM/DD 或 YYYY-MM-DD
+  const parts = raw.includes('/') ? raw.split('/') : (raw.includes('-') ? raw.split('-') : []);
+  const y = parts[0] ? normIntStr(parts[0]) : "";
+  const m = parts[1] ? normIntStr(parts[1]) : "";
+  const d = parts[2] ? normIntStr(parts[2]) : "";
+
+  // JS: 0(日)~6(六)；你的 UI 是 一..日
+  let w = "";
+  if(y && m && d){
+    const dt = new Date(Number(y), Number(m)-1, Number(d));
+    if(!Number.isNaN(dt.getTime())){
+      const map = ["日","一","二","三","四","五","六"];
+      w = map[dt.getDay()];
+    }
+  }
+
+  return {
+    "年份": y,
+    "月份": m,
+    "日期": d,
+    "星期": w,
+    "天干": row[2] ? String(row[2]).trim() : "",
+    "地支": row[3] ? String(row[3]).trim() : ""
+  };
+}
+
 function switchUser(role) {
     currentUser = role;
     document.getElementById('mode-dad').classList.toggle('btn-cyan', role==='dad');
@@ -158,8 +195,7 @@ function fetchSheetData(callback) {
         download: true, header: false, skipEmptyLines: true,
         complete: function(results) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            // 原始數據保留，不進行預篩選
-            cloudData = results.data.slice(1); 
+            cloudData = results.data.slice(1);
             if(callback) callback(results.data[results.data.length - 1]);
             updateStats();
         }
@@ -170,15 +206,13 @@ function updateStats() {
     if(!cloudData.length) return;
     const filters = {}; let catCount = 0;
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => String(c.textContent).trim());
         if(sel.length > 0) { filters[lbl] = sel; catCount++; }
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent));
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent, 10));
     const counts = Array(maxNum + 1).fill(0);
 
-    // 過濾有效資料列
     const validRows = cloudData.filter(row => {
-        // 爸模式：檢查 C(2), D(3), E(4), F(5) 是否為空值
         if (currentUser === "dad") {
             if (!row[2] || !row[3] || !row[4] || !row[5]) return false;
         }
@@ -186,19 +220,13 @@ function updateStats() {
     });
 
     validRows.forEach((row, idx) => {
-        const dateParts = row[1].split('/');
-        const rd = { 
-            "年份": dateParts[0], 
-            "月份": dateParts[1], 
-            "日期": dateParts[2], 
-            "星期": dateParts[3] ? dateParts[3].replace('週','') : "", 
-            "天干": row[2], 
-            "地支": row[3] 
-        };
-        const rowNums = row.slice(6, 12).map(Number).filter(n => n > 0); // 號碼從第 G 欄(6)開始
-        
+        const rd = parseRowMeta(row);
+        const rowNums = row.slice(6, 12).map(Number).filter(n => n > 0);
+
         let mCond = true;
-        for(let k in filters) if(!filters[k].includes(rd[k])) { mCond = false; break; }
+        for(let k in filters){
+          if(!filters[k].includes(rd[k])) { mCond = false; break; }
+        }
         if(!mCond) return;
 
         if (currentMode === "歷史模式") {
@@ -219,12 +247,12 @@ function updateStats() {
     const threshold = sorted[4] > 0 ? sorted[4] : 999;
 
     document.getElementById('filterCounter').textContent = `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length}`;
-    
+
     for(let i=1; i<=maxNum; i++){
         const td = document.getElementById(`val1-${i}`);
         td.textContent = counts[i] || 0;
         td.className = (counts[i] >= threshold && counts[i] > 0) ? "top5" : "";
-        
+
         let gap = 0;
         for(let j=validRows.length-1; j>=0; j--){
             if(validRows[j].slice(6, 12).map(Number).includes(i)) break;
@@ -237,10 +265,10 @@ function updateStats() {
 function addToReport() {
     const filters = {}; let catCount = 0;
     ["年份", "月份", "日期", "星期", "天干", "地支"].forEach(lbl => {
-        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => c.textContent);
+        const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => String(c.textContent).trim());
         if(sel.length > 0) { filters[lbl] = sel; catCount++; }
     });
-    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent));
+    const selNums = Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`)).map(c => parseInt(c.textContent, 10));
     const condTxt = Object.entries(filters).map(([k,v])=>`${k}:${v}`).join('+') || "無條件";
 
     const validRows = cloudData.filter(row => {
@@ -253,8 +281,7 @@ function addToReport() {
         selNums.forEach(sn => {
             const counts = Array(maxNum + 1).fill(0);
             validRows.forEach((row, idx) => {
-                const dateParts = row[1].split('/');
-                const rd = { "年份": dateParts[0], "月份": dateParts[1], "日期": dateParts[2], "星期": dateParts[3]?dateParts[3].replace('週',''):"", "天干": row[2], "地支": row[3] };
+                const rd = parseRowMeta(row);
                 let m = true; for(let k in filters) if(!filters[k].includes(rd[k])) { m = false; break; }
                 if(m && row.slice(6, 12).map(Number).includes(sn)) {
                     const nxt = validRows[idx+1];
@@ -266,8 +293,7 @@ function addToReport() {
     } else {
         const counts = Array(maxNum + 1).fill(0);
         validRows.forEach((row) => {
-            const dateParts = row[1].split('/');
-            const rd = { "年份": dateParts[0], "月份": dateParts[1], "日期": dateParts[2], "星期": dateParts[3]?dateParts[3].replace('週',''):"", "天干": row[2], "地支": row[3] };
+            const rd = parseRowMeta(row);
             const rowNums = row.slice(6, 12).map(Number);
             let mCond = true; for(let k in filters) if(!filters[k].includes(rd[k])) { mCond = false; break; }
             if(!mCond) return;
@@ -321,17 +347,20 @@ function syncModeButtons() {
 function selectToday() {
     clearFilters();
     fetchSheetData((lastRow) => {
-        const p = lastRow[1].split('/');
-        autoClick('月份', p[1]); autoClick('日期', p[2]);
-        if(p[3]) autoClick('星期', p[3].replace('週',''));
+        // lastRow[1] 可能只有 YYYY/MM/DD：這裡也用同一套解析
+        const meta = parseRowMeta(lastRow);
+        autoClick('月份', meta["月份"]);
+        autoClick('日期', meta["日期"]);
+        if(meta["星期"]) autoClick('星期', meta["星期"]);
         if(currentUser === 'dad') { autoClick('天干', lastRow[2]); autoClick('地支', lastRow[3]); }
         updateStats();
     });
 }
 
 function autoClick(label, val) {
-    if(!val) return;
-    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${val.trim().replace(/^0/, '')}"]`);
+    if(val === null || val === undefined || val === "") return;
+    const vv = String(val).trim();
+    const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${vv}"]`);
     if(c) c.classList.add('on');
 }
 
