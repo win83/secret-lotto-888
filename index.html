@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>樂透統計系統 V1 - 對碰按鈕修復版</title>
+  <title>樂透統計系統 V1 - 終極連線版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -61,7 +61,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay">雲端數據連線中...</div>
+<div id="loadingOverlay">雲端數據強力連線中...</div>
 
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
@@ -94,7 +94,7 @@
     
     <div class="btnbar" style="margin-top:15px;">
       <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 & 同步雲端</button>
-      <div id="filterCounter" style="font-weight:bold; font-size:13px; color:red; margin-left:10px;">尚未讀取雲端數據</div>
+      <div id="filterCounter" style="font-weight:bold; font-size:13px; color:red; margin-left:10px;">尚未連網</div>
     </div>
 
     <div class="stat-title">即時篩選統計</div>
@@ -104,7 +104,7 @@
   </div>
 
   <div id="reportPage" class="page">
-    <div id="reportFilters" style="background:#ffd966; padding:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
+    <div style="background:#ffd966; padding:8px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; border:1px solid #999;">
       <button class="btn btn-yellow" onclick="filterReport('歷史', this)">歷史</button>
       <button class="btn btn-yellow" onclick="filterReport('拖牌', this)">拖牌</button>
       <button class="btn btn-yellow" onclick="filterReport('當期', this)">當期對碰</button>
@@ -129,11 +129,13 @@ const reportStorage = {
     bro: { "539": [], "Lotto": [] }
 };
 
+// 原始網址 (自動加上 Proxy 代理防止被阻擋)
+const proxy = "https://corsproxy.io/?";
 const sheetUrls = {
-    "539_dad": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1671013974&single=true&output=csv",
-    "49_dad": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1537410716&single=true&output=csv",
-    "539_bro": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=691798156&single=true&output=csv",
-    "49_bro": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1767471305&single=true&output=csv"
+    "539_dad": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1671013974&single=true&output=tsv"),
+    "49_dad": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1537410716&single=true&output=tsv"),
+    "539_bro": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=691798156&single=true&output=tsv"),
+    "49_bro": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vTzETHpUZjScTdPyuH2gmiBZJvZUYE0Zz5WR_PQwpDOVCS2WZFEsHuq0-ToY6lP-g/pub?gid=1767471305&single=true&output=tsv")
 };
 
 function switchUser(role) {
@@ -191,11 +193,7 @@ document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.add('active');
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById(tab.dataset.target).classList.add('active');
-        if(tab.dataset.target === 'mainPage') {
-            initFilters();
-        } else {
-            renderCurrentReports();
-        }
+        if(tab.dataset.target === 'mainPage') initFilters(); else renderCurrentReports();
     });
 });
 
@@ -210,22 +208,31 @@ function clearFilters() {
     updateStats();
 }
 
+// 終極連線函數：自動偵測分隔符與處理 TSV
 function fetchSheetData(callback) {
     const key = `${currentGame === '539' ? '539' : '49'}_${currentUser}`;
     const url = sheetUrls[key];
     document.getElementById('loadingOverlay').style.display = 'flex';
+    
     Papa.parse(url, {
         download: true,
         header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
         complete: function(results) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            cloudData = results.data;
-            document.getElementById('filterCounter').textContent = `雲端讀取成功：共 ${cloudData.length} 筆`;
-            if(callback) callback();
+            if (results.data && results.data.length > 0) {
+                cloudData = results.data;
+                document.getElementById('filterCounter').textContent = `雲端連線成功：共 ${cloudData.length} 筆`;
+                if(callback) callback();
+            } else {
+                alert("連線成功但格式讀取有誤，請確認試算表內容是否為空。");
+            }
         },
-        error: function() {
+        error: function(err) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            alert("雲端連結失敗");
+            alert("雲端連線失敗！請確認：\n1. 試算表已發佈到網路\n2. 網址正確無誤");
+            console.error(err);
         }
     });
 }
@@ -245,7 +252,6 @@ function addToReport() {
         const chips = Array.from(group.querySelectorAll('.chip.on')).map(c => c.textContent);
         if(chips.length > 0) selItems.push({label: group.dataset.label, chips});
     });
-
     const reportObj = { mode: currentMode, items: selItems, id: Date.now() };
     reportStorage[currentUser][currentGame].push(reportObj);
     renderCurrentReports();
@@ -256,12 +262,10 @@ function renderCurrentReports() {
     const container = document.getElementById('reportContainer');
     container.innerHTML = '';
     const myReports = reportStorage[currentUser][currentGame];
-
     myReports.slice().reverse().forEach((rep, idx) => {
         const div = document.createElement('div');
         div.className = 'report-item';
         div.dataset.type = rep.mode.substring(0,2);
-        
         let rowsHtml = '';
         rep.items.forEach(item => {
             if(rep.mode === '拖牌模式' && item.chips.length === 2) {
@@ -270,7 +274,6 @@ function renderCurrentReports() {
                 item.chips.forEach(val => rowsHtml += `<tr><td class="cond-col">${item.label}:${val}</td>${generateCells()}</tr>`);
             }
         });
-
         div.innerHTML = `
             <div class="report-header">
                 <span>【${rep.mode}】使用者：${currentUser === 'dad' ? '爸' : '哥'}</span>
@@ -339,7 +342,7 @@ function clearAllReports() { if(confirm("確定清空個人報表？")) { report
 function exportToExcel() {
     const container = document.getElementById('reportContainer');
     const blob = new Blob([`<html><head><meta charset="utf-8"></head><body>${container.innerHTML}</body></html>`], { type: 'application/vnd.ms-excel' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_Export.xls`; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `V1_${currentUser}.xls`; a.click();
 }
 
 initFilters();
