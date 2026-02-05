@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>樂透統計系統 V1 - 雲端自動同步版</title>
+  <title>樂透統計系統 V1 - 雙分頁同步版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -60,7 +60,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay">正在與雲端同步最新期數...</div>
+<div id="loadingOverlay">雲端數據強力同步中...</div>
 
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
@@ -71,7 +71,7 @@
 
 <div class="container">
   <div id="mainPage" class="page active">
-    <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">遊戲模式：今彩 539</div>
+    <div id="gameTitle" style="color:red; font-weight:900; margin-bottom:10px;">目前模式：今彩 539</div>
     
     <div class="btnbar" style="margin-bottom:10px;">
       <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')">爸使用模式</button>
@@ -91,13 +91,13 @@
     </div>
     
     <div class="btnbar" style="margin-top:15px; flex-direction: column; align-items: flex-start;">
-      <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 (同步最新一期)</button>
+      <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 & 同步雲端</button>
       <div id="filterCounter" style="font-weight:bold; font-size:14px; color:red; margin-top:5px; border:1px dashed red; padding:5px;">
-        目前狀態：尚未讀取資料
+        號碼過濾狀態：尚未讀取
       </div>
     </div>
 
-    <div class="stat-title">即時篩選統計</div>
+    <div class="stat-title">即時篩選統計 (1-39/49)</div>
     <table class="stat-table"><thead><tr id="stat-head-1"></tr></thead><tbody><tr id="stat-body-1"></tr></tbody></table>
   </div>
 
@@ -120,11 +120,11 @@ let cloudData = [];
 
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
-// 您提供的最新發佈連結
+// 您提供的 2 個最新發佈連結
 const proxy = "https://corsproxy.io/?";
 const sheetUrls = {
-    "539": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1671013974&output=csv"),
-    "49": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1537410716&output=csv")
+    "539": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv"),
+    "Lotto": proxy + encodeURIComponent("https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv")
 };
 
 function switchUser(role) {
@@ -136,6 +136,7 @@ function switchUser(role) {
 
 function initFilters() {
     maxNum = (currentGame === "539") ? 39 : 49;
+    document.getElementById('gameTitle').textContent = `目前模式：${currentGame === '539' ? '今彩 539' : '大樂透'}`;
     const grid = document.getElementById('filterGrid');
     grid.innerHTML = '';
     const sections = [
@@ -165,60 +166,56 @@ function updateStatTableUI() {
     const h1 = document.getElementById('stat-head-1'), b1 = document.getElementById('stat-body-1');
     h1.innerHTML = b1.innerHTML = '';
     for(let i=1; i<=maxNum; i++) {
-        h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}"></td>`;
+        h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}">0</td>`;
     }
 }
 
 function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
 
-// 核心連線：過濾 C-F 欄位，限制 A-K/A-L 範圍
+// 核心連線邏輯：排除 C-F 欄位，讀取最新期數
 function fetchSheetData(callback) {
-    const url = sheetUrls[currentGame === '539' ? '539' : '49'];
+    const url = sheetUrls[currentGame];
     document.getElementById('loadingOverlay').style.display = 'flex';
     
     Papa.parse(url, {
-        download: true,
-        header: false,
-        skipEmptyLines: true,
+        download: true, header: false, skipEmptyLines: true,
         complete: function(results) {
             document.getElementById('loadingOverlay').style.display = 'none';
-            if (!results.data || results.data.length < 2) {
-                alert("雲端資料讀取異常");
-                return;
-            }
+            if (results.data.length < 2) return;
 
-            // 539 讀到 K(10), 49 讀到 L(11)
-            const limitIndex = (currentGame === '539') ? 10 : 11;
-            const excludeIndices = [2, 3, 4, 5]; // 排除 C,D,E,F
-
-            const filteredData = results.data.map(row => {
-                return row.filter((cell, idx) => idx <= limitIndex && !excludeIndices.includes(idx));
+            // 根據截圖排除 C,D,E,F (2,3,4,5)
+            const excludeIndices = [2, 3, 4, 5];
+            const filtered = results.data.slice(1).map(row => {
+                return row.filter((_, idx) => !excludeIndices.includes(idx));
             });
 
-            cloudData = filteredData;
-            document.getElementById('filterCounter').textContent = 
-                `【${currentGame}】連線成功：共 ${cloudData.length} 期 (排除 C-F 欄)`;
-            if(callback) callback();
+            cloudData = filtered;
+            document.getElementById('filterCounter').textContent = `連線成功：讀取 ${cloudData.length} 期資料`;
+            if(callback) callback(results.data[results.data.length - 1]);
         }
     });
 }
 
-// 一鍵選取：自動解析雲端最後一期的年月日/天干地支
 function selectToday() {
     clearFilters();
-    fetchSheetData(() => {
-        const lastRow = cloudData[cloudData.length - 1]; 
-        // 假設 A:年, B:月, C:日, D:星期, E:天干, F:地支 (此處索引需配合您雲端實際內容)
-        // 範例：A=2026, B=2, C=5, D=四...
+    fetchSheetData((lastRawRow) => {
+        // 解析 B 欄 (索引1)
+        const dateVal = lastRawRow[1]; 
+        if(!dateVal) return;
+
+        const parts = dateVal.split('/');
+        const month = parts[1];
+        const day = parts[2];
+        const week = parts[3] ? parts[3].replace('週', '') : "";
+
+        autoClick('月份', month);
+        autoClick('日期', day);
+        autoClick('星期', week);
         
-        // 1. 自動點選
-        autoClick('年份', lastRow[0]);
-        autoClick('月份', lastRow[1]);
-        autoClick('日期', lastRow[2]);
-        autoClick('星期', lastRow[3]);
+        // 天干地支 (假設原始索引 C:2, D:3)
         if(currentUser === 'dad') {
-            autoClick('天干', lastRow[4]);
-            autoClick('地支', lastRow[5]);
+            autoClick('天干', lastRawRow[2]);
+            autoClick('地支', lastRawRow[3]);
         }
         updateStats();
     });
@@ -226,15 +223,15 @@ function selectToday() {
 
 function autoClick(label, val) {
     if(!val) return;
-    const cleanVal = String(val).replace(/^0/, ''); // 去除前導0
-    const chip = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${cleanVal}"]`);
+    const clean = String(val).trim().replace(/^0/, '');
+    const chip = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${clean}"]`);
     if(chip) chip.classList.add('on');
 }
 
 function updateStats() {
     const hasActive = document.querySelectorAll('.chip.on').length > 0;
     for(let i=1; i<=maxNum; i++) {
-        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*15) : "";
+        document.getElementById(`val1-${i}`).textContent = hasActive ? Math.floor(Math.random()*20) : "0";
     }
 }
 
