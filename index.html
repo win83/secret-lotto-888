@@ -142,12 +142,18 @@ const sheetUrls = {
 function parseYMD(dateCell){
   const s = String(dateCell || "").trim();
   if(!s) return {y:"", m:"", d:""};
-  const parts = s.includes('/') ? s.split('/') : (s.includes('-') ? s.split('-') : []);
-  const y = parts[0] ? String(parseInt(parts[0],10)) : "";
-  const m = parts[1] ? String(parseInt(parts[1],10)) : "";
-  const d = parts[2] ? String(parseInt(parts[2],10)) : "";
-  return {y,m,d};
+
+  // 支援：yyyy/mm/dd、yyyy-mm-dd、yyyy.mm.dd、後面有時間
+  const m1 = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if(!m1) return {y:"", m:"", d:""};
+
+  return {
+    y: String(parseInt(m1[1],10)),
+    m: String(parseInt(m1[2],10)),
+    d: String(parseInt(m1[3],10))
+  };
 }
+
 function ymdKey(y,m,d){
   if(!y||!m||!d) return NaN;
   const yy = parseInt(y,10), mm = parseInt(m,10), dd = parseInt(d,10);
@@ -213,7 +219,11 @@ function startYearByUser(){ return (currentUser === "dad") ? 2020 : 2006; }
    539: 5顆 G~K => slice(6,11)
    Lotto: 6顆 G~L => slice(6,12)
    ========================= */
-function ballSliceEnd(){ return (currentGame === "539") ? 11 : 12; }
+function ballSliceEnd(){
+  // Lotto 抓到 M 欄（含特別號或空欄）
+  return (currentGame === "539") ? 11 : 13;
+}
+
 function requiredBallCount(){
   // 539 必須剛好 5 顆
   if(currentGame === "539") return 5;
@@ -223,8 +233,12 @@ function requiredBallCount(){
 }
 
 function rowBalls(row){
-  return row.slice(6, ballSliceEnd()).map(v => parseInt(v,10)).filter(n => n > 0);
+  return row
+    .slice(6, ballSliceEnd())
+    .map(v => parseInt(v,10))
+    .filter(n => Number.isFinite(n) && n > 0);
 }
+
 function hasEnoughBalls(row){
   return rowBalls(row).length >= requiredBallCount();
 }
@@ -717,4 +731,5 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
