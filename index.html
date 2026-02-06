@@ -418,94 +418,77 @@ function updateStats() {
 }
 
 /* =========================
-   修正核心：報表生成邏輯 (針對報表拆分與號碼拆分)
-   ========================= */
-/* =========================
-   報表生成邏輯：支援多條件交叉配對 (拖牌/對碰模式)
+   報表生成邏輯：精確交叉配對 (前期標籤+號碼 -> 後期標籤統計)
    ========================= */
 function addToReport() {
   if (!cloudData.length) return alert("尚未載入資料");
   const validRows = getValidRows();
   if (!validRows.length) return alert("無有效資料列");
   
-  const filters = getSelectedFilters(); // 包含年份、月份、天干、地支等
-  const selNums = getSelectedNums();   // 介面上選取的號碼
+  const filters = getSelectedFilters(); 
+  const selNums = getSelectedNums();   
   const gameMax = (currentGame === "539") ? 39 : 49;
 
-  // 建立報表主體物件
-  const group = newGroup(currentMode, `【${currentMode}】${fmtFilters(filters)} | 號碼:${selNums.join(',')}`);
+  // 取得所有選取的標籤類別 (如：天干、地支、星期等)
+  const filterKeys = Object.keys(filters);
+  
+  // 建立報表主體
+  const group = newGroup(currentMode, `【精確拖牌】${fmtFilters(filters)} | 號碼:${selNums.join(',')}`);
 
-  // --- 模式：歷史模式 (維持原邏輯，依標籤拆分) ---
-  if (currentMode === "歷史模式") {
-    Object.entries(filters).forEach(([cat, vals]) => {
-      vals.forEach(val => {
+  // --- 核心邏輯：交叉配對篩選 ---
+  // 遍歷所有選取的標籤類別
+  filterKeys.forEach(cat => {
+    const vals = filters[cat];
+    
+    // 如果選取了至少 2 個值 (例如丙、丁)
+    if (vals.length >= 2) {
+      const preVal = vals[0];  // 取第一個為前期條件 (丙)
+      const postVal = vals[1]; // 取第二個為後期對比條件 (丁)
+
+      selNums.forEach(num => {
         const counts = Array(gameMax + 1).fill(0);
-        const singleFilter = {}; singleFilter[cat] = [val];
-        validRows.forEach(row => {
-          if (matchFilters(buildRd(rowMetaFromRow(row)), singleFilter)) {
-            rowBalls(row).forEach(n => { if(n <= gameMax) counts[n]++; });
-          }
-        });
-        addRowToGroup(group, `${cat}: ${val}`, counts);
-      });
-    });
-  } 
-  // --- 模式：拖牌 / 下期對碰 (執行前期條件與號碼的交叉配對) ---
-  else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
-    // 1. 先處理標籤明細 (如 天干: 丙)
-    Object.entries(filters).forEach(([cat, vals]) => {
-      vals.forEach(val => {
-        const counts = Array(gameMax + 1).fill(0);
+        let matchCount = 0;
+
         for (let i = 0; i < validRows.length - 1; i++) {
-          const rd = buildRd(rowMetaFromRow(validRows[i]));
-          if (rd[cat] === val) { // 符合該單一標籤
-            rowBalls(validRows[i+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+          const currentRd = buildRd(rowMetaFromRow(validRows[i]));    // 前期資料
+          const nextRd = buildRd(rowMetaFromRow(validRows[i+1]));     // 下期資料
+          const currentBalls = rowBalls(validRows[i]);               // 前期號碼
+          const nextBalls = rowBalls(validRows[i+1]);                // 下期號碼
+
+          // 精確匹配：前期是丙 + 前期有號碼 + 下期是丁
+          if (currentRd[cat] === preVal && 
+              currentBalls.includes(num) && 
+              nextRd[cat] === postVal) {
+            
+            matchCount++;
+            nextBalls.forEach(n => { if(n <= gameMax) counts[n]++; });
           }
         }
-        addRowToGroup(group, `${cat}: ${val}`, counts);
-      });
-    });
 
-    // 2. 處理交叉配對：前期標籤 + 前期號碼 -> 統計下一期
-    // 範例：前期是「丙」且號碼有「4」，統計下一期
-    if (selNums.length > 0) {
-      Object.entries(filters).forEach(([cat, vals]) => {
-        vals.forEach(val => {
-          selNums.forEach(num => {
-            const counts = Array(gameMax + 1).fill(0);
-            for (let i = 0; i < validRows.length - 1; i++) {
-              const rd = buildRd(rowMetaFromRow(validRows[i]));
-              const balls = rowBalls(validRows[i]);
-              // 核心判斷：前期符合標籤(如丙) 且 包含號碼(如4)
-              if (rd[cat] === val && balls.includes(num)) {
-                rowBalls(validRows[i+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
-              }
+        // 加入明細行，標籤顯示：前期(丙)+號碼 -> 後期(丁)
+        const rowLabel = `前期 ${cat}:${preVal} + 號碼:${num} (限後其為${postVal})`;
+        addRowToGroup(group, rowLabel, counts);
+      });
+    } else {
+      // 若該類別只選 1 個，則執行一般拖牌統計
+      vals.forEach(val => {
+        selNums.forEach(num => {
+          const counts = Array(gameMax + 1).fill(0);
+          for (let i = 0; i < validRows.length - 1; i++) {
+            const currentRd = buildRd(rowMetaFromRow(validRows[i]));
+            if (currentRd[cat] === val && rowBalls(validRows[i]).includes(num)) {
+              rowBalls(validRows[i+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
             }
-            addRowToGroup(group, `前期 ${cat}:${val} + 號碼:${num}`, counts);
-          });
+          }
+          addRowToGroup(group, `前期 ${cat}:${val} + 號碼:${num}`, counts);
         });
       });
     }
-  }
-  // --- 模式：當期對碰 ---
-  else if (currentMode === "當期對碰") {
-    selNums.forEach(num => {
-      const counts = Array(gameMax + 1).fill(0);
-      validRows.forEach(row => {
-        const rd = buildRd(rowMetaFromRow(row));
-        const balls = rowBalls(row);
-        if (matchFilters(rd, filters) && balls.includes(num)) {
-          balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
-        }
-      });
-      addRowToGroup(group, `號碼: ${num} 同現統計`, counts);
-    });
-  }
+  });
 
-  // 儲存並渲染報表
+  // 儲存並跳轉報表
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
-  // 切換到報表分頁
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
   if(targetTab) targetTab.click();
 }
@@ -612,4 +595,5 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
