@@ -242,17 +242,19 @@ function getValidRows(){
 }
 
 function newGroup(mode, title){
+  const gLimit = (currentGame === "539") ? 39 : 49;
   return {
     id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
     mode,
     title,
+    limit: gLimit,
     rows: [],
-    sum: Array(maxNum + 1).fill(0)
+    sum: Array(gLimit + 1).fill(0)
   };
 }
 function addRowToGroup(group, label, dataArr){
   group.rows.push({ label, data: dataArr });
-  for(let i=1;i<=maxNum;i++){
+  for(let i=1;i<=group.limit;i++){
     group.sum[i] += (dataArr[i] || 0);
   }
 }
@@ -416,7 +418,7 @@ function updateStats() {
 }
 
 /* =========================
-   修正核心：自動拆分報表顯示邏輯
+   修正核心：報表生成邏輯 (針對報表拆分與號碼拆分)
    ========================= */
 function addToReport() {
   if (!cloudData.length) return alert("尚未載入資料");
@@ -425,77 +427,67 @@ function addToReport() {
   
   const filters = getSelectedFilters();
   const selNums = getSelectedNums();
-  const categories = Object.keys(filters);
+  const gameMax = (currentGame === "539") ? 39 : 49;
 
-  // 如果完全沒選條件，則按原本邏輯加一張報表
-  if (categories.length === 0) {
-    processAndAddSingleGroup(filters, selNums, validRows);
-  } else {
-    // 遍歷所有選中的類別 (如年份、月份)
-    categories.forEach(cat => {
-      // 遍歷該類別下的所有選中值 (如 2024, 2025)
-      filters[cat].forEach(val => {
-        const singleFilter = {};
-        singleFilter[cat] = [val];
-        processAndAddSingleGroup(singleFilter, selNums, validRows);
+  // 建立報表主體物件
+  const group = newGroup(currentMode, `【${currentMode}】${fmtFilters(filters)}`);
+
+  // --- 邏輯 1: 處理標籤拆分 (如日期 5,6,7) ---
+  Object.entries(filters).forEach(([cat, vals]) => {
+    vals.forEach(val => {
+      const counts = Array(gameMax + 1).fill(0);
+      const singleFilter = {}; singleFilter[cat] = [val];
+
+      validRows.forEach((row, idx) => {
+        const meta = rowMetaFromRow(row);
+        const rd = buildRd(meta);
+        if (singleFilter[cat].includes(rd[cat])) {
+          const balls = rowBalls(row);
+          if (currentMode === "歷史模式") {
+            balls.forEach(n => { if(n <= gameMax) counts[n]++; });
+          } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
+            if (selNums.some(sn => balls.includes(sn)) && validRows[idx+1]) {
+              rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+            }
+          } else if (currentMode === "當期對碰") {
+            if (selNums.every(sn => balls.includes(sn))) {
+              balls.forEach(n => { if(n <= gameMax) counts[n]++; });
+            }
+          }
+        }
       });
+      addRowToGroup(group, `${cat}: ${val}`, counts);
+    });
+  });
+
+  // --- 邏輯 2: 處理號碼拆分 (針對拖牌/對碰，號碼分開呈現) ---
+  if (currentMode !== "歷史模式" && selNums.length > 0) {
+    selNums.forEach(num => {
+      const counts = Array(gameMax + 1).fill(0);
+      validRows.forEach((row, idx) => {
+        const meta = rowMetaFromRow(row);
+        const rd = buildRd(meta);
+        // 符合總體標籤篩選
+        if (!matchFilters(rd, filters)) return;
+
+        const balls = rowBalls(row);
+        if (balls.includes(num)) {
+          if ((currentMode === "拖牌模式" || currentMode === "下期對碰") && validRows[idx+1]) {
+            rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+          } else if (currentMode === "當期對碰") {
+            balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
+          }
+        }
+      });
+      addRowToGroup(group, `號碼: ${num}`, counts);
     });
   }
 
+  // 儲存並切換
+  reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
-  document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-}
-
-// 輔助函式：針對單一過濾條件生成對應報表物件
-function processAndAddSingleGroup(singleFilter, selNums, validRows) {
-  let group = null;
-  const filterDesc = fmtFilters(singleFilter);
-
-  if (currentMode === "歷史模式") {
-    group = newGroup(currentMode, `【歷史】${filterDesc} | 出現統計`);
-    const counts = Array(maxNum + 1).fill(0);
-    validRows.forEach(row => {
-      if (matchFilters(buildRd(rowMetaFromRow(row)), singleFilter)) {
-        rowBalls(row).forEach(n => { if (n <= maxNum) counts[n]++; });
-      }
-    });
-    addRowToGroup(group, "出現次數", counts);
-  } 
-  else if (currentMode === "當期對碰") {
-    if (selNums.length < 2) return; 
-    group = newGroup(currentMode, `【當期對碰】${filterDesc} | 選號:${selNums.join(',')}`);
-    selNums.forEach(mainNum => {
-      const counts = Array(maxNum + 1).fill(0);
-      validRows.forEach(row => {
-        if (matchFilters(buildRd(rowMetaFromRow(row)), singleFilter)) {
-          const nums = rowBalls(row);
-          if (nums.includes(mainNum)) {
-            nums.forEach(n => { if (n <= maxNum && n !== mainNum) counts[n]++; });
-          }
-        }
-      });
-      addRowToGroup(group, `主號碼 ${mainNum} 共現`, counts);
-    });
-  } 
-  else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
-    if (selNums.length === 0) return;
-    group = newGroup(currentMode, `【${currentMode.replace('模式','')}】${filterDesc} | 前期:${selNums.join(',')}`);
-    selNums.forEach(preNum => {
-      const counts = Array(maxNum + 1).fill(0);
-      for (let idx = 0; idx < validRows.length - 1; idx++) {
-        if (matchFilters(buildRd(rowMetaFromRow(validRows[idx])), singleFilter)) {
-          if (rowBalls(validRows[idx]).includes(preNum)) {
-            rowBalls(validRows[idx + 1]).forEach(n => { if (n <= maxNum) counts[n]++; });
-          }
-        }
-      }
-      addRowToGroup(group, `前期 ${preNum} 拖牌統計`, counts);
-    });
-  }
-
-  if (group) {
-    reportStorage[currentUser][currentGame].push(group);
-  }
+  const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
+  if(targetTab) targetTab.click();
 }
 
 function deleteReport(groupId){
@@ -512,9 +504,12 @@ function renderCurrentReports() {
   cont.innerHTML = '';
   const groups = reportStorage[currentUser][currentGame];
   if(!groups.length) return;
+  
   let html = '';
   groups.forEach((g, gi) => {
-    html += `<div class="report-item"><div class="report-header"><div class="title">【第 ${gi+1} 張】${g.title}</div><button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button></div><table class="report-table"><thead><tr><td class="cond-col">統計項目</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
+    const gLimit = g.limit;
+    html += `<div class="report-item"><div class="report-header"><div class="title">【第 ${gi+1} 張】${g.title}</div><button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button></div><table class="report-table"><thead><tr><td class="cond-col">統計明細</td>${Array.from({length:gLimit},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
+    
     g.rows.forEach(r=>{
       const sorted = [...r.data].slice(1).sort((a,b)=>b-a);
       const threshold = (sorted[4] > 0) ? sorted[4] : 999;
@@ -523,6 +518,7 @@ function renderCurrentReports() {
         return `<td class="${cls}">${vv ? vv : ''}</td>`;
       }).join('')}</tr>`;
     });
+    
     const sumSorted = [...g.sum].slice(1).sort((a,b)=>b-a);
     const sumTh = (sumSorted[4] > 0) ? sumSorted[4] : 999;
     html += `</tbody><tfoot><tr class="sum-row"><td class="cond-col">加總 (Sum)</td>${g.sum.slice(1).map(v=>{
