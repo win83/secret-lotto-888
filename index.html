@@ -428,69 +428,62 @@ function addToReport() {
   const filters = getSelectedFilters();
   const selNums = getSelectedNums();
   const gameMax = (currentGame === "539") ? 39 : 49;
-  const filterKeys = Object.keys(filters);
 
+  // 建立報表主體物件
   const group = newGroup(currentMode, `【${currentMode}】${fmtFilters(filters)}`);
 
-  filterKeys.forEach(cat => {
-    const vals = filters[cat];
+  // --- 邏輯 1: 處理標籤拆分 (如日期 5,6,7) ---
+  Object.entries(filters).forEach(([cat, vals]) => {
+    vals.forEach(val => {
+      const counts = Array(gameMax + 1).fill(0);
+      const singleFilter = {}; singleFilter[cat] = [val];
 
-    // --- 拖牌模式：處理 2 個條件的交叉配對 ---
-    if (currentMode === "拖牌模式" && vals.length >= 2) {
-      const preVal = vals[0];  
-      const postVal = vals[1]; 
-
-      selNums.forEach(num => {
-        const counts = Array(gameMax + 1).fill(0);
-        for (let i = 0; i < validRows.length - 1; i++) {
-          const currentRd = buildRd(rowMetaFromRow(validRows[i]));
-          const nextRd = buildRd(rowMetaFromRow(validRows[i+1]));
-          const currentBalls = rowBalls(validRows[i]);
-          if (currentRd[cat] === preVal && currentBalls.includes(num) && nextRd[cat] === postVal) {
-            rowBalls(validRows[i+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
-          }
-        }
-        // 修正後的文字顯示
-        addRowToGroup(group, `前期 ${cat}:${preVal} + 號碼:${num} 拖出 -> ${postVal}`, counts);
-      });
-    } 
-    // --- 其他模式或一般條件：顯示原本明細 ---
-    else {
-      vals.forEach(val => {
-        const counts = Array(gameMax + 1).fill(0);
-        validRows.forEach((row, idx) => {
-          const rd = buildRd(rowMetaFromRow(row));
-          if (rd[cat] === val) {
-            const balls = rowBalls(row);
-            if (currentMode === "歷史模式") {
+      validRows.forEach((row, idx) => {
+        const meta = rowMetaFromRow(row);
+        const rd = buildRd(meta);
+        if (singleFilter[cat].includes(rd[cat])) {
+          const balls = rowBalls(row);
+          if (currentMode === "歷史模式") {
+            balls.forEach(n => { if(n <= gameMax) counts[n]++; });
+          } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
+            if (selNums.some(sn => balls.includes(sn)) && validRows[idx+1]) {
+              rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+            }
+          } else if (currentMode === "當期對碰") {
+            if (selNums.every(sn => balls.includes(sn))) {
               balls.forEach(n => { if(n <= gameMax) counts[n]++; });
-            } else if ((currentMode === "拖牌模式" || currentMode === "下期對碰") && validRows[idx+1]) {
-              if (selNums.some(sn => balls.includes(sn))) {
-                rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
-              }
             }
           }
-        });
-        addRowToGroup(group, `${cat}: ${val}`, counts);
-      });
-    }
-  });
-
-  // 當期對碰的號碼明細
-  if (currentMode === "當期對碰" && selNums.length > 0) {
-    selNums.forEach(num => {
-      const counts = Array(gameMax + 1).fill(0);
-      validRows.forEach(row => {
-        if (!matchFilters(buildRd(rowMetaFromRow(row)), filters)) return;
-        const balls = rowBalls(row);
-        if (balls.includes(num)) {
-          balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
         }
       });
-      addRowToGroup(group, `號碼: ${num} 同現統計`, counts);
+      addRowToGroup(group, `${cat}: ${val}`, counts);
+    });
+  });
+
+  // --- 邏輯 2: 處理號碼拆分 (針對拖牌/對碰，號碼分開呈現) ---
+  if (currentMode !== "歷史模式" && selNums.length > 0) {
+    selNums.forEach(num => {
+      const counts = Array(gameMax + 1).fill(0);
+      validRows.forEach((row, idx) => {
+        const meta = rowMetaFromRow(row);
+        const rd = buildRd(meta);
+        // 符合總體標籤篩選
+        if (!matchFilters(rd, filters)) return;
+
+        const balls = rowBalls(row);
+        if (balls.includes(num)) {
+          if ((currentMode === "拖牌模式" || currentMode === "下期對碰") && validRows[idx+1]) {
+            rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+          } else if (currentMode === "當期對碰") {
+            balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
+          }
+        }
+      });
+      addRowToGroup(group, `號碼: ${num}`, counts);
     });
   }
 
+  // 儲存並切換
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
