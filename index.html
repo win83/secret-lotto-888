@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>專業樂透統計系統 V2.1 - 邏輯修正版（報表逐筆+加總+單張刪除+爸節氣篩選）</title>
+  <title>專業樂透統計系統 V2.1 - 邏輯修正版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -143,7 +143,6 @@ function parseYMD(dateCell){
   const s = String(dateCell || "").trim();
   if(!s) return {y:"", m:"", d:""};
 
-  // 支援：yyyy/mm/dd、yyyy-mm-dd、yyyy.mm.dd、後面有時間
   const m1 = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if(!m1) return {y:"", m:"", d:""};
 
@@ -168,7 +167,6 @@ function calcWeekday(y,m,d){
   return map[dt.getDay()];
 }
 
-// 日干支（基準：1984-02-02 = 甲子日）
 const STEMS = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
 const BRANCHES = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
 
@@ -180,7 +178,7 @@ function jdnFromYMD(y,m,d){
   const mm = M + 12*a - 3;
   return D + Math.floor((153*mm + 2)/5) + 365*yy + Math.floor(yy/4) - Math.floor(yy/100) + Math.floor(yy/400) - 32045;
 }
-const BASE_JDN = jdnFromYMD("1984","2","2"); // 甲子日
+const BASE_JDN = jdnFromYMD("1984","2","2");
 function ganzhiOfDay(y,m,d){
   const jdn = jdnFromYMD(y,m,d);
   if(!Number.isFinite(jdn) || !Number.isFinite(BASE_JDN)) return {stem:"", branch:""};
@@ -188,12 +186,7 @@ function ganzhiOfDay(y,m,d){
   return { stem: STEMS[idx % 10], branch: BRANCHES[idx % 12] };
 }
 
-/* =========================
-   節氣（爸模式用）
-   - 從 row 的 C~F(索引 2~5) 內尋找 S0..S15 / T0..T15
-   ========================= */
 function extractJieqiFromRow(row){
-  // 只給爸用；哥模式不需要也不顯示
   if(currentUser !== "dad") return "";
   const re = /^(S|T)(?:[0-9]|1[0-5])$/i;
   for(let i=2;i<=5;i++){
@@ -205,48 +198,47 @@ function extractJieqiFromRow(row){
 function buildJieqiOptions(){
   const S = Array.from({length:16},(_,i)=>`S${i}`);
   const T = Array.from({length:16},(_,i)=>`T${i}`);
-  return [...S, ...T]; // 用 brk=16 斷行
+  return [...S, ...T];
 }
 
-/* =========================
-   爸/哥 起算日
-   ========================= */
 function startKeyByUser(){ return (currentUser === "dad") ? 20200101 : 20060101; }
 function startYearByUser(){ return (currentUser === "dad") ? 2020 : 2006; }
 
 /* =========================
-   球號欄位（依遊戲）
-   539: 5顆 G~K => slice(6,11)
-   Lotto: 6顆 G~L => slice(6,12)
+   修正核心：球號欄位讀取與驗證
    ========================= */
-function ballSliceEnd(){
-  // Lotto 抓到 M 欄（含特別號或空欄）
-  return (currentGame === "539") ? 11 : 13;
-}
-
 function requiredBallCount(){
-  // 539 必須剛好 5 顆
-  if(currentGame === "539") return 5;
-
-  // Lotto：至少 6 顆（避免空欄/特別號干擾）
-  return 6;
+  return (currentGame === "539") ? 5 : 6; 
 }
 
 function rowBalls(row){
+  // 修正：大樂透 CSV 可能有特別號，我們從索引 6 開始往後抓 7 欄，並過濾掉非數字
+  let limit = (currentGame === "539") ? 39 : 49;
+  let endIdx = (currentGame === "539") ? 11 : 13;
   return row
-    .slice(6, ballSliceEnd())
-    .map(v => parseInt(v,10))
-    .filter(n => Number.isFinite(n) && n > 0);
+    .slice(6, endIdx)
+    .map(v => parseInt(String(v).trim(), 10))
+    .filter(n => !isNaN(n) && n > 0 && n <= limit);
 }
 
 function hasEnoughBalls(row){
-  return rowBalls(row).length >= requiredBallCount();
+  const balls = rowBalls(row);
+  return balls.length >= requiredBallCount();
 }
+
 function getValidRows(){
   const sk = startKeyByUser();
   return cloudData.filter(row => {
+    if (!row || row.length < 7) return false; 
     const {y,m,d} = parseYMD(row[1]);
-    const k = ymdKey(y,m,d);
+    let k = ymdKey(y,m,d);
+    
+    // 如果 B 欄不是日期，嘗試檢查 A 欄 (部分大樂透格式日期在 A)
+    if(isNaN(k)) {
+        const alt = parseYMD(row[0]);
+        k = ymdKey(alt.y, alt.m, alt.d);
+    }
+
     if(!Number.isFinite(k) || k < sk) return false;
     if(!hasEnoughBalls(row)) return false;
     return true;
@@ -254,7 +246,7 @@ function getValidRows(){
 }
 
 /* =========================
-   報表：群組模型 + 逐筆 + Sum
+   其餘功能保持原樣
    ========================= */
 function newGroup(mode, title){
   return {
@@ -272,12 +264,8 @@ function addRowToGroup(group, label, dataArr){
   }
 }
 
-/* =========================
-   篩選讀取 / 比對
-   ========================= */
 function getSelectedFilters(){
   const filters = {};
-  // 節氣只有爸模式顯示/可選
   const keys = (currentUser === "dad")
     ? ["年份","月份","日期","星期","天干","地支","節氣"]
     : ["年份","月份","日期","星期","天干","地支"];
@@ -298,7 +286,8 @@ function fmtFilters(filters){
   return Object.entries(filters).map(([k,v])=>`${k}:${v.join(',')}`).join(' + ') || "無條件";
 }
 function rowMetaFromRow(row){
-  const {y,m,d} = parseYMD(row[1]);
+  let {y,m,d} = parseYMD(row[1]);
+  if(!y) { const alt = parseYMD(row[0]); y=alt.y; m=alt.m; d=alt.d; }
   const w = calcWeekday(y,m,d);
   const gz = ganzhiOfDay(y,m,d);
   const jq = extractJieqiFromRow(row);
@@ -323,9 +312,6 @@ function matchFilters(rd, filters){
   return true;
 }
 
-/* =========================
-   UI 初始化
-   ========================= */
 function switchUser(role) {
   currentUser = role;
   document.getElementById('mode-dad').classList.toggle('btn-cyan', role==='dad');
@@ -339,12 +325,10 @@ function initFilters() {
   document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
 
   const grid = document.getElementById('filterGrid'); grid.innerHTML = '';
-
   const yStart = startYearByUser();
   const yEnd = 2026;
   const years = Array.from({length: yEnd - yStart + 1}, (_, i) => yStart + i);
 
-  // ✅ 節氣放在號碼上面（只在爸模式顯示）
   const sections = [
     {lbl:"年份", d: years},
     {lbl:"月份", d:Array.from({length: 12}, (_, i) => i + 1)},
@@ -352,18 +336,14 @@ function initFilters() {
     {lbl:"星期", d: ["一","二","三","四","五","六","日"]},
     {lbl:"天干", d: STEMS},
     {lbl:"地支", d: BRANCHES},
-    {lbl:"節氣", d: buildJieqiOptions(), brk:16}, // S0~S15 / T0~T15 兩行
+    {lbl:"節氣", d: buildJieqiOptions(), brk:16},
     {lbl:"號碼", d: Array.from({length:maxNum}, (_,i)=>String(i+1).padStart(2,'0')), brk:25}
   ];
 
   sections.forEach(sec => {
     const isSB = (sec.lbl === "天干" || sec.lbl === "地支");
     const isJQ = (sec.lbl === "節氣");
-
-    // 哥模式：天干地支不顯示；節氣也不顯示
     const hidden = (currentUser === "bro" && (isSB || isJQ)) ? "hidden" : "";
-
-    // 節氣只給爸：若是哥，整列隱藏
     grid.innerHTML += `<div class="lbl ${hidden}">${sec.lbl}</div>`;
     let html = `<div class="chips ${hidden}" data-label="${sec.lbl}">`;
     sec.d.forEach((v, i) => {
@@ -389,9 +369,6 @@ function updateStatTableUI() {
 
 function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
 
-/* =========================
-   讀取雲端 CSV
-   ========================= */
 function fetchSheetData(callback) {
   document.getElementById('loadingOverlay').style.display = 'flex';
   Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(), {
@@ -405,24 +382,18 @@ function fetchSheetData(callback) {
   });
 }
 
-/* =========================
-   即時統計
-   ========================= */
 function updateStats() {
   if(!cloudData.length) return;
-
   const filters = getSelectedFilters();
   const catCount = Object.keys(filters).length;
   const selNums = getSelectedNums();
   const counts = Array(maxNum + 1).fill(0);
-
   const validRows = getValidRows();
 
   validRows.forEach((row, idx) => {
     const meta = rowMetaFromRow(row);
     const rd = buildRd(meta);
     if(!matchFilters(rd, filters)) return;
-
     const nums = rowBalls(row);
 
     if (currentMode === "歷史模式") {
@@ -441,7 +412,6 @@ function updateStats() {
 
   const sorted = [...counts].sort((a,b)=>b-a);
   const threshold = sorted[4] > 0 ? sorted[4] : 999;
-
   const sk = startKeyByUser();
   const skStr = `${String(Math.floor(sk/10000))}/${String(Math.floor((sk%10000)/100)).padStart(2,'0')}/${String(sk%100).padStart(2,'0')}`;
   document.getElementById('filterCounter').textContent =
@@ -451,7 +421,6 @@ function updateStats() {
     const td = document.getElementById(`val1-${i}`);
     td.textContent = counts[i] || 0;
     td.className = (counts[i] >= threshold && counts[i] > 0) ? "top5" : "";
-
     let gap = 0;
     for(let j=validRows.length-1; j>=0; j--){
       if(rowBalls(validRows[j]).includes(i)) break;
@@ -461,111 +430,68 @@ function updateStats() {
   }
 }
 
-/* =========================
-   加入報表（逐筆+加總）
-   ========================= */
 function addToReport(){
   if(!cloudData.length) return alert("尚未載入資料");
   const validRows = getValidRows();
   if(!validRows.length) return alert("無有效資料列");
-
   const filters = getSelectedFilters();
   const selNums = getSelectedNums();
 
-  // 歷史
   if(currentMode === "歷史模式"){
     const title = `【歷史】${fmtFilters(filters)} |（符合條件）出現次數統計`;
     const group = newGroup(currentMode, title);
-
     const counts = Array(maxNum + 1).fill(0);
     validRows.forEach(row=>{
       const meta = rowMetaFromRow(row);
       const rd = buildRd(meta);
       if(!matchFilters(rd, filters)) return;
-      const nums = rowBalls(row);
-      nums.forEach(n=>{ if(n<=maxNum) counts[n]++; });
+      rowBalls(row).forEach(n=>{ if(n<=maxNum) counts[n]++; });
     });
-
     addRowToGroup(group, "全部(符合條件)出現次數", counts);
     reportStorage[currentUser][currentGame].push(group);
     renderCurrentReports();
     document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-    return;
-  }
-
-  // 當期對碰
-  if(currentMode === "當期對碰"){
+  } else if(currentMode === "當期對碰"){
     if(selNums.length < 2) return alert("當期對碰：請至少選 2 個號碼");
     const title = `【當期對碰】${fmtFilters(filters)} | 選號:${selNums.join(',')}（每行=主號碼共現次數）`;
     const group = newGroup(currentMode, title);
-
     selNums.forEach(mainNum=>{
       const counts = Array(maxNum + 1).fill(0);
       validRows.forEach(row=>{
         const meta = rowMetaFromRow(row);
         const rd = buildRd(meta);
         if(!matchFilters(rd, filters)) return;
-
         const nums = rowBalls(row);
         if(!nums.includes(mainNum)) return;
-
-        nums.forEach(n=>{
-          if(n<=maxNum && n!==mainNum) counts[n]++;
-        });
+        nums.forEach(n=>{ if(n<=maxNum && n!==mainNum) counts[n]++; });
       });
-
       addRowToGroup(group, `主號碼 ${mainNum}（共現統計）`, counts);
     });
-
     reportStorage[currentUser][currentGame].push(group);
     renderCurrentReports();
     document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-    return;
-  }
-
-  // 拖牌 / 下期對碰
-  if(currentMode === "拖牌模式" || currentMode === "下期對碰"){
+  } else if(currentMode === "拖牌模式" || currentMode === "下期對碰"){
     if(selNums.length === 0) return alert("拖牌/下期對碰：請選前期號碼（可多選）");
-
-    const preFilters = filters;
-    const postFilters = filters; // 仍維持單套（你要拆前/後期時再進一步改）
-
-    const title = `【${currentMode.replace('模式','')}】前期:${fmtFilters(preFilters)} | 後期:${fmtFilters(postFilters)} | 前期號碼:${selNums.join(',')}`;
+    const title = `【${currentMode.replace('模式','')}】前期:${fmtFilters(filters)} | 前期號碼:${selNums.join(',')}`;
     const group = newGroup(currentMode, title);
-
     selNums.forEach(preNum=>{
       const counts = Array(maxNum + 1).fill(0);
-
       for(let idx=0; idx<validRows.length-1; idx++){
         const row = validRows[idx];
         const nxt = validRows[idx+1];
-
-        const rd1 = buildRd(rowMetaFromRow(row));
-        const rd2 = buildRd(rowMetaFromRow(nxt));
-
-        if(!matchFilters(rd1, preFilters)) continue;
-        if(!matchFilters(rd2, postFilters)) continue;
-
-        const nums1 = rowBalls(row);
-        if(!nums1.includes(preNum)) continue;
-
-        const nums2 = rowBalls(nxt);
-        nums2.forEach(n=>{ if(n<=maxNum) counts[n]++; });
+        if(!matchFilters(buildRd(rowMetaFromRow(row)), filters)) continue;
+        if(!matchFilters(buildRd(rowMetaFromRow(nxt)), filters)) continue;
+        if(!rowBalls(row).includes(preNum)) continue;
+        rowBalls(nxt).forEach(n=>{ if(n<=maxNum) counts[n]++; });
       }
-
       addRowToGroup(group, `前期號碼 ${preNum} → 後期出現次數`, counts);
     });
-
     reportStorage[currentUser][currentGame].push(group);
     renderCurrentReports();
     document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-    return;
   }
 }
 
-/* =========================
-   報表渲染 + 單張刪除
-   ========================= */
 function deleteReport(groupId){
   const list = reportStorage[currentUser][currentGame];
   const idx = list.findIndex(g => g.id === groupId);
@@ -578,84 +504,38 @@ function deleteReport(groupId){
 function renderCurrentReports() {
   const cont = document.getElementById('reportContainer');
   cont.innerHTML = '';
-
   const groups = reportStorage[currentUser][currentGame];
   if(!groups.length) return;
 
   let html = '';
   groups.forEach((g, gi) => {
-    html += `
-      <div class="report-item">
-        <div class="report-header">
-          <div class="title">【第 ${gi+1} 張】${g.title}</div>
-          <button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button>
-        </div>
-        <table class="report-table">
-          <thead>
-            <tr>
-              <td class="cond-col">明細(每條件一筆)</td>
-              ${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}
-            </tr>
-          </thead>
-          <tbody class="report-body">
-    `;
-
+    html += `<div class="report-item"><div class="report-header"><div class="title">【第 ${gi+1} 張】${g.title}</div><button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button></div><table class="report-table"><thead><tr><td class="cond-col">明細(每條件一筆)</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
     g.rows.forEach(r=>{
       const sorted = [...r.data].slice(1).sort((a,b)=>b-a);
       const threshold = (sorted[4] > 0) ? sorted[4] : 999;
-
-      html += `
-        <tr>
-          <td class="cond-col">${r.label}</td>
-          ${r.data.slice(1).map(v => {
-            const vv = v||0;
-            const cls = (vv >= threshold && vv > 0) ? 'top5' : '';
-            return `<td class="${cls}">${vv ? vv : ''}</td>`;
-          }).join('')}
-        </tr>
-      `;
+      html += `<tr><td class="cond-col">${r.label}</td>${r.data.slice(1).map(v => {
+        const vv = v||0; const cls = (vv >= threshold && vv > 0) ? 'top5' : '';
+        return `<td class="${cls}">${vv ? vv : ''}</td>`;
+      }).join('')}</tr>`;
     });
-
     const sumSorted = [...g.sum].slice(1).sort((a,b)=>b-a);
     const sumTh = (sumSorted[4] > 0) ? sumSorted[4] : 999;
-
-    html += `
-          </tbody>
-          <tfoot>
-            <tr class="sum-row">
-              <td class="cond-col">加總 (Sum)</td>
-              ${g.sum.slice(1).map(v=>{
-                const vv = v||0;
-                const cls = (vv >= sumTh && vv > 0) ? 'top5' : '';
-                return `<td class="${cls}">${vv ? vv : ''}</td>`;
-              }).join('')}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    `;
+    html += `</tbody><tfoot><tr class="sum-row"><td class="cond-col">加總 (Sum)</td>${g.sum.slice(1).map(v=>{
+      const vv = v||0; const cls = (vv >= sumTh && vv > 0) ? 'top5' : '';
+      return `<td class="${cls}">${vv ? vv : ''}</td>`;
+    }).join('')}</tr></tfoot></table></div>`;
   });
-
   cont.innerHTML = html;
 }
 
-/* =========================
-   模式切換 / tabs
-   ========================= */
 function changeMode(mode, btn) {
   currentMode = (mode.includes('模式')) ? mode : mode + '模式';
   syncModeButtons();
-  if(document.getElementById('mainPage').classList.contains('active')) {
-    updateStats();
-  } else {
-    renderCurrentReports();
-  }
+  if(document.getElementById('mainPage').classList.contains('active')) { updateStats(); } else { renderCurrentReports(); }
 }
 
 function syncModeButtons() {
-  document.querySelectorAll('.mode-btn').forEach(b => {
-    b.classList.toggle('btn-orange', b.textContent === currentMode);
-  });
+  document.querySelectorAll('.mode-btn').forEach(b => { b.classList.toggle('btn-orange', b.textContent === currentMode); });
   document.querySelectorAll('.rpt-mode-btn').forEach(b => {
     const simpleMode = currentMode.replace('模式', '');
     b.classList.toggle('btn-orange', b.textContent === simpleMode);
@@ -665,28 +545,20 @@ function syncModeButtons() {
 function selectToday() {
   clearFilters();
   fetchSheetData((lastRow) => {
-    const {y,m,d} = parseYMD(lastRow[1]);
-    if(m) autoClick('月份', m);
-    if(d) autoClick('日期', d);
-    const w = calcWeekday(y,m,d);
-    if(w) autoClick('星期', w);
-
+    const meta = rowMetaFromRow(lastRow);
+    if(meta.m) autoClick('月份', meta.m);
+    if(meta.d) autoClick('日期', meta.d);
+    if(meta.w) autoClick('星期', meta.w);
     if(currentUser === 'dad'){
-      const gz = ganzhiOfDay(y,m,d);
-      if(gz.stem) autoClick('天干', gz.stem);
-      if(gz.branch) autoClick('地支', gz.branch);
-
-      // 節氣：從 lastRow 的 C~F 抓
-      const jq = extractJieqiFromRow(lastRow);
-      if(jq) autoClick('節氣', jq);
+      if(meta.stem) autoClick('天干', meta.stem);
+      if(meta.branch) autoClick('地支', meta.branch);
+      if(meta.jieqi) autoClick('節氣', meta.jieqi);
     }
-
     updateStats();
   });
 }
 
 function autoClick(label, val) {
-  if(val === null || val === undefined || val === "") return;
   const vv = String(val).trim();
   const c = document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${vv}"]`);
   if(c) c.classList.add('on');
@@ -701,10 +573,7 @@ function exportToExcel() {
 
 function clearFilters() { document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on')); updateStats(); }
 function clearAllReports() {
-  if(confirm("確定清空？")) {
-    reportStorage[currentUser][currentGame] = [];
-    renderCurrentReports();
-  }
+  if(confirm("確定清空？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); }
 }
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -713,24 +582,12 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(tab.dataset.target).classList.add('active');
-if(tab.dataset.target === 'mainPage') {
-  initFilters();
-  fetchSheetData();   // ⭐⭐⭐ 必須重新抓 CSV
-    } else {
-      renderCurrentReports();
-      syncModeButtons();
-    }
+    if(tab.dataset.target === 'mainPage') { initFilters(); fetchSheetData(); } else { renderCurrentReports(); syncModeButtons(); }
   });
 });
 
-/* =========================
-   啟動
-   ========================= */
 initFilters();
 fetchSheetData();
 </script>
 </body>
 </html>
-
-
-
