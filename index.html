@@ -420,6 +420,9 @@ function updateStats() {
 /* =========================
    報表生成邏輯：精確交叉配對 (前期標籤+號碼 -> 後期標籤統計)
    ========================= */
+/* =========================
+   報表生成邏輯：僅顯示紅框標示的「前期條件+號碼」交叉明細
+   ========================= */
 function addToReport() {
   if (!cloudData.length) return alert("尚未載入資料");
   const validRows = getValidRows();
@@ -429,48 +432,47 @@ function addToReport() {
   const selNums = getSelectedNums();   
   const gameMax = (currentGame === "539") ? 39 : 49;
 
-  // 取得所有選取的標籤類別 (如：天干、地支、星期等)
-  const filterKeys = Object.keys(filters);
-  
-  // 建立報表主體
-  const group = newGroup(currentMode, `【精確拖牌】${fmtFilters(filters)} | 號碼:${selNums.join(',')}`);
+  // 建立報表主體，標題顯示目前所有篩選條件
+  const group = newGroup(currentMode, `【拖牌模式】${fmtFilters(filters)} | 號碼:${selNums.join(',')}`);
 
-  // --- 核心邏輯：交叉配對篩選 ---
-  // 遍歷所有選取的標籤類別
+  // 取得所有選取的類別 (如：星期、天干、地支)
+  const filterKeys = Object.keys(filters);
+
+  // --- 核心邏輯：依照紅框需求，僅產生「前期條件 + 號碼」的統計列 ---
   filterKeys.forEach(cat => {
     const vals = filters[cat];
     
-    // 如果選取了至少 2 個值 (例如丙、丁)
+    // 判斷是否符合您說的「固定選2個」(例如：丙、丁)
+    // 第一個值 (vals[0]) 為前期發動條件，第二個值 (vals[1]) 為後期指定環境
     if (vals.length >= 2) {
-      const preVal = vals[0];  // 取第一個為前期條件 (丙)
-      const postVal = vals[1]; // 取第二個為後期對比條件 (丁)
+      const preConditionVal = vals[0];  
+      const postConditionVal = vals[1]; 
 
       selNums.forEach(num => {
         const counts = Array(gameMax + 1).fill(0);
-        let matchCount = 0;
 
         for (let i = 0; i < validRows.length - 1; i++) {
           const currentRd = buildRd(rowMetaFromRow(validRows[i]));    // 前期資料
           const nextRd = buildRd(rowMetaFromRow(validRows[i+1]));     // 下期資料
-          const currentBalls = rowBalls(validRows[i]);               // 前期號碼
-          const nextBalls = rowBalls(validRows[i+1]);                // 下期號碼
+          const currentBalls = rowBalls(validRows[i]);               // 前期球號
+          const nextBalls = rowBalls(validRows[i+1]);                // 下期球號
 
-          // 精確匹配：前期是丙 + 前期有號碼 + 下期是丁
-          if (currentRd[cat] === preVal && 
+          // 嚴格篩選：前期符合條件1 (如:丙) + 前期包含號碼 + 下期符合條件2 (如:丁)
+          if (currentRd[cat] === preConditionVal && 
               currentBalls.includes(num) && 
-              nextRd[cat] === postVal) {
+              nextRd[cat] === postConditionVal) {
             
-            matchCount++;
+            // 統計該情況下的後期球號出現次數
             nextBalls.forEach(n => { if(n <= gameMax) counts[n]++; });
           }
         }
 
-        // 加入明細行，標籤顯示：前期(丙)+號碼 -> 後期(丁)
-        const rowLabel = `前期 ${cat}:${preVal} + 號碼:${num} (限後其為${postVal})`;
+        // 僅加入此明細行至報表 (對應您紅框內的顯示格式)
+        const rowLabel = `前期 ${cat}:${preConditionVal} + 號碼:${num}`;
         addRowToGroup(group, rowLabel, counts);
       });
     } else {
-      // 若該類別只選 1 個，則執行一般拖牌統計
+      // 若該類別僅選 1 個，則執行一般「前期條件+號碼」對「下期不限條件」的統計
       vals.forEach(val => {
         selNums.forEach(num => {
           const counts = Array(gameMax + 1).fill(0);
@@ -486,7 +488,7 @@ function addToReport() {
     }
   });
 
-  // 儲存並跳轉報表
+  // 儲存並自動切換至報表頁面
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
@@ -595,5 +597,6 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
 
