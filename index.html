@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>專業樂透統計系統 V2.1 - 邏輯修正版</title>
+  <title>專業樂透統計系統 V2.2 - 報表自動拆分版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -205,14 +205,13 @@ function startKeyByUser(){ return (currentUser === "dad") ? 20200101 : 20060101;
 function startYearByUser(){ return (currentUser === "dad") ? 2020 : 2006; }
 
 /* =========================
-   修正核心：球號欄位讀取與驗證
+   球號欄位讀取與驗證
    ========================= */
 function requiredBallCount(){
   return (currentGame === "539") ? 5 : 6; 
 }
 
 function rowBalls(row){
-  // 修正：大樂透 CSV 可能有特別號，我們從索引 6 開始往後抓 7 欄，並過濾掉非數字
   let limit = (currentGame === "539") ? 39 : 49;
   let endIdx = (currentGame === "539") ? 11 : 13;
   return row
@@ -232,22 +231,16 @@ function getValidRows(){
     if (!row || row.length < 7) return false; 
     const {y,m,d} = parseYMD(row[1]);
     let k = ymdKey(y,m,d);
-    
-    // 如果 B 欄不是日期，嘗試檢查 A 欄 (部分大樂透格式日期在 A)
     if(isNaN(k)) {
         const alt = parseYMD(row[0]);
         k = ymdKey(alt.y, alt.m, alt.d);
     }
-
     if(!Number.isFinite(k) || k < sk) return false;
     if(!hasEnoughBalls(row)) return false;
     return true;
   });
 }
 
-/* =========================
-   其餘功能保持原樣
-   ========================= */
 function newGroup(mode, title){
   return {
     id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -323,12 +316,10 @@ function switchUser(role) {
 function initFilters() {
   maxNum = (currentGame === "539") ? 39 : 49;
   document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
-
   const grid = document.getElementById('filterGrid'); grid.innerHTML = '';
   const yStart = startYearByUser();
   const yEnd = 2026;
   const years = Array.from({length: yEnd - yStart + 1}, (_, i) => yStart + i);
-
   const sections = [
     {lbl:"年份", d: years},
     {lbl:"月份", d:Array.from({length: 12}, (_, i) => i + 1)},
@@ -339,7 +330,6 @@ function initFilters() {
     {lbl:"節氣", d: buildJieqiOptions(), brk:16},
     {lbl:"號碼", d: Array.from({length:maxNum}, (_,i)=>String(i+1).padStart(2,'0')), brk:25}
   ];
-
   sections.forEach(sec => {
     const isSB = (sec.lbl === "天干" || sec.lbl === "地支");
     const isJQ = (sec.lbl === "節氣");
@@ -352,7 +342,6 @@ function initFilters() {
     });
     grid.innerHTML += html + `</div>`;
   });
-
   updateStatTableUI();
   syncModeButtons();
 }
@@ -389,13 +378,11 @@ function updateStats() {
   const selNums = getSelectedNums();
   const counts = Array(maxNum + 1).fill(0);
   const validRows = getValidRows();
-
   validRows.forEach((row, idx) => {
     const meta = rowMetaFromRow(row);
     const rd = buildRd(meta);
     if(!matchFilters(rd, filters)) return;
     const nums = rowBalls(row);
-
     if (currentMode === "歷史模式") {
       nums.forEach(n => { if(n <= maxNum) counts[n]++; });
     } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
@@ -409,14 +396,12 @@ function updateStats() {
       }
     }
   });
-
   const sorted = [...counts].sort((a,b)=>b-a);
   const threshold = sorted[4] > 0 ? sorted[4] : 999;
   const sk = startKeyByUser();
   const skStr = `${String(Math.floor(sk/10000))}/${String(Math.floor((sk%10000)/100)).padStart(2,'0')}/${String(sk%100).padStart(2,'0')}`;
   document.getElementById('filterCounter').textContent =
     `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length} | 起算日:${skStr}`;
-
   for(let i=1; i<=maxNum; i++){
     const td = document.getElementById(`val1-${i}`);
     td.textContent = counts[i] || 0;
@@ -430,65 +415,86 @@ function updateStats() {
   }
 }
 
-function addToReport(){
-  if(!cloudData.length) return alert("尚未載入資料");
+/* =========================
+   修正核心：自動拆分報表顯示邏輯
+   ========================= */
+function addToReport() {
+  if (!cloudData.length) return alert("尚未載入資料");
   const validRows = getValidRows();
-  if(!validRows.length) return alert("無有效資料列");
+  if (!validRows.length) return alert("無有效資料列");
+  
   const filters = getSelectedFilters();
   const selNums = getSelectedNums();
+  const categories = Object.keys(filters);
 
-  if(currentMode === "歷史模式"){
-    const title = `【歷史】${fmtFilters(filters)} |（符合條件）出現次數統計`;
-    const group = newGroup(currentMode, title);
-    const counts = Array(maxNum + 1).fill(0);
-    validRows.forEach(row=>{
-      const meta = rowMetaFromRow(row);
-      const rd = buildRd(meta);
-      if(!matchFilters(rd, filters)) return;
-      rowBalls(row).forEach(n=>{ if(n<=maxNum) counts[n]++; });
-    });
-    addRowToGroup(group, "全部(符合條件)出現次數", counts);
-    reportStorage[currentUser][currentGame].push(group);
-    renderCurrentReports();
-    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-  } else if(currentMode === "當期對碰"){
-    if(selNums.length < 2) return alert("當期對碰：請至少選 2 個號碼");
-    const title = `【當期對碰】${fmtFilters(filters)} | 選號:${selNums.join(',')}（每行=主號碼共現次數）`;
-    const group = newGroup(currentMode, title);
-    selNums.forEach(mainNum=>{
-      const counts = Array(maxNum + 1).fill(0);
-      validRows.forEach(row=>{
-        const meta = rowMetaFromRow(row);
-        const rd = buildRd(meta);
-        if(!matchFilters(rd, filters)) return;
-        const nums = rowBalls(row);
-        if(!nums.includes(mainNum)) return;
-        nums.forEach(n=>{ if(n<=maxNum && n!==mainNum) counts[n]++; });
+  // 如果完全沒選條件，則按原本邏輯加一張報表
+  if (categories.length === 0) {
+    processAndAddSingleGroup(filters, selNums, validRows);
+  } else {
+    // 遍歷所有選中的類別 (如年份、月份)
+    categories.forEach(cat => {
+      // 遍歷該類別下的所有選中值 (如 2024, 2025)
+      filters[cat].forEach(val => {
+        const singleFilter = {};
+        singleFilter[cat] = [val];
+        processAndAddSingleGroup(singleFilter, selNums, validRows);
       });
-      addRowToGroup(group, `主號碼 ${mainNum}（共現統計）`, counts);
     });
-    reportStorage[currentUser][currentGame].push(group);
-    renderCurrentReports();
-    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
-  } else if(currentMode === "拖牌模式" || currentMode === "下期對碰"){
-    if(selNums.length === 0) return alert("拖牌/下期對碰：請選前期號碼（可多選）");
-    const title = `【${currentMode.replace('模式','')}】前期:${fmtFilters(filters)} | 前期號碼:${selNums.join(',')}`;
-    const group = newGroup(currentMode, title);
-    selNums.forEach(preNum=>{
-      const counts = Array(maxNum + 1).fill(0);
-      for(let idx=0; idx<validRows.length-1; idx++){
-        const row = validRows[idx];
-        const nxt = validRows[idx+1];
-        if(!matchFilters(buildRd(rowMetaFromRow(row)), filters)) continue;
-        if(!matchFilters(buildRd(rowMetaFromRow(nxt)), filters)) continue;
-        if(!rowBalls(row).includes(preNum)) continue;
-        rowBalls(nxt).forEach(n=>{ if(n<=maxNum) counts[n]++; });
+  }
+
+  renderCurrentReports();
+  document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
+}
+
+// 輔助函式：針對單一過濾條件生成對應報表物件
+function processAndAddSingleGroup(singleFilter, selNums, validRows) {
+  let group = null;
+  const filterDesc = fmtFilters(singleFilter);
+
+  if (currentMode === "歷史模式") {
+    group = newGroup(currentMode, `【歷史】${filterDesc} | 出現統計`);
+    const counts = Array(maxNum + 1).fill(0);
+    validRows.forEach(row => {
+      if (matchFilters(buildRd(rowMetaFromRow(row)), singleFilter)) {
+        rowBalls(row).forEach(n => { if (n <= maxNum) counts[n]++; });
       }
-      addRowToGroup(group, `前期號碼 ${preNum} → 後期出現次數`, counts);
     });
+    addRowToGroup(group, "出現次數", counts);
+  } 
+  else if (currentMode === "當期對碰") {
+    if (selNums.length < 2) return; 
+    group = newGroup(currentMode, `【當期對碰】${filterDesc} | 選號:${selNums.join(',')}`);
+    selNums.forEach(mainNum => {
+      const counts = Array(maxNum + 1).fill(0);
+      validRows.forEach(row => {
+        if (matchFilters(buildRd(rowMetaFromRow(row)), singleFilter)) {
+          const nums = rowBalls(row);
+          if (nums.includes(mainNum)) {
+            nums.forEach(n => { if (n <= maxNum && n !== mainNum) counts[n]++; });
+          }
+        }
+      });
+      addRowToGroup(group, `主號碼 ${mainNum} 共現`, counts);
+    });
+  } 
+  else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
+    if (selNums.length === 0) return;
+    group = newGroup(currentMode, `【${currentMode.replace('模式','')}】${filterDesc} | 前期:${selNums.join(',')}`);
+    selNums.forEach(preNum => {
+      const counts = Array(maxNum + 1).fill(0);
+      for (let idx = 0; idx < validRows.length - 1; idx++) {
+        if (matchFilters(buildRd(rowMetaFromRow(validRows[idx])), singleFilter)) {
+          if (rowBalls(validRows[idx]).includes(preNum)) {
+            rowBalls(validRows[idx + 1]).forEach(n => { if (n <= maxNum) counts[n]++; });
+          }
+        }
+      }
+      addRowToGroup(group, `前期 ${preNum} 拖牌統計`, counts);
+    });
+  }
+
+  if (group) {
     reportStorage[currentUser][currentGame].push(group);
-    renderCurrentReports();
-    document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`).click();
   }
 }
 
@@ -506,10 +512,9 @@ function renderCurrentReports() {
   cont.innerHTML = '';
   const groups = reportStorage[currentUser][currentGame];
   if(!groups.length) return;
-
   let html = '';
   groups.forEach((g, gi) => {
-    html += `<div class="report-item"><div class="report-header"><div class="title">【第 ${gi+1} 張】${g.title}</div><button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button></div><table class="report-table"><thead><tr><td class="cond-col">明細(每條件一筆)</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
+    html += `<div class="report-item"><div class="report-header"><div class="title">【第 ${gi+1} 張】${g.title}</div><button class="btn btn-red" onclick="deleteReport('${g.id}')">刪除此報表</button></div><table class="report-table"><thead><tr><td class="cond-col">統計項目</td>${Array.from({length:maxNum},(_,i)=>`<td>${i+1}</td>`).join('')}</tr></thead><tbody class="report-body">`;
     g.rows.forEach(r=>{
       const sorted = [...r.data].slice(1).sort((a,b)=>b-a);
       const threshold = (sorted[4] > 0) ? sorted[4] : 999;
