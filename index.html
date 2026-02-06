@@ -468,8 +468,8 @@ function addToReport() {
         }
 
         // 僅加入此明細行至報表 (對應您紅框內的顯示格式)
-        const rowLabel = `前期 ${cat}:${preConditionVal} + 號碼:${num}`;
-        addRowToGroup(group, rowLabel, counts);
+          const rowLabel = `前期 ${cat}:${preVal} + 號碼:${num} 拖出 -> ${postVal}`;
+          addRowToGroup(group, rowLabel, counts);
       });
     } else {
       // 若該類別僅選 1 個，則執行一般「前期條件+號碼」對「下期不限條件」的統計
@@ -597,6 +597,7 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
 
 
