@@ -214,7 +214,14 @@ function startYearByUser(){ return (currentUser === "dad") ? 2020 : 2006; }
    Lotto: 6顆 G~L => slice(6,12)
    ========================= */
 function ballSliceEnd(){ return (currentGame === "539") ? 11 : 12; }
-function requiredBallCount(){ return (currentGame === "539") ? 5 : 6; }
+function requiredBallCount(){
+  // 539 必須剛好 5 顆
+  if(currentGame === "539") return 5;
+
+  // Lotto：至少 6 顆（避免空欄/特別號干擾）
+  return 6;
+}
+
 function rowBalls(row){
   return row.slice(6, ballSliceEnd()).map(v => parseInt(v,10)).filter(n => n > 0);
 }
@@ -710,3 +717,4 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
