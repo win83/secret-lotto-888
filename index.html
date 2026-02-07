@@ -608,50 +608,34 @@ function addToReport() {
      條件：必須有主體 + 至少 1 個副體
      ========================= */
   if(mainPick && subPicks.length > 0){
-    subPicks.forEach((sub, si) => {
-      const filters = {};
-      filters[mainPick.cat] = [String(mainPick.val)];
-      filters[sub.cat] = [String(sub.val)];
-
-      const title = `【${currentMode}】主:${mainPick.cat}-${mainPick.val} + 副:${sub.cat}-${sub.val}`;
-      const group = newGroup(currentMode, title);
-
-      // 只做「主+副(AND)」一筆統計明細（這張報表的核心）
-      const baseCounts = computeCountsForFilters(validRows, filters, selNums, gameMax);
-      addRowToGroup(group, `主+副：${mainPick.cat}:${mainPick.val} + ${sub.cat}:${sub.val}`, baseCounts);
-
-      // 保留你原本的「號碼拆分」邏輯（但套用在主+副條件之下）
-      if (currentMode !== "歷史模式" && selNums.length > 0) {
-        selNums.forEach(num => {
-          const counts = Array(gameMax + 1).fill(0);
-
-          validRows.forEach((row, idx) => {
-            const meta = rowMetaFromRow(row);
-            const rd = buildRd(meta);
-            if (!matchFilters(rd, filters)) return;
-
-            const balls = rowBalls(row);
-            if (balls.includes(num)) {
-              if ((currentMode === "拖牌模式" || currentMode === "下期對碰") && validRows[idx+1]) {
-                rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
-              } else if (currentMode === "當期對碰") {
-                balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
-              }
-            }
-          });
-
-          addRowToGroup(group, `號碼: ${num}`, counts);
-        });
-      }
-
-      reportStorage[currentUser][currentGame].push(group);
-    });
-
-    renderCurrentReports();
-    const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
-    if(targetTab) targetTab.click();
+  const needNums = (currentMode === "拖牌模式" || currentMode === "下期對碰" || currentMode === "當期對碰");
+  if(needNums && selNums.length === 0){
+    alert("目前為拖牌/對碰模式：請先在【號碼】區選至少 1 個號碼，再加入主+副報表（否則會統計為 0）。");
     return;
   }
+
+  subPicks.forEach((sub) => {
+    // ✅ 每張只用 2 個條件（Excel：只篩兩個欄位）
+    const filters2 = {};
+    filters2[mainPick.cat] = [String(mainPick.val)];
+    filters2[sub.cat]      = [String(sub.val)];
+
+    const title = `【${currentMode}】主:${mainPick.cat}-${mainPick.val} + 副:${sub.cat}-${sub.val}`;
+    const group = newGroup(currentMode, title);
+
+    // ✅ 只生成 1 列：主+副(AND) 的統計
+    const baseCounts = computeCountsForFilters(getValidRows(), filters2, selNums, gameMax);
+    addRowToGroup(group, `主+副：${mainPick.cat}:${mainPick.val} + ${sub.cat}:${sub.val}`, baseCounts);
+
+    reportStorage[currentUser][currentGame].push(group);
+  });
+
+  renderCurrentReports();
+  const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
+  if(targetTab) targetTab.click();
+  return;
+  }
+
 
   /* =========================
      ✅ 原本 addToReport：完全保留（不動）
@@ -824,3 +808,4 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
