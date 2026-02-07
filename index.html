@@ -54,6 +54,24 @@
     .hidden { display: none !important; }
 
     #loadingOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:none; justify-content:center; align-items:center; z-index:9999; font-weight:900; color:red; }
+
+    /* ===== 新增：主體/副體視覺標記（不影響原 on） ===== */
+    .chip.mainpick{
+      outline: 4px solid #ff3b30 !important;
+      background: #ffe5e3 !important;
+    }
+    .chip.subpick{
+      outline: 4px solid #00bcd4 !important;
+      background: #e6fbff !important;
+    }
+    .mainSubBox{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+      background:#fff7cc; border:1px dashed #b38b00; padding:8px; margin-bottom:10px;
+      font-weight:900;
+    }
+    .mainSubHint{
+      color:#b21b12;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +92,14 @@
     <div class="btnbar" style="margin-bottom:10px;">
       <button class="btn btn-cyan" id="mode-dad" onclick="switchUser('dad')">爸使用模式</button>
       <button class="btn" id="mode-bro" onclick="switchUser('bro')">哥使用模式</button>
+    </div>
+
+    <!-- ===== 新增：主體/副體控制列（不改原本結構，只是加在篩選上方） ===== -->
+    <div class="mainSubBox">
+      <button class="btn btn-red" id="btnMainArm" onclick="armMainPick()">① 主體</button>
+      <button class="btn btn-cyan" id="btnSubMode" onclick="toggleSubMode()">② 副體(多選)</button>
+      <button class="btn" onclick="clearMainSub()">清除主體/副體</button>
+      <div id="mainSubStatus" class="mainSubHint">主體：未指定｜副體：0 個｜狀態：一般</div>
     </div>
 
     <div class="filters-box"><div class="grid" id="filterGrid"></div></div>
@@ -135,6 +161,54 @@ const sheetUrls = {
   "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
   "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
 };
+
+/* =========================
+   ✅ 新增：主體/副體狀態（不影響原 on）
+   ========================= */
+let pickState = "normal"; // normal | main_armed | sub
+let mainPick = null;      // {cat, val}
+let subPicks = [];        // [{cat,val}, ...] 允許跨類別多選
+
+function samePick(a,b){ return !!a && !!b && a.cat===b.cat && a.val===b.val; }
+
+function setPickState(st){
+  pickState = st;
+  const btnMain = document.getElementById('btnMainArm');
+  const btnSub  = document.getElementById('btnSubMode');
+  if(btnMain) btnMain.classList.toggle('btn-orange', st === 'main_armed');
+  if(btnSub)  btnSub.classList.toggle('btn-orange', st === 'sub');
+  renderMainSubStatus();
+}
+
+function armMainPick(){
+  setPickState("main_armed");
+}
+
+function toggleSubMode(){
+  if(!mainPick){
+    alert("請先設定主體（先按①主體，再點任一條件確認）");
+    return;
+  }
+  setPickState(pickState === "sub" ? "normal" : "sub");
+}
+
+function clearMainSub(){
+  mainPick = null;
+  subPicks = [];
+  // 清除視覺標記
+  document.querySelectorAll('.chip.mainpick').forEach(el=>el.classList.remove('mainpick'));
+  document.querySelectorAll('.chip.subpick').forEach(el=>el.classList.remove('subpick'));
+  setPickState("normal");
+}
+
+function renderMainSubStatus(){
+  const el = document.getElementById('mainSubStatus');
+  if(!el) return;
+  const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
+  const subStr = subPicks.length ? subPicks.map(s=>`${s.cat}:${s.val}`).join('、') : "";
+  const stMap = { normal:"一般", main_armed:"等待主體確認", sub:"副體多選中" };
+  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length?`（${subStr}）`:``}｜狀態：${stMap[pickState] || pickState}`;
+}
 
 /* =========================
    日期 / 星期 / 日干支
@@ -311,6 +385,7 @@ function switchUser(role) {
   currentUser = role;
   document.getElementById('mode-dad').classList.toggle('btn-cyan', role==='dad');
   document.getElementById('mode-bro').classList.toggle('btn-cyan', role==='bro');
+  clearMainSub(); // ✅ 切模式時避免主副體殘留
   initFilters();
   updateStats();
 }
@@ -346,6 +421,7 @@ function initFilters() {
   });
   updateStatTableUI();
   syncModeButtons();
+  renderMainSubStatus();
 }
 
 function updateStatTableUI() {
@@ -358,7 +434,70 @@ function updateStatTableUI() {
   }
 }
 
-function toggleChip(el) { el.classList.toggle('on'); updateStats(); }
+/* =========================
+   ✅ 改：toggleChip（保留原功能，新增主體/副體攔截）
+   ========================= */
+function toggleChip(el) {
+  const cat = el?.parentElement?.dataset?.label || "";
+  const val = String(el?.dataset?.val ?? el?.textContent ?? "").trim();
+
+  // 號碼區一律保留原本 on 行為（避免干擾拖牌/對碰）
+  const isNumber = (cat === "號碼");
+
+  // ---- 主體指定流程 ----
+  if(!isNumber && pickState === "main_armed"){
+    const ok = confirm(`設定「主體」為：${cat}：${val} ？`);
+    if(!ok) return;
+
+    // 清除舊主體標記
+    document.querySelectorAll('.chip.mainpick').forEach(x=>x.classList.remove('mainpick'));
+    // 清除舊副體標記（主體變了，副體重選）
+    document.querySelectorAll('.chip.subpick').forEach(x=>x.classList.remove('subpick'));
+    subPicks = [];
+
+    // 設新主體
+    mainPick = {cat, val};
+    el.classList.add('mainpick');
+
+    // ✅ 讓主體同時視覺上像一般篩選（使用 on），但只留該類別一個
+    const box = el.parentElement;
+    if(box){
+      box.querySelectorAll('.chip.on').forEach(x=>x.classList.remove('on'));
+    }
+    el.classList.add('on');
+
+    // 自動進入副體多選
+    setPickState("sub");
+    updateStats();
+    return;
+  }
+
+  // ---- 副體多選流程 ----
+  if(!isNumber && pickState === "sub"){
+    if(!mainPick){
+      alert("請先設定主體");
+      setPickState("normal");
+      return;
+    }
+    // 主體本身不可當副體
+    if(samePick(mainPick,{cat,val})) return;
+
+    const idx = subPicks.findIndex(s=>samePick(s,{cat,val}));
+    if(idx >= 0){
+      subPicks.splice(idx,1);
+      el.classList.remove('subpick');
+    }else{
+      subPicks.push({cat,val});
+      el.classList.add('subpick');
+    }
+    renderMainSubStatus();
+    return;
+  }
+
+  // ---- 一般模式：保留原本功能 ----
+  el.classList.toggle('on');
+  updateStats();
+}
 
 function fetchSheetData(callback) {
   document.getElementById('loadingOverlay').style.display = 'flex';
@@ -415,19 +554,109 @@ function updateStats() {
     }
     document.getElementById(`val2-${i}`).textContent = gap;
   }
+  renderMainSubStatus();
 }
 
 /* =========================
-   修正核心：報表生成邏輯 (針對報表拆分與號碼拆分)
+   ✅ 新增：通用計算器（給主+副報表拆分用）
+   ========================= */
+function computeCountsForFilters(validRows, filters, selNums, gameMax){
+  const counts = Array(gameMax + 1).fill(0);
+  validRows.forEach((row, idx) => {
+    const meta = rowMetaFromRow(row);
+    const rd = buildRd(meta);
+    if(!matchFilters(rd, filters)) return;
+
+    const balls = rowBalls(row);
+
+    if (currentMode === "歷史模式") {
+      balls.forEach(n => { if(n <= gameMax) counts[n]++; });
+      return;
+    }
+
+    if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
+      if (selNums.length > 0 && selNums.some(sn => balls.includes(sn))) {
+        const nxt = validRows[idx+1];
+        if(nxt) rowBalls(nxt).forEach(n => { if(n <= gameMax) counts[n]++; });
+      }
+      return;
+    }
+
+    if (currentMode === "當期對碰") {
+      if (selNums.length > 0 && selNums.every(sn => balls.includes(sn))) {
+        balls.forEach(n => { if(n <= gameMax) counts[n]++; });
+      }
+      return;
+    }
+  });
+  return counts;
+}
+
+/* =========================
+   修正核心：報表生成邏輯 (保留原本 + 新增主體/副體拆分)
    ========================= */
 function addToReport() {
   if (!cloudData.length) return alert("尚未載入資料");
   const validRows = getValidRows();
   if (!validRows.length) return alert("無有效資料列");
-  
-  const filters = getSelectedFilters();
+
   const selNums = getSelectedNums();
   const gameMax = (currentGame === "539") ? 39 : 49;
+
+  /* =========================
+     ✅ 新增：主體 + 多副體 → 自動拆成多張報表
+     條件：必須有主體 + 至少 1 個副體
+     ========================= */
+  if(mainPick && subPicks.length > 0){
+    subPicks.forEach((sub, si) => {
+      const filters = {};
+      filters[mainPick.cat] = [String(mainPick.val)];
+      filters[sub.cat] = [String(sub.val)];
+
+      const title = `【${currentMode}】主:${mainPick.cat}-${mainPick.val} + 副:${sub.cat}-${sub.val}`;
+      const group = newGroup(currentMode, title);
+
+      // 只做「主+副(AND)」一筆統計明細（這張報表的核心）
+      const baseCounts = computeCountsForFilters(validRows, filters, selNums, gameMax);
+      addRowToGroup(group, `主+副：${mainPick.cat}:${mainPick.val} + ${sub.cat}:${sub.val}`, baseCounts);
+
+      // 保留你原本的「號碼拆分」邏輯（但套用在主+副條件之下）
+      if (currentMode !== "歷史模式" && selNums.length > 0) {
+        selNums.forEach(num => {
+          const counts = Array(gameMax + 1).fill(0);
+
+          validRows.forEach((row, idx) => {
+            const meta = rowMetaFromRow(row);
+            const rd = buildRd(meta);
+            if (!matchFilters(rd, filters)) return;
+
+            const balls = rowBalls(row);
+            if (balls.includes(num)) {
+              if ((currentMode === "拖牌模式" || currentMode === "下期對碰") && validRows[idx+1]) {
+                rowBalls(validRows[idx+1]).forEach(n => { if(n <= gameMax) counts[n]++; });
+              } else if (currentMode === "當期對碰") {
+                balls.forEach(n => { if(n <= gameMax && n !== num) counts[n]++; });
+              }
+            }
+          });
+
+          addRowToGroup(group, `號碼: ${num}`, counts);
+        });
+      }
+
+      reportStorage[currentUser][currentGame].push(group);
+    });
+
+    renderCurrentReports();
+    const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
+    if(targetTab) targetTab.click();
+    return;
+  }
+
+  /* =========================
+     ✅ 原本 addToReport：完全保留（不動）
+     ========================= */
+  const filters = getSelectedFilters();
 
   // 建立報表主體物件
   const group = newGroup(currentMode, `【${currentMode}】${fmtFilters(filters)}`);
@@ -572,7 +801,10 @@ function exportToExcel() {
   let link = document.createElement("a"); link.download = `分析_${Date.now()}.xls`; link.href = url; link.click();
 }
 
-function clearFilters() { document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on')); updateStats(); }
+function clearFilters() {
+  document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on'));
+  updateStats();
+}
 function clearAllReports() {
   if(confirm("確定清空？")) { reportStorage[currentUser][currentGame] = []; renderCurrentReports(); }
 }
