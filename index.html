@@ -860,26 +860,35 @@ function clearAllReports(){
    modes / misc
    ========================= */
 function changeMode(mode, btn){
-  currentMode = mode; // 設置當前模式
+  // 清除其他模式的選擇
+  document.querySelectorAll('.mode-btn').forEach(button => {
+    button.classList.remove('btn-orange');
+  });
+  
+  // 設定當前模式
+  currentMode = mode; // 更新為當前選擇的模式
 
-  // 更新顯示的模式名稱
+  // 顯示當前模式名稱
   document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
 
-  // 當切換至主體模式時，更新「模式：主體模式」並顯示相應的統計條件
+  // 切換顯示模式名稱
   if (currentMode === "主體模式") {
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-  }
-
-  // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
-  if (currentMode === "歷史模式") {
+  } else if (currentMode === "歷史模式") {
     document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
+  } else {
+    // 處理其他模式的顯示
   }
 
-  // 清除或顯示對應的按鈕、欄位等
-  syncModeButtons();
-  updateStats();
-  renderMainSubStatus();  // 更新顯示的狀態
+  // 讓被選中的模式按鈕突出顯示
+  btn.classList.add('btn-orange');
+
+  // 其他操作
+  syncModeButtons(); // 同步模式按鈕
+  updateStats(); // 更新統計
+  renderMainSubStatus(); // 更新主體/副體狀態
 }
+
 
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
@@ -962,4 +971,5 @@ start();
 </script>
 </body>
 </html>
+
 
