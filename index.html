@@ -387,10 +387,10 @@ function newGroup(mode, title){
   const gLimit=(currentGame==="539") ? 39 : 49;
   return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
 }
-// 組合：當期對碰
+// 下期對碰：顯示與當期對碰相同的格式
 function addRowToGroup(group, label, dataArr){
-  // 在這裡將“交集”部分剔除，僅顯示選擇的條件與對應結果
-  if (currentMode === "當期對碰") {
+  // 在這裡處理，確保報表顯示一致
+  if (currentMode === "下期對碰") {
     group.rows.push({label: label, data: dataArr});
   }
   for (let i = 1; i <= group.limit; i++) {
@@ -639,21 +639,23 @@ function computeNextPair(validRows, cond1, cond2, a, b, gameMax){
   const f2={}; f2[cond2.cat]=[String(cond2.val)];
   const counts=Array(gameMax+1).fill(0);
 
+  // 遍歷每一行資料，並檢查前一行是否符合條件
   for(let i=0;i<validRows.length-1;i++){
     const row=validRows[i];
     const nxt=validRows[i+1];
-    const rd1=buildRd(rowMetaFromRow(row));
-    const rd2=buildRd(rowMetaFromRow(nxt));
-    if(!matchFilters(rd1, f1)) continue;
-    if(!matchFilters(rd2, f2)) continue;
+    const rd1=buildRd(rowMetaFromRow(row)); // 當前行
+    const rd2=buildRd(rowMetaFromRow(nxt)); // 下一行
+    if(!matchFilters(rd1, f1)) continue;  // 確認當前行符合條件
+    if(!matchFilters(rd2, f2)) continue;  // 確認下一行符合條件
 
-    const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) continue;
+    const balls=rowBalls(row);  // 獲取當前行號碼
+    if(!(balls.includes(a) && balls.includes(b))) continue; // 確保前期號碼包含 a 和 b
 
-    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });
+    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });  // 計算符合條件的號碼出現次數
   }
   return counts;
 }
+
 
 // ✅ 當期對碰：filters(交集) + 2碼同列出現 → 統計同列球號
 function computePairSameRow(validRows, filters, a, b, gameMax){
@@ -769,6 +771,7 @@ function addToReport(){
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
   if(targetTab) targetTab.click();
 }
+
 
 
 /* =========================
@@ -971,6 +974,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
