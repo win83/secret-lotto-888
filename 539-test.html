@@ -120,8 +120,8 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 const STEMS=["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
 const BRANCHES=["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
 const sheetUrls = {
-  "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
-  "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
+  "539": "/secret-lotto-888/data/new-folder/539.csv",
+  "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
 };
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
@@ -281,60 +281,38 @@ function setDragPick(el, cat, val){
 const excelFilePath = "/secret-lotto-888/data/new-folder/539-49.xlsx";
 
 // 2. 修改資料獲取邏輯
-function fetchSheetData(callback){
-    const overlay = document.getElementById('loadingOverlay');
-    overlay.style.display = 'flex';
+function fetchSheetData(callback) {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.display = 'flex';
 
-    // 延遲解析，給瀏覽器時間渲染「雲端大數據運算中」的畫面
-    setTimeout(async () => {
-        try {
-            const response = await fetch(excelFilePath + "?t=" + Date.now());
-            if (!response.ok) throw new Error("檔案讀取失敗");
-            
-            const data = await response.arrayBuffer();
-            
-            // 優化解析參數：使用密集模式與關閉樣式
-            const workbook = XLSX.read(data, { 
-                type: 'array',
-                bookVBA: false,
-                bookDeps: false,
-                bookSheets: false, // 設為 false 提高速度，手動指定
-                cellDates: false,  // 關閉日期轉換，維持原字串速度最快
-                cellStyles: false,
-                cellHTML: false,
-                cellFormula: false
-            });
-            
-            const sheetName = (currentGame === "539") ? "539" : "49";
-            const worksheet = workbook.Sheets[sheetName];
-            
-            if (!worksheet) {
-                alert(`找不到活頁簿: ${sheetName}`);
-                overlay.style.display = 'none';
-                return;
-            }
+  // 使用 requestAnimationFrame 確保瀏覽器先渲染出「運算中」的畫面，避免視覺死機
+  requestAnimationFrame(() => {
+    Papa.parse(sheetUrls[currentGame] + "?t=" + Date.now(), {
+      download: true,
+      header: false,
+      skipEmptyLines: true,
+      fastMode: true, // 針對單純結構的 CSV 開啟快速模式
+      complete: function(results) {
+        overlay.style.display = 'none';
+        
+        // 取得數據並過濾掉可能的空列
+        cloudData = results.data.slice(1).filter(row => row.length > 5);
+        
+        // 更新即時統計
+        updateStats();
 
-            // header: 1 代表轉成純二維陣列
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-                header: 1, 
-                defval: "",
-                raw: true // 讀取原始值，不進行格式化處理以提升速度
-            });
-
-            cloudData = jsonData.slice(1);
-            
-            // 執行統計
-            updateStats();
-            
-            if(callback) callback(jsonData[jsonData.length - 1]);
-            
-            overlay.style.display = 'none';
-        } catch (error) {
-            console.error(error);
-            alert("載入失敗: " + error.message);
-            overlay.style.display = 'none';
+        // 執行回調（例如自動選取今日功能）
+        if (callback && results.data.length > 1) {
+          callback(results.data[results.data.length - 1]);
         }
-    }, 50); // 延遲 50 毫秒啟動解析
+      },
+      error: function(err) {
+        console.error("檔案讀取失敗:", err);
+        overlay.style.display = 'none';
+        alert(`無法載入 ${currentGame} 的資料，請檢查檔案路徑。`);
+      }
+    });
+  });
 }
 
 function updateStats(){
@@ -472,12 +450,30 @@ function renderMainSubStatus(){
 // 分頁切換監聽
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab, .page').forEach(el => el.classList.remove('active'));
+    // 切換遊戲模式
+    const targetGame = tab.dataset.game; // "539" 或 "Lotto"
+    const targetPage = tab.dataset.target;
+
+    // 只有在更換遊戲種類時才重新抓取資料
+    const gameChanged = (currentGame !== targetGame);
+    currentGame = targetGame;
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    document.getElementById(tab.dataset.target).classList.add('active');
-    currentGame = tab.dataset.game;
-    if(tab.dataset.target==='reportPage') renderCurrentReports();
-    else { initFilters(); fetchSheetData(); }
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(targetPage).classList.add('active');
+
+    if (targetPage === 'mainPage') {
+      initFilters(); 
+      // 如果遊戲更換了，立即抓取對應的 CSV
+      if (gameChanged || cloudData.length === 0) {
+        fetchSheetData();
+      } else {
+        updateStats();
+      }
+    } else {
+      renderCurrentReports();
+    }
   });
 });
 
@@ -487,5 +483,6 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
 
