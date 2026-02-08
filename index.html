@@ -194,37 +194,35 @@ function clearDragPair(){
   document.querySelectorAll('.chip.drag2').forEach(el=>el.classList.remove('drag2'));
   renderMainSubStatus();
 }
-function setDragPick(el, cat, val) {
-  if (!dragPick1) {
-    dragPick1 = { cat, val };
+function setDragPick(el, cat, val){
+  if(!dragPick1){
+    dragPick1 = {cat,val};
     el.classList.add('drag1');
     return;
   }
-  if (dragPick1 && dragPick1.cat === cat && dragPick1.val === val) {
+  if(dragPick1 && dragPick1.cat===cat && dragPick1.val===val){
     dragPick1 = null;
     el.classList.remove('drag1');
-    if (dragPick2) {
-      const old2 = dragPick2;
-      dragPick2 = null;
-      document.querySelectorAll('.chip.drag2').forEach(x => x.classList.remove('drag2'));
+    if(dragPick2){
+      const old2 = dragPick2; dragPick2 = null;
+      document.querySelectorAll('.chip.drag2').forEach(x=>x.classList.remove('drag2'));
       dragPick1 = old2;
       const node = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
-      if (node) node.classList.add('drag1');
+      if(node) node.classList.add('drag1');
     }
     return;
   }
-  if (!dragPick2) {
-    dragPick2 = { cat, val };
+  if(!dragPick2){
+    dragPick2 = {cat,val};
     el.classList.add('drag2');
     return;
   }
   const old2 = dragPick2;
   const oldNode2 = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
-  if (oldNode2) oldNode2.classList.remove('drag2');
-  dragPick2 = { cat, val };
+  if(oldNode2) oldNode2.classList.remove('drag2');
+  dragPick2 = {cat,val};
   el.classList.add('drag2');
 }
-
 
 /* =========================
    號碼點擊順序（保持，但本次規格不再依 base 固定）
@@ -241,17 +239,16 @@ function updateNumOrder(num, isOn){
   }
 }
 
-function renderMainSubStatus() {
+function renderMainSubStatus(){
   const el = document.getElementById('mainSubStatus');
-  if (!el) return;
+  if(!el) return;
   const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
-  const subStr = subPicks.length ? subPicks.map(s => `${s.cat}:${s.val}`).join('、') : "";
+  const subStr = subPicks.length ? subPicks.map(s=>`${s.cat}:${s.val}`).join('、') : "";
   const dragStr = (dragPick1 && dragPick2) ? `①${dragPick1.cat}:${dragPick1.val}｜②${dragPick2.cat}:${dragPick2.val}` :
-    (dragPick1 ? `①${dragPick1.cat}:${dragPick1.val}｜②未設定` : "未設定");
-  const stMap = { normal: "一般", main_armed: "等待主體確認", sub: "副體多選中" };
-  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length ? `（${subStr}）` : ``}｜拖牌①②：${dragStr}｜狀態：${stMap[pickState] || pickState}`;
+                  (dragPick1 ? `①${dragPick1.cat}:${dragPick1.val}｜②未設定` : "未設定");
+  const stMap = { normal:"一般", main_armed:"等待主體確認", sub:"副體多選中" };
+  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length?`（${subStr}）`:``}｜拖牌①②：${dragStr}｜狀態：${stMap[pickState] || pickState}`;
 }
-
 
 /* =========================
    日期 / 干支
@@ -324,32 +321,21 @@ function rowBalls(row){
     .filter(n=>!isNaN(n) && n>0 && n<=limit);
 }
 function hasEnoughBalls(row){ return rowBalls(row).length >= requiredBallCount(); }
-function getValidRows() {
-  const sk = startKeyByUser();
-  return cloudData.filter(row => {
-    if (!row || row.length < 7) return false;
-    const { y, m, d } = parseYMD(row[1]);
-    let k = ymdKey(y, m, d);
+function getValidRows(){
+  const sk=startKeyByUser();
+  return cloudData.filter(row=>{
+    if(!row || row.length < 7) return false;
+    const {y,m,d} = parseYMD(row[1]);
+    let k = ymdKey(y,m,d);
     if (isNaN(k)) {
       const alt = parseYMD(row[0]);
       k = ymdKey(alt.y, alt.m, alt.d);
     }
     if (!Number.isFinite(k) || k < sk) return false;
     if (!hasEnoughBalls(row)) return false;
-
-    // 在此處進行條件的過濾
-    const selectedFilters = getSelectedFilters();
-    let match = true;
-    Object.keys(selectedFilters).forEach(filter => {
-      if (filter !== "號碼" && !selectedFilters[filter].includes(row[filter])) {
-        match = false;
-      }
-    });
-
-    return match;
+    return true;
   });
 }
-
 
 
 /* =========================
@@ -483,14 +469,14 @@ function toggleChip(el){
   const val = String(el?.dataset?.val ?? el?.textContent ?? "").trim();
   const isNumber = (cat === "號碼");
 
-  // 拖牌模式或下期對碰模式：非號碼 chip 用來設定 ①②
+  // 拖牌模式：非號碼 chip 用來設定 ①②
   if (!isNumber && (currentMode === "拖牌模式" || currentMode === "下期對碰") && pickState === "normal") {
     setDragPick(el, cat, val);
     renderMainSubStatus();
     return;
   }
 
-  // 主體模式選擇
+  // 主體指定
   if (!isNumber && pickState === "main_armed") {
     const ok = confirm(`設定「主體」為：${cat}：${val} ？`);
     if (!ok) return;
@@ -500,7 +486,7 @@ function toggleChip(el){
     mainPick = { cat, val };
     el.classList.add('mainpick');
 
-    // 主體保持選中狀態
+    // 主體保持 on（同類別只留一個）
     const box = el.parentElement;
     if (box) box.querySelectorAll('.chip.on').forEach(x => x.classList.remove('on'));
     el.classList.add('on');
@@ -521,11 +507,12 @@ function toggleChip(el){
     return;
   }
 
-  // 號碼選擇：只在號碼篩選時進行操作
+  // 一般模式（含號碼）
   el.classList.toggle('on');
   if (isNumber) updateNumOrder(val, el.classList.contains('on'));
   updateStats();
 }
+
 
 function fetchSheetData(callback){
   document.getElementById('loadingOverlay').style.display='flex';
@@ -1003,16 +990,3 @@ start();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
