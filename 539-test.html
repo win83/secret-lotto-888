@@ -140,6 +140,7 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
 const sheetUrls = {
+  // 注意：請確保儲存庫名稱 secret-lotto-888 與分支 main 名稱正確
   "539": "https://raw.githubusercontent.com/win83/secret-lotto-888/main/data/new-folder/539.csv",
   "Lotto": "https://raw.githubusercontent.com/win83/secret-lotto-888/main/data/new-folder/49.csv"
 };
@@ -510,15 +511,33 @@ function toggleChip(el){
 }
 
 
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData=results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
-      updateStats();
+function fetchSheetData(callback) {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.display = 'flex';
+
+  // 1. 檢查網址是否包含 github.com (若是則提醒，因為那不是 Raw 連結)
+  if (sheetUrls[currentGame].includes("github.com") && !sheetUrls[currentGame].includes("raw.githubusercontent.com")) {
+    overlay.style.display = 'none';
+    alert("設定錯誤：請使用 GitHub 的 'Raw' 原始資料連結，不能使用一般瀏覽網址。");
+    return;
+  }
+
+  Papa.parse(sheetUrls[currentGame] + "?t=" + Date.now(), {
+    download: true,
+    header: false,
+    skipEmptyLines: true,
+    complete: function(results) {
+      overlay.style.display = 'none'; // 讀取完畢必關閉
+      if (results.data && results.data.length > 0) {
+        cloudData = results.data.slice(1);
+        if (callback) callback(results.data[results.data.length - 1]);
+        updateStats();
+      }
+    },
+    error: function(err) {
+      overlay.style.display = 'none'; // 發生錯誤必關閉
+      console.error("讀取失敗:", err);
+      alert("無法載入資料，請檢查網路或 GitHub 網址是否正確。");
     }
   });
 }
@@ -987,6 +1006,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
