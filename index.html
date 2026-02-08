@@ -868,7 +868,7 @@ function changeMode(mode, btn){
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
 
-  // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
+  // 當切換至歷史模式時，更新統計條件
   if (currentMode === "歷史模式") {
     document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
@@ -883,6 +883,7 @@ function changeMode(mode, btn){
   updateStats();
   renderMainSubStatus();  // 更新顯示的狀態
 }
+
 
 
 function syncModeButtons(){
@@ -966,3 +967,4 @@ start();
 </script>
 </body>
 </html>
+
