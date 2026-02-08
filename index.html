@@ -167,7 +167,17 @@ function setPickState(st){
   if(btnSub)  btnSub.classList.toggle('btn-orange', st === 'sub');
   renderMainSubStatus();
 }
-function armMainPick(){ setPickState("main_armed"); }
+// 按下主體按鈕時進行更新
+function armMainPick() {
+  setPickState("main_armed");
+
+  // 切換模式顯示為「主體模式」
+  changeMode("主體模式", document.querySelector('.mode-btn'));
+
+  // 更新狀態顯示
+  document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
+}
+
 function toggleSubMode(){
   if(!mainPick){ alert("請先設定主體"); return; }
   setPickState(pickState === "sub" ? "normal" : "sub");
@@ -243,7 +253,8 @@ function renderMainSubStatus(){
 
   const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
   const subStr = subPicks.length ? subPicks.map(s => `${s.cat}:${s.val}`).join('、') : "";
-
+  
+  // 當前狀態文字設置
   const stMap = { 
     normal: "一般", 
     main_armed: "等待主體確認", 
@@ -867,25 +878,27 @@ function clearAllReports(){
    modes / misc
    ========================= */
 function changeMode(mode, btn){
-  currentMode = mode; // 保持你按鈕文字
+  currentMode = mode; // 設置當前模式
 
-  // 切換模式時，清除其他模式選項
-  if(currentMode !== "主體模式") {
-    document.getElementById('btnMainArm').style.display = 'none';  // 隱藏主體按鈕
-  } else {
-    document.getElementById('btnMainArm').style.display = 'block';  // 顯示主體按鈕
+  // 更新顯示的模式名稱
+  document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
+
+  // 當切換至主體模式時，更新「模式：主體模式」並顯示相應的統計條件
+  if (currentMode === "主體模式") {
+    document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
 
-  if(currentMode !== "副體模式") {
-    document.getElementById('btnSubMode').style.display = 'none';  // 隱藏副體選擇
-  } else {
-    document.getElementById('btnSubMode').style.display = 'block';  // 顯示副體選擇
+  // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
+  if (currentMode === "歷史模式") {
+    document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
 
+  // 清除或顯示對應的按鈕、欄位等
   syncModeButtons();
   updateStats();
-  renderMainSubStatus();
+  renderMainSubStatus();  // 更新顯示的狀態
 }
+
 
 
 function syncModeButtons(){
@@ -983,5 +996,6 @@ start();
 </script>
 </body>
 </html>
+
 
 
