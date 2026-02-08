@@ -139,8 +139,8 @@ const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lott
 
 // 修改路徑對應
 const sheetUrls = {
-  "539": "/secret-lotto-888/data/new-folder/539.csv",
-  "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
+  "539": "/secret-lotto-888/data/new-folder/539.csv",
+  "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
 };
 
 // 確保初始啟動時能正確對應
@@ -513,33 +513,39 @@ function toggleChip(el){
 
 
 function fetchSheetData(callback) {
-  const overlay = document.getElementById('loadingOverlay');
-  overlay.style.display = 'flex';
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.display = 'flex';
 
-  // 使用 requestAnimationFrame 確保「運算中」的畫面能即時渲染
-  requestAnimationFrame(() => {
-    Papa.parse(sheetUrls[currentGame] + "?t=" + Date.now(), {
-      download: true,
-      header: false,
-      skipEmptyLines: true,
-      complete: function(results) {
-        overlay.style.display = 'none';
-        
-        // 取得數據並進行基本格式檢查 (過濾掉長度不足的異常列)
-        cloudData = results.data.slice(1).filter(row => row.length >= 7);
-        
-        if (callback && results.data.length > 1) {
-          callback(results.data[results.data.length - 1]);
-        }
-        updateStats();
-      },
-      error: function(err) {
-        console.error("CSV 讀取失敗:", err);
-        overlay.style.display = 'none';
-        alert(`檔案讀取失敗，請確認 ${sheetUrls[currentGame]} 是否存在。`);
-      }
-    });
-  });
+  const fullUrl = sheetUrls[currentGame] + "?t=" + Date.now();
+  console.log("正在嘗試讀取檔案:", fullUrl);
+
+  Papa.parse(fullUrl, {
+    download: true,
+    header: false,
+    skipEmptyLines: true,
+    complete: function(results) {
+      overlay.style.display = 'none';
+      
+      if (!results.data || results.data.length < 2) {
+        console.error("檔案內容為空或解析失敗", results);
+        alert("檔案讀取成功但內容格式不正確，請確認 CSV 內容。");
+        return;
+      }
+
+      cloudData = results.data.slice(1).filter(row => row.length >= 7);
+      console.log(`成功載入 ${currentGame} 資料，共 ${cloudData.length} 筆`);
+      
+      updateStats();
+      if (callback) callback(results.data[results.data.length - 1]);
+    },
+    error: function(err, file, inputElem, reason) {
+      overlay.style.display = 'none';
+      console.error("PapaParse 錯誤原因:", err, reason);
+      
+      // 這裡會彈出更精確的錯誤訊息
+      alert("【讀取失敗】\n檔案路徑：" + fullUrl + "\n可能原因：" + err);
+    }
+  });
 }
 
 function updateStats(){
@@ -1040,6 +1046,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
