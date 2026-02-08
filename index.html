@@ -1,3 +1,4 @@
+記憶現在程式碼,名稱V1
 
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -387,15 +388,9 @@ function newGroup(mode, title){
   const gLimit=(currentGame==="539") ? 39 : 49;
   return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
 }
-// 組合：當期對碰
 function addRowToGroup(group, label, dataArr){
-  // 在這裡將“交集”部分剔除，僅顯示選擇的條件與對應結果
-  if (currentMode === "當期對碰") {
-    group.rows.push({label: label, data: dataArr});
-  }
-  for (let i = 1; i <= group.limit; i++) {
-    group.sum[i] += (dataArr[i] || 0);
-  }
+  group.rows.push({label, data:dataArr});
+  for(let i=1;i<=group.limit;i++) group.sum[i]+= (dataArr[i]||0);
 }
 
 function getSelectedFilters(){
@@ -660,14 +655,13 @@ function computePairSameRow(validRows, filters, a, b, gameMax){
   const counts=Array(gameMax+1).fill(0);
   validRows.forEach(row=>{
     const rd=buildRd(rowMetaFromRow(row));
-    if(!matchFilters(rd, filters)) return; // 繼續篩選條件
+    if(!matchFilters(rd, filters)) return;
     const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) return; // 確保兩個號碼在同一列中
-    balls.forEach(n=>{ if(n<=gameMax) counts[n]++; });  // 更新計數
+    if(!(balls.includes(a) && balls.includes(b))) return;
+    balls.forEach(n=>{ if(n<=gameMax) counts[n]++; });
   });
   return counts;
 }
-
 
 // 組合：全部 2碼配對（不固定 base）
 function buildAllPairs(nums){
@@ -869,6 +863,9 @@ function clearAllReports(){
 function changeMode(mode, btn){
   currentMode = mode; // 設置當前模式
 
+  // 更新顯示的模式名稱
+  document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
+
   // 當切換至主體模式時，更新「模式：主體模式」並顯示相應的統計條件
   if (currentMode === "主體模式") {
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
@@ -877,11 +874,6 @@ function changeMode(mode, btn){
   // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
   if (currentMode === "歷史模式") {
     document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-  }
-
-  // 切換到其他模式時，清除主副體
-  if (currentMode !== "主體模式") {
-    clearMainSub(); // 清除主副體
   }
 
   // 清除或顯示對應的按鈕、欄位等
@@ -971,3 +963,4 @@ start();
 </script>
 </body>
 </html>
+
