@@ -140,9 +140,33 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
 const sheetUrls = {
-  "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
-  "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
+  "539": "https://github.com/win83/secret-lotto-888/raw/main/data/new-folder/539%20&%2049.xlsx"
 };
+
+// 使用 Fetch API 下載檔案
+function fetchExcelData() {
+  fetch(sheetUrls["539"])
+    .then(response => response.arrayBuffer()) // 讀取檔案為 ArrayBuffer
+    .then(data => {
+      const workbook = XLSX.read(data, { type: 'array' }); // 使用 xlsx.js 解析 Excel 檔案
+      const sheet539 = workbook.Sheets['539']; // 取得 '539' 活頁
+      const sheet49 = workbook.Sheets['49']; // 取得 '49' 活頁
+
+      // 將活頁轉換為 JSON 格式
+      const json539 = XLSX.utils.sheet_to_json(sheet539, { header: 1 }); // 用 header: 1 來保證將資料轉為陣列
+      const json49 = XLSX.utils.sheet_to_json(sheet49, { header: 1 });
+
+      console.log('539 活頁資料:', json539);
+      console.log('49 活頁資料:', json49);
+
+      // 在此處處理資料，根據您的需求進行操作
+    })
+    .catch(error => console.error('讀取 Excel 檔案錯誤:', error));
+}
+
+// 呼叫函式開始讀取資料
+fetchExcelData();
+
 
 /* =========================
    主體/副體 狀態
@@ -986,4 +1010,5 @@ function start(){
 start();
 </script>
 </body>
+
 </html>
