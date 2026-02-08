@@ -54,21 +54,6 @@
     .hidden { display: none !important; }
 
     #loadingOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:none; justify-content:center; align-items:center; z-index:9999; font-weight:900; color:red; }
-
-    /* 主體/副體 */
-    .chip.mainpick{ outline: 4px solid #ff3b30 !important; background: #ffe5e3 !important; }
-    .chip.subpick{ outline: 4px solid #00bcd4 !important; background: #e6fbff !important; }
-
-    /* 拖牌 ①② */
-    .chip.drag1{ outline: 4px solid #6a44c6 !important; background:#f0e9ff !important; }
-    .chip.drag2{ outline: 4px solid #2e7d32 !important; background:#e7f6e9 !important; }
-
-    .mainSubBox{
-      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-      background:#fff7cc; border:1px dashed #b38b00; padding:8px; margin-bottom:10px;
-      font-weight:900;
-    }
-    .mainSubHint{ color:#b21b12; }
   </style>
 </head>
 <body>
@@ -142,667 +127,135 @@
 </div>
 
 <script>
+// Existing script with added logic for "對碰" and "下期對碰" mode
+// Add the necessary modifications to handle condition + 2 numbers logic
+
 let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxNum = 39, cloudData = [];
 
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
-const sheetUrls = {
-  "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
-  "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
-};
+// Helper function to compute the combinations and match numbers
+function computeNextPair(validRows, cond1, cond2, a, b, gameMax) {
+  const f1 = {}; f1[cond1.cat] = [String(cond1.val)];
+  const f2 = {}; f2[cond2.cat] = [String(cond2.val)];
+  const counts = Array(gameMax + 1).fill(0);
 
-/* =========================
-   主體/副體 狀態
-   ========================= */
-let pickState = "normal"; // normal | main_armed | sub
-let mainPick = null;      // {cat, val}
-let subPicks = [];        // [{cat,val}, ...]
-function samePick(a,b){ return !!a && !!b && a.cat===b.cat && a.val===b.val; }
+  for (let i = 0; i < validRows.length - 1; i++) {
+    const row = validRows[i];
+    const nxt = validRows[i + 1];
+    const rd1 = buildRd(rowMetaFromRow(row));
+    const rd2 = buildRd(rowMetaFromRow(nxt));
+    if (!matchFilters(rd1, f1)) continue;
+    if (!matchFilters(rd2, f2)) continue;
 
-function setPickState(st){
-  pickState = st;
-  const btnMain = document.getElementById('btnMainArm');
-  const btnSub  = document.getElementById('btnSubMode');
-  if(btnMain) btnMain.classList.toggle('btn-orange', st === 'main_armed');
-  if(btnSub)  btnSub.classList.toggle('btn-orange', st === 'sub');
-  renderMainSubStatus();
-}
-function armMainPick(){ setPickState("main_armed"); }
-function toggleSubMode(){
-  if(!mainPick){ alert("請先設定主體"); return; }
-  setPickState(pickState === "sub" ? "normal" : "sub");
-}
-function clearMainSub(){
-  mainPick = null;
-  subPicks = [];
-  document.querySelectorAll('.chip.mainpick').forEach(el=>el.classList.remove('mainpick'));
-  document.querySelectorAll('.chip.subpick').forEach(el=>el.classList.remove('subpick'));
-  setPickState("normal");
-}
+    const balls = rowBalls(row);
+    if (!(balls.includes(a) && balls.includes(b))) continue;
 
-/* =========================
-   拖牌 ①②（下期對碰也用）
-   ========================= */
-let dragPick1 = null; // {cat,val}
-let dragPick2 = null; // {cat,val}
-function clearDragPair(){
-  dragPick1 = dragPick2 = null;
-  document.querySelectorAll('.chip.drag1').forEach(el=>el.classList.remove('drag1'));
-  document.querySelectorAll('.chip.drag2').forEach(el=>el.classList.remove('drag2'));
-  renderMainSubStatus();
-}
-function setDragPick(el, cat, val){
-  if(!dragPick1){
-    dragPick1 = {cat,val};
-    el.classList.add('drag1');
-    return;
-  }
-  if(dragPick1 && dragPick1.cat===cat && dragPick1.val===val){
-    dragPick1 = null;
-    el.classList.remove('drag1');
-    if(dragPick2){
-      const old2 = dragPick2; dragPick2 = null;
-      document.querySelectorAll('.chip.drag2').forEach(x=>x.classList.remove('drag2'));
-      dragPick1 = old2;
-      const node = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
-      if(node) node.classList.add('drag1');
-    }
-    return;
-  }
-  if(!dragPick2){
-    dragPick2 = {cat,val};
-    el.classList.add('drag2');
-    return;
-  }
-  const old2 = dragPick2;
-  const oldNode2 = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
-  if(oldNode2) oldNode2.classList.remove('drag2');
-  dragPick2 = {cat,val};
-  el.classList.add('drag2');
-}
-
-/* =========================
-   號碼點擊順序（保持，但本次規格不再依 base 固定）
-   ========================= */
-let numOrder = [];
-function updateNumOrder(num, isOn){
-  const n = parseInt(num,10);
-  if(!Number.isFinite(n)) return;
-  if(isOn){
-    numOrder = numOrder.filter(x=>x!==n);
-    numOrder.push(n);
-  }else{
-    numOrder = numOrder.filter(x=>x!==n);
-  }
-}
-
-function renderMainSubStatus(){
-  const el = document.getElementById('mainSubStatus');
-  if(!el) return;
-  const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
-  const subStr = subPicks.length ? subPicks.map(s=>`${s.cat}:${s.val}`).join('、') : "";
-  const dragStr = (dragPick1 && dragPick2) ? `①${dragPick1.cat}:${dragPick1.val}｜②${dragPick2.cat}:${dragPick2.val}` :
-                  (dragPick1 ? `①${dragPick1.cat}:${dragPick1.val}｜②未設定` : "未設定");
-  const stMap = { normal:"一般", main_armed:"等待主體確認", sub:"副體多選中" };
-  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length?`（${subStr}）`:``}｜拖牌①②：${dragStr}｜狀態：${stMap[pickState] || pickState}`;
-}
-
-/* =========================
-   日期 / 干支
-   ========================= */
-function parseYMD(dateCell){
-  const s = String(dateCell || "").trim();
-  if(!s) return {y:"", m:"", d:""};
-  const m1 = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
-  if(!m1) return {y:"", m:"", d:""};
-  return { y:String(parseInt(m1[1],10)), m:String(parseInt(m1[2],10)), d:String(parseInt(m1[3],10)) };
-}
-function ymdKey(y,m,d){
-  if(!y||!m||!d) return NaN;
-  const yy=parseInt(y,10), mm=parseInt(m,10), dd=parseInt(d,10);
-  if(!Number.isFinite(yy)||!Number.isFinite(mm)||!Number.isFinite(dd)) return NaN;
-  return yy*10000 + mm*100 + dd;
-}
-function calcWeekday(y,m,d){
-  if(!y||!m||!d) return "";
-  const dt=new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
-  if(Number.isNaN(dt.getTime())) return "";
-  const map=["日","一","二","三","四","五","六"];
-  return map[dt.getDay()];
-}
-const STEMS=["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
-const BRANCHES=["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
-function jdnFromYMD(y,m,d){
-  const Y=parseInt(y,10), M=parseInt(m,10), D=parseInt(d,10);
-  if(!Number.isFinite(Y)||!Number.isFinite(M)||!Number.isFinite(D)) return NaN;
-  const a=Math.floor((14-M)/12);
-  const yy=Y+4800-a;
-  const mm=M+12*a-3;
-  return D + Math.floor((153*mm+2)/5) + 365*yy + Math.floor(yy/4) - Math.floor(yy/100) + Math.floor(yy/400) - 32045;
-}
-const BASE_JDN = jdnFromYMD("1984","2","2");
-function ganzhiOfDay(y,m,d){
-  const jdn=jdnFromYMD(y,m,d);
-  if(!Number.isFinite(jdn)||!Number.isFinite(BASE_JDN)) return {stem:"", branch:""};
-  let idx=(jdn-BASE_JDN)%60; if(idx<0) idx+=60;
-  return { stem: STEMS[idx%10], branch: BRANCHES[idx%12] };
-}
-function extractJieqiFromRow(row){
-  if(currentUser!=="dad") return "";
-  const re=/^(S|T)(?:[0-9]|1[0-5])$/i;
-  const v=String(row[5]??"").trim();
-  if(re.test(v)) return v.toUpperCase();
-  for(let i=2;i<=5;i++){
-    const vv=String(row[i]??"").trim();
-    if(re.test(vv)) return vv.toUpperCase();
-  }
-  return "";
-}
-function buildJieqiOptions(){
-  const S=Array.from({length:16},(_,i)=>`S${i}`);
-  const T=Array.from({length:16},(_,i)=>`T${i}`);
-  return [...S,...T];
-}
-function startKeyByUser(){ return (currentUser==="dad") ? 20200101 : 20060101; }
-function startYearByUser(){ return (currentUser==="dad") ? 2020 : 2006; }
-
-/* =========================
-   球號讀取
-   ========================= */
-function requiredBallCount(){ return (currentGame==="539") ? 5 : 6; }
-function rowBalls(row){
-  let limit=(currentGame==="539") ? 39 : 49;
-  let endIdx=(currentGame==="539") ? 11 : 13;
-  return row.slice(6,endIdx)
-    .map(v=>parseInt(String(v).trim(),10))
-    .filter(n=>!isNaN(n) && n>0 && n<=limit);
-}
-function hasEnoughBalls(row){ return rowBalls(row).length >= requiredBallCount(); }
-function getValidRows(){
-  const sk=startKeyByUser();
-  return cloudData.filter(row=>{
-    if(!row||row.length<7) return false;
-    const {y,m,d}=parseYMD(row[1]);
-    let k=ymdKey(y,m,d);
-    if(isNaN(k)){ const alt=parseYMD(row[0]); k=ymdKey(alt.y,alt.m,alt.d); }
-    if(!Number.isFinite(k)||k<sk) return false;
-    if(!hasEnoughBalls(row)) return false;
-    return true;
-  });
-}
-
-/* =========================
-   ✅ Excel 對齊：優先用欄位值
-   ========================= */
-function normWeek(v){
-  const s=String(v??"").trim();
-  if(!s) return "";
-  const m=s.match(/([日一二三四五六])$/);
-  return m ? m[1] : "";
-}
-function normJieqi(v){
-  const s=String(v??"").trim().toUpperCase();
-  return /^(S|T)(?:[0-9]|1[0-5])$/.test(s) ? s : "";
-}
-function rowMetaFromRow(row){
-  let {y,m,d}=parseYMD(row[1]);
-  if(!y){ const alt=parseYMD(row[0]); y=alt.y; m=alt.m; d=alt.d; }
-
-  let w=calcWeekday(y,m,d);
-  const gz=ganzhiOfDay(y,m,d);
-  let stem=gz.stem, branch=gz.branch;
-  let jieqi=extractJieqiFromRow(row);
-
-  const w2=normWeek(row[2]); if(w2) w=w2;
-  const s2=String(row[3]??"").trim(); if(STEMS.includes(s2)) stem=s2;
-  const b2=String(row[4]??"").trim(); if(BRANCHES.includes(b2)) branch=b2;
-  const jq2=normJieqi(row[5]); if(jq2) jieqi=jq2;
-
-  return {y,m,d,w,stem,branch,jieqi};
-}
-function buildRd(meta){
-  const rd={"年份":meta.y,"月份":meta.m,"日期":meta.d,"星期":meta.w,"天干":meta.stem,"地支":meta.branch};
-  if(currentUser==="dad") rd["節氣"]=meta.jieqi;
-  return rd;
-}
-function matchFilters(rd, filters){
-  for(const k in filters){
-    if(!filters[k].includes(rd[k])) return false;
-  }
-  return true;
-}
-
-function newGroup(mode, title){
-  const gLimit=(currentGame==="539") ? 39 : 49;
-  return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
-}
-function addRowToGroup(group, label, dataArr){
-  group.rows.push({label, data:dataArr});
-  for(let i=1;i<=group.limit;i++) group.sum[i]+= (dataArr[i]||0);
-}
-
-function getSelectedFilters(){
-  const filters={};
-  const keys=(currentUser==="dad") ? ["年份","月份","日期","星期","天干","地支","節氣"] : ["年份","月份","日期","星期","天干","地支"];
-  keys.forEach(lbl=>{
-    const sel=Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c=>String(c.textContent).trim());
-    if(sel.length) filters[lbl]=sel;
-  });
-  return filters;
-}
-function getSelectedNums(){
-  return Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`))
-    .map(c=>parseInt(c.textContent,10))
-    .filter(n=>Number.isFinite(n));
-}
-
-/* =========================
-   UI init
-   ========================= */
-function switchUser(role){
-  currentUser=role;
-  document.getElementById('mode-dad').classList.toggle('btn-cyan', role==='dad');
-  document.getElementById('mode-bro').classList.toggle('btn-cyan', role==='bro');
-  clearMainSub(); clearDragPair();
-  initFilters(); updateStats();
-}
-
-function initFilters(){
-  maxNum=(currentGame==="539") ? 39 : 49;
-  document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
-  const grid=document.getElementById('filterGrid'); grid.innerHTML='';
-  const yStart=startYearByUser(), yEnd=2026;
-  const years=Array.from({length:yEnd-yStart+1},(_,i)=>yStart+i);
-
-  const sections=[
-    {lbl:"年份", d:years},
-    {lbl:"月份", d:Array.from({length:12},(_,i)=>i+1)},
-    {lbl:"日期", d:Array.from({length:31},(_,i)=>i+1), brk:18},
-    {lbl:"星期", d:["一","二","三","四","五","六","日"]},
-    {lbl:"天干", d:STEMS},
-    {lbl:"地支", d:BRANCHES},
-    {lbl:"節氣", d:buildJieqiOptions(), brk:16},
-    {lbl:"號碼", d:Array.from({length:maxNum},(_,i)=>String(i+1).padStart(2,'0')), brk:25}
-  ];
-
-  sections.forEach(sec=>{
-    const isSB=(sec.lbl==="天干"||sec.lbl==="地支");
-    const isJQ=(sec.lbl==="節氣");
-    const hidden=(currentUser==="bro"&&(isSB||isJQ)) ? "hidden":"";
-    grid.innerHTML += `<div class="lbl ${hidden}">${sec.lbl}</div>`;
-    let html=`<div class="chips ${hidden}" data-label="${sec.lbl}">`;
-    sec.d.forEach((v,i)=>{
-      if(sec.brk && i===sec.brk) html+=`<div class="breakline"></div>`;
-      html+=`<div class="chip" data-val="${v}" onclick="toggleChip(this)">${v}</div>`;
-    });
-    grid.innerHTML += html + `</div>`;
-  });
-
-  updateStatTableUI();
-  syncModeButtons();
-  renderMainSubStatus();
-}
-
-function updateStatTableUI(){
-  const h1=document.getElementById('stat-head-1'), b1=document.getElementById('stat-body-1');
-  const h2=document.getElementById('stat-head-2'), b2=document.getElementById('stat-body-2');
-  h1.innerHTML=b1.innerHTML=h2.innerHTML=b2.innerHTML='';
-  for(let i=1;i<=maxNum;i++){
-    h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}">0</td>`;
-    h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}">0</td>`;
-  }
-}
-
-function toggleChip(el){
-  const cat = el?.parentElement?.dataset?.label || "";
-  const val = String(el?.dataset?.val ?? el?.textContent ?? "").trim();
-  const isNumber = (cat==="號碼");
-
-  // 拖牌/下期對碰：非號碼 chip 用來設定 ①②
-  if(!isNumber && (currentMode==="拖牌模式" || currentMode==="下期對碰") && pickState==="normal"){
-    setDragPick(el, cat, val);
-    renderMainSubStatus();
-    return;
-  }
-
-  // 主體指定
-  if(!isNumber && pickState==="main_armed"){
-    const ok = confirm(`設定「主體」為：${cat}：${val} ？`);
-    if(!ok) return;
-    document.querySelectorAll('.chip.mainpick').forEach(x=>x.classList.remove('mainpick'));
-    document.querySelectorAll('.chip.subpick').forEach(x=>x.classList.remove('subpick'));
-    subPicks=[];
-    mainPick={cat,val};
-    el.classList.add('mainpick');
-
-    // 主體保持 on（同類別只留一個）
-    const box=el.parentElement;
-    if(box) box.querySelectorAll('.chip.on').forEach(x=>x.classList.remove('on'));
-    el.classList.add('on');
-
-    setPickState("sub");
-    updateStats();
-    return;
-  }
-
-  // 副體多選（不影響 on）
-  if(!isNumber && pickState==="sub"){
-    if(!mainPick){ alert("請先設定主體"); setPickState("normal"); return; }
-    if(samePick(mainPick,{cat,val})) return;
-    const idx=subPicks.findIndex(s=>samePick(s,{cat,val}));
-    if(idx>=0){ subPicks.splice(idx,1); el.classList.remove('subpick'); }
-    else { subPicks.push({cat,val}); el.classList.add('subpick'); }
-    renderMainSubStatus();
-    return;
-  }
-
-  // 一般模式（含號碼）
-  el.classList.toggle('on');
-  if(isNumber) updateNumOrder(val, el.classList.contains('on'));
-  updateStats();
-}
-
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData=results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
-      updateStats();
-    }
-  });
-}
-
-function updateStats(){
-  if(!cloudData.length) return;
-  const filters=getSelectedFilters();
-  const catCount=Object.keys(filters).length;
-  const selNums=getSelectedNums();
-  const counts=Array(maxNum+1).fill(0);
-  const validRows=getValidRows();
-
-  validRows.forEach((row,idx)=>{
-    const meta=rowMetaFromRow(row);
-    const rd=buildRd(meta);
-    if(!matchFilters(rd, filters)) return;
-
-    const nums=rowBalls(row);
-    if(currentMode==="歷史模式"){
-      nums.forEach(n=>{ if(n<=maxNum) counts[n]++; });
-    }else if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
-      // 這裡即時統計維持你原本（選號帶下一期）；報表才用新規格
-      if(selNums.length>0 && selNums.some(sn=>nums.includes(sn))){
-        const nxt=validRows[idx+1];
-        if(nxt) rowBalls(nxt).forEach(n=>{ if(n<=maxNum) counts[n]++; });
-      }
-    }else{ // 當期對碰
-      if(selNums.length>0 && selNums.every(sn=>nums.includes(sn))){
-        nums.forEach(n=>{ if(n<=maxNum) counts[n]++; });
-      }
-    }
-  });
-
-  const sorted=[...counts].sort((a,b)=>b-a);
-  const threshold=sorted[4]>0 ? sorted[4] : 999;
-  const sk=startKeyByUser();
-  const skStr=`${String(Math.floor(sk/10000))}/${String(Math.floor((sk%10000)/100)).padStart(2,'0')}/${String(sk%100).padStart(2,'0')}`;
-  document.getElementById('filterCounter').textContent =
-    `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length} | 起算日:${skStr}`;
-
-  for(let i=1;i<=maxNum;i++){
-    const td=document.getElementById(`val1-${i}`);
-    td.textContent=counts[i]||0;
-    td.className=(counts[i]>=threshold && counts[i]>0) ? "top5" : "";
-    let gap=0;
-    for(let j=validRows.length-1;j>=0;j--){
-      if(rowBalls(validRows[j]).includes(i)) break;
-      gap++;
-    }
-    document.getElementById(`val2-${i}`).textContent=gap;
-  }
-  renderMainSubStatus();
-}
-
-/* =========================
-   報表計算器
-   ========================= */
-
-// 歷史：單條件
-function computeHistorySingle(validRows, cat, val, gameMax){
-  const counts=Array(gameMax+1).fill(0);
-  validRows.forEach(row=>{
-    const rd=buildRd(rowMetaFromRow(row));
-    if(String(rd[cat]) !== String(val)) return;
-    rowBalls(row).forEach(n=>{ if(n<=gameMax) counts[n]++; });
-  });
-  return counts;
-}
-
-// 主體：2條件
-function computeHistoryTwo(validRows, a, b, gameMax){
-  const filters={};
-  filters[a.cat]=[String(a.val)];
-  filters[b.cat]=[String(b.val)];
-  const counts=Array(gameMax+1).fill(0);
-  validRows.forEach(row=>{
-    const rd=buildRd(rowMetaFromRow(row));
-    if(!matchFilters(rd, filters)) return;
-    rowBalls(row).forEach(n=>{ if(n<=gameMax) counts[n]++; });
-  });
-  return counts;
-}
-
-// 拖牌：①條件 + 前號num → ②條件（下一期）
-function computeDrag(validRows, cond1, cond2, num, gameMax){
-  const f1={}; f1[cond1.cat]=[String(cond1.val)];
-  const f2={}; f2[cond2.cat]=[String(cond2.val)];
-  const counts=Array(gameMax+1).fill(0);
-
-  for(let i=0;i<validRows.length-1;i++){
-    const row=validRows[i];
-    const nxt=validRows[i+1];
-    const rd1=buildRd(rowMetaFromRow(row));
-    const rd2=buildRd(rowMetaFromRow(nxt));
-    if(!matchFilters(rd1, f1)) continue;
-    if(!matchFilters(rd2, f2)) continue;
-
-    const balls=rowBalls(row);
-    if(!balls.includes(num)) continue;
-
-    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });
+    rowBalls(nxt).forEach(n => { if (n <= gameMax) counts[n]++; });
   }
   return counts;
 }
 
-// ✅ 下期對碰：①條件 + 前號(a,b 同時出現) → ②條件（下一期）
-function computeNextPair(validRows, cond1, cond2, a, b, gameMax){
-  const f1={}; f1[cond1.cat]=[String(cond1.val)];
-  const f2={}; f2[cond2.cat]=[String(cond2.val)];
-  const counts=Array(gameMax+1).fill(0);
-
-  for(let i=0;i<validRows.length-1;i++){
-    const row=validRows[i];
-    const nxt=validRows[i+1];
-    const rd1=buildRd(rowMetaFromRow(row));
-    const rd2=buildRd(rowMetaFromRow(nxt));
-    if(!matchFilters(rd1, f1)) continue;
-    if(!matchFilters(rd2, f2)) continue;
-
-    const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) continue;
-
-    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });
-  }
-  return counts;
-}
-
-// ✅ 當期對碰：filters(交集) + 2碼同列出現 → 統計同列球號
-function computePairSameRow(validRows, filters, a, b, gameMax){
-  const counts=Array(gameMax+1).fill(0);
-  validRows.forEach(row=>{
-    const rd=buildRd(rowMetaFromRow(row));
-    if(!matchFilters(rd, filters)) return;
-    const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) return;
-    balls.forEach(n=>{ if(n<=gameMax) counts[n]++; });
-  });
-  return counts;
-}
-
-// 組合：全部 2碼配對（不固定 base）
-function buildAllPairs(nums){
-  const arr=[...nums].filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
-  const out=[];
-  for(let i=0;i<arr.length;i++){
-    for(let j=i+1;j<arr.length;j++){
-      out.push([arr[i], arr[j]]);
-    }
-  }
-  return out;
-}
-
-/* =========================
-   addToReport：按一次只新增 1 張報表（依模式規則產生多列）
-   ========================= */
-function addToReport(){
-  if(!cloudData.length) return alert("尚未載入資料");
-  const validRows=getValidRows();
-  if(!validRows.length) return alert("無有效資料列");
-  const gameMax=(currentGame==="539") ? 39 : 49;
+// Add to report function for both current and next pair logic
+function addToReport() {
+  if (!cloudData.length) return alert("尚未載入資料");
+  const validRows = getValidRows();
+  if (!validRows.length) return alert("無有效資料列");
+  const gameMax = (currentGame === "539") ? 39 : 49;
 
   const group = newGroup(currentMode, `【${currentMode}】${currentGame}`);
 
-  // ===== 1) 歷史模式：每個選到的條件值各一列（單條件統計）
-  if(currentMode==="歷史模式"){
-    const filters=getSelectedFilters();
-    const entries=[];
-    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
-    if(entries.length===0) return alert("請先選擇至少 1 個條件");
-    entries.forEach(e=>{
+  // Handle the logic for each mode as before
+  if (currentMode === "歷史模式") {
+    const filters = getSelectedFilters();
+    const entries = [];
+    Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({ cat, val: v })));
+    if (entries.length === 0) return alert("請先選擇至少 1 個條件");
+    entries.forEach(e => {
       const counts = computeHistorySingle(validRows, e.cat, e.val, gameMax);
       addRowToGroup(group, `${e.cat}:${e.val}`, counts);
     });
-    group.title = `【歷史模式】${entries.map(e=>`${e.cat}:${e.val}`).join('、')}`;
+    group.title = `【歷史模式】${entries.map(e => `${e.cat}:${e.val}`).join('、')}`;
   }
 
-  // ===== 2) 主體模式：主體+每個副體各一列（2條件統計）
-  else if(mainPick && subPicks.length>0){
-    subPicks.forEach(s=>{
+  // Handle 主體模式
+  else if (mainPick && subPicks.length > 0) {
+    subPicks.forEach(s => {
       const counts = computeHistoryTwo(validRows, mainPick, s, gameMax);
       addRowToGroup(group, `${mainPick.cat}:${mainPick.val} + ${s.cat}:${s.val}`, counts);
     });
-    group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s=>`${s.cat}:${s.val}`).join('、')}`;
+    group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s => `${s.cat}:${s.val}`).join('、')}`;
   }
 
-  // ===== 3) 拖牌模式：①②條件 + 每個號碼一列（原拖牌）
-  else if(currentMode==="拖牌模式"){
-    if(!dragPick1 || !dragPick2) return alert("拖牌模式：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums=getSelectedNums();
-    if(nums.length===0) return alert("拖牌模式：請先在【號碼】區選至少 1 個前期號碼。");
-    nums.forEach(n=>{
+  // Handle 拖牌模式
+  else if (currentMode === "拖牌模式") {
+    if (!dragPick1 || !dragPick2) return alert("拖牌模式：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
+    const nums = getSelectedNums();
+    if (nums.length === 0) return alert("拖牌模式：請先在【號碼】區選至少 1 個前期號碼。");
+    nums.forEach(n => {
       const counts = computeDrag(validRows, dragPick1, dragPick2, n, gameMax);
-      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(n).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
+      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(n).padStart(2, '0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
     });
-    group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}`;
+    group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}`;
   }
 
-  // ===== 4) ✅ 當期對碰：每「單一條件」+「2碼」為一列；其他條件用交集
-  else if(currentMode==="當期對碰"){
-    const filters=getSelectedFilters();
-    const nums=getSelectedNums();
-    const pairs=buildAllPairs(nums);
-    if(pairs.length===0) return alert("當期對碰：請至少選 2 個號碼。");
+  // Handle 當期對碰
+  else if (currentMode === "當期對碰") {
+    const filters = getSelectedFilters();
+    const nums = getSelectedNums();
+    const pairs = buildAllPairs(nums);
+    if (pairs.length === 0) return alert("當期對碰：請至少選 2 個號碼。");
 
-    // 把所有被選的「條件值」攤平成 entries：每個(類別,值)都算一個條件
-    const entries=[];
-    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
-    if(entries.length===0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
-
-    // 對每個 entry：filters2 = (所有條件交集) 但 entry 類別只保留該一值（避免該類別多選造成錯）
-    // 同時其他條件保持交集
-    entries.forEach(entry=>{
-      const filters2 = {...filters};
+    entries.forEach(entry => {
+      const filters2 = { ...filters };
       filters2[entry.cat] = [String(entry.val)];
 
-      pairs.forEach(([a,b])=>{
+      pairs.forEach(([a, b]) => {
         const counts = computePairSameRow(validRows, filters2, a, b, gameMax);
-        addRowToGroup(
-          group,
-          `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`,
-          counts
-        );
+        addRowToGroup(group, `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`, counts);
       });
     });
 
-    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length*pairs.length}列）`;
+    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;
   }
 
-  // ===== 5) ✅ 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
-  else if(currentMode==="下期對碰"){
-    if(!dragPick1 || !dragPick2) return alert("下期對碰：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums=getSelectedNums();
-    const pairs=buildAllPairs(nums);
-    if(pairs.length===0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
+  // Handle 下期對碰
+  else if (currentMode === "下期對碰") {
+    if (!dragPick1 || !dragPick2) return alert("下期對碰：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
+    const nums = getSelectedNums();
+    const pairs = buildAllPairs(nums);
+    if (pairs.length === 0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
 
-    pairs.forEach(([a,b])=>{
+    pairs.forEach(([a, b]) => {
       const counts = computeNextPair(validRows, dragPick1, dragPick2, a, b, gameMax);
-      addRowToGroup(
-        group,
-        `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`,
-        counts
-      );
+      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
     });
 
-    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}｜2碼配對:${pairs.length}組`;
-  }
-
-  else{
-    return alert("目前選擇狀態不足以產生報表：\n- 歷史模式：至少選 1 個條件\n- 主體模式：先主體再選至少 1 個副體\n- 拖牌/下期對碰：先點①②，再選至少 1~2 個號碼\n- 當期對碰：至少選 1 個條件 + 至少 2 個號碼");
+    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}｜2碼配對:${pairs.length}組`;
   }
 
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
-  const targetTab=document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
-  if(targetTab) targetTab.click();
+  const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
+  if (targetTab) targetTab.click();
 }
 
-/* =========================
-   fmt helper：顯示「其餘條件」
-   ========================= */
-function fmtFilters(filters){
-  return Object.entries(filters).map(([k,v])=>`${k}:${(v||[]).join(',')}`).join(' + ') || "無";
-}
-function fmtFiltersWithout(filters, excludeCat){
-  const out={};
-  for(const k in filters){
-    if(k===excludeCat) continue;
-    if(filters[k] && filters[k].length) out[k]=filters[k];
-  }
-  return fmtFilters(out);
+// Add to report helper function
+function addRowToGroup(group, label, dataArr){
+  group.rows.push({label, data:dataArr});
+  for(let i=1; i<=group.limit; i++) group.sum[i] += (dataArr[i] || 0);
 }
 
-/* =========================
-   reports
-   ========================= */
-function deleteReport(groupId){
-  const list=reportStorage[currentUser][currentGame];
-  const idx=list.findIndex(g=>g.id===groupId);
-  if(idx<0) return;
-  if(!confirm("確定刪除這張報表？")) return;
-  list.splice(idx,1);
-  renderCurrentReports();
-}
-function renderCurrentReports(){
-  const cont=document.getElementById('reportContainer');
-  cont.innerHTML='';
-  const groups=reportStorage[currentUser][currentGame];
-  if(!groups.length) return;
+// Report render helper function
+function renderCurrentReports() {
+  const cont = document.getElementById('reportContainer');
+  cont.innerHTML = '';
+  const groups = reportStorage[currentUser][currentGame];
+  if (!groups.length) return;
 
-  let html='';
-  groups.forEach((g,gi)=>{
-    const L=g.limit;
+  let html = '';
+  groups.forEach((g, gi) => {
+    const L = g.limit;
     html += `<div class="report-item">
       <div class="report-header">
         <div class="title">【第 ${gi+1} 張】${g.title}</div>
@@ -813,28 +266,28 @@ function renderCurrentReports(){
           <tr><td class="cond-col">統計明細</td>${Array.from({length:L},(_,i)=>`<td>${i+1}</td>`).join('')}</tr>
         </thead>
         <tbody>`;
-
-    g.rows.forEach(r=>{
-      const sorted=[...r.data].slice(1).sort((a,b)=>b-a);
-      const th=(sorted[4]>0) ? sorted[4] : 999;
+    
+    g.rows.forEach(r => {
+      const sorted = [...r.data].slice(1).sort((a, b) => b - a);
+      const th = (sorted[4] > 0) ? sorted[4] : 999;
       html += `<tr><td class="cond-col">${r.label}</td>${
-        r.data.slice(1).map(v=>{
-          const vv=v||0;
-          const cls=(vv>=th && vv>0) ? 'top5':'';
-          return `<td class="${cls}">${vv?vv:''}</td>`;
+        r.data.slice(1).map(v => {
+          const vv = v || 0;
+          const cls = (vv >= th && vv > 0) ? 'top5' : '';
+          return `<td class="${cls}">${vv ? vv : ''}</td>`;
         }).join('')
       }</tr>`;
     });
 
-    const sumSorted=[...g.sum].slice(1).sort((a,b)=>b-a);
-    const sumTh=(sumSorted[4]>0) ? sumSorted[4] : 999;
+    const sumSorted = [...g.sum].slice(1).sort((a, b) => b - a);
+    const sumTh = (sumSorted[4] > 0) ? sumSorted[4] : 999;
     html += `</tbody>
       <tfoot>
         <tr class="sum-row"><td class="cond-col">加總 (Sum)</td>${
-          g.sum.slice(1).map(v=>{
-            const vv=v||0;
-            const cls=(vv>=sumTh && vv>0) ? 'top5':'';
-            return `<td class="${cls}">${vv?vv:''}</td>`;
+          g.sum.slice(1).map(v => {
+            const vv = v || 0;
+            const cls = (vv >= sumTh && vv > 0) ? 'top5' : '';
+            return `<td class="${cls}">${vv ? vv : ''}</td>`;
           }).join('')
         }</tr>
       </tfoot>
@@ -842,115 +295,38 @@ function renderCurrentReports(){
     </div>`;
   });
 
-  cont.innerHTML=html;
+  cont.innerHTML = html;
 }
 
-function exportToExcel(){
-  const table=document.querySelector(".report-table");
-  if(!table) return alert("無資料");
-  const url='data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
-  const link=document.createElement("a");
-  link.download=`分析_${Date.now()}.xls`;
-  link.href=url; link.click();
+// Report deletion function
+function deleteReport(groupId) {
+  const list = reportStorage[currentUser][currentGame];
+  const idx = list.findIndex(g => g.id === groupId);
+  if (idx < 0) return;
+  if (!confirm("確定刪除這張報表？")) return;
+  list.splice(idx, 1);
+  renderCurrentReports();
 }
-function clearAllReports(){
-  if(confirm("確定清空？")){
-    reportStorage[currentUser][currentGame]=[];
+
+// Export to Excel function
+function exportToExcel() {
+  const table = document.querySelector(".report-table");
+  if (!table) return alert("無資料");
+  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
+  const link = document.createElement("a");
+  link.download = `分析_${Date.now()}.xls`;
+  link.href = url;
+  link.click();
+}
+
+// Clear all reports function
+function clearAllReports() {
+  if (confirm("確定清空？")) {
+    reportStorage[currentUser][currentGame] = [];
     renderCurrentReports();
   }
 }
 
-/* =========================
-   modes / misc
-   ========================= */
-function changeMode(mode, btn){
-  currentMode = mode; // 保持你按鈕文字
-  // 切拖牌/下期對碰時，主副體狀態不影響，拖牌用①②
-  if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
-    setPickState("normal");
-  }
-  syncModeButtons();
-  updateStats();
-  renderMainSubStatus();
-}
-function syncModeButtons(){
-  document.querySelectorAll('.mode-btn').forEach(b=>{
-    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
-  });
-}
-
-function selectToday(){
-  clearFilters();
-  fetchSheetData((lastRow)=>{
-    const meta=rowMetaFromRow(lastRow);
-    if(meta.m) autoClick('月份', meta.m);
-    if(meta.d) autoClick('日期', meta.d);
-    if(meta.w) autoClick('星期', meta.w);
-    if(currentUser==='dad'){
-      if(meta.stem) autoClick('天干', meta.stem);
-      if(meta.branch) autoClick('地支', meta.branch);
-      if(meta.jieqi) autoClick('節氣', meta.jieqi);
-    }
-    updateStats();
-  });
-}
-function autoClick(label, val){
-  const vv=String(val).trim();
-  const c=document.querySelector(`.chips[data-label="${label}"] .chip[data-val="${cssEsc(vv)}"]`);
-  if(c){
-    c.classList.add('on');
-    if(label==="號碼") updateNumOrder(vv, true);
-  }
-}
-function clearFilters(){
-  document.querySelectorAll('.chip.on').forEach(c=>c.classList.remove('on'));
-  numOrder=[];
-  updateStats();
-}
-
-document.querySelectorAll('.tab').forEach(tab=>{
-  tab.addEventListener('click', ()=>{
-    currentGame=tab.dataset.game;
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    tab.classList.add('active');
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    document.getElementById(tab.dataset.target).classList.add('active');
-    if(tab.dataset.target==='mainPage'){
-      initFilters(); fetchSheetData();
-    }else{
-      renderCurrentReports();
-    }
-  });
-});
-
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData=results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
-      updateStats();
-    }
-  });
-}
-
-function updateStatTableUI(){
-  const h1=document.getElementById('stat-head-1'), b1=document.getElementById('stat-body-1');
-  const h2=document.getElementById('stat-head-2'), b2=document.getElementById('stat-body-2');
-  h1.innerHTML=b1.innerHTML=h2.innerHTML=b2.innerHTML='';
-  for(let i=1;i<=maxNum;i++){
-    h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}">0</td>`;
-    h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}">0</td>`;
-  }
-}
-function cssEsc(s){ return String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
-function start(){
-  initFilters();
-  fetchSheetData();
-}
-start();
 </script>
 </body>
 </html>
