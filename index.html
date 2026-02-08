@@ -389,14 +389,15 @@ function addRowToGroup(group, label, dataArr){
 }
 
 function getSelectedFilters(){
-  const filters={};
-  const keys=(currentUser==="dad") ? ["年份","月份","日期","星期","天干","地支","節氣"] : ["年份","月份","日期","星期","天干","地支"];
-  keys.forEach(lbl=>{
-    const sel=Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c=>String(c.textContent).trim());
-    if(sel.length) filters[lbl]=sel;
+  const filters = {};
+  const keys = (currentUser === "dad") ? ["年份", "月份", "日期", "星期", "天干", "地支", "節氣"] : ["年份", "月份", "日期", "星期", "天干", "地支"];
+  keys.forEach(lbl => {
+    const sel = Array.from(document.querySelectorAll(`.chips[data-label="${lbl}"] .chip.on`)).map(c => String(c.textContent).trim());
+    if (sel.length) filters[lbl] = sel;
   });
   return filters;
 }
+
 function getSelectedNums(){
   return Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`))
     .map(c=>parseInt(c.textContent,10))
@@ -415,32 +416,34 @@ function switchUser(role){
 }
 
 function initFilters(){
-  maxNum=(currentGame==="539") ? 39 : 49;
+  maxNum = (currentGame === "539") ? 39 : 49;
   document.getElementById('gameTitle').textContent = `目前模式：${currentGame} - ${currentMode}`;
-  const grid=document.getElementById('filterGrid'); grid.innerHTML='';
-  const yStart=startYearByUser(), yEnd=2026;
-  const years=Array.from({length:yEnd-yStart+1},(_,i)=>yStart+i);
+  const grid = document.getElementById('filterGrid'); 
+  grid.innerHTML = '';  // 清空之前的篩選項
 
-  const sections=[
-    {lbl:"年份", d:years},
-    {lbl:"月份", d:Array.from({length:12},(_,i)=>i+1)},
-    {lbl:"日期", d:Array.from({length:31},(_,i)=>i+1), brk:18},
-    {lbl:"星期", d:["一","二","三","四","五","六","日"]},
-    {lbl:"天干", d:STEMS},
-    {lbl:"地支", d:BRANCHES},
-    {lbl:"節氣", d:buildJieqiOptions(), brk:16},
-    {lbl:"號碼", d:Array.from({length:maxNum},(_,i)=>String(i+1).padStart(2,'0')), brk:25}
+  const yStart = startYearByUser(), yEnd = 2026;
+  const years = Array.from({ length: yEnd - yStart + 1 }, (_, i) => yStart + i);
+
+  const sections = [
+    { lbl: "年份", d: years },
+    { lbl: "月份", d: Array.from({ length: 12 }, (_, i) => i + 1) },
+    { lbl: "日期", d: Array.from({ length: 31 }, (_, i) => i + 1), brk: 18 },
+    { lbl: "星期", d: currentGame === "Lotto" ? ["二", "五"] : ["一", "二", "三", "四", "五", "六", "日"] },  // 只顯示二、五
+    { lbl: "天干", d: STEMS },
+    { lbl: "地支", d: BRANCHES },
+    { lbl: "節氣", d: buildJieqiOptions(), brk: 16 },
+    { lbl: "號碼", d: Array.from({ length: maxNum }, (_, i) => String(i + 1).padStart(2, '0')), brk: 25 }
   ];
 
-  sections.forEach(sec=>{
-    const isSB=(sec.lbl==="天干"||sec.lbl==="地支");
-    const isJQ=(sec.lbl==="節氣");
-    const hidden=(currentUser==="bro"&&(isSB||isJQ)) ? "hidden":"";
+  sections.forEach(sec => {
+    const isSB = (sec.lbl === "天干" || sec.lbl === "地支");
+    const isJQ = (sec.lbl === "節氣");
+    const hidden = (currentUser === "bro" && (isSB || isJQ)) ? "hidden" : "";
     grid.innerHTML += `<div class="lbl ${hidden}">${sec.lbl}</div>`;
-    let html=`<div class="chips ${hidden}" data-label="${sec.lbl}">`;
-    sec.d.forEach((v,i)=>{
-      if(sec.brk && i===sec.brk) html+=`<div class="breakline"></div>`;
-      html+=`<div class="chip" data-val="${v}" onclick="toggleChip(this)">${v}</div>`;
+    let html = `<div class="chips ${hidden}" data-label="${sec.lbl}">`;
+    sec.d.forEach((v, i) => {
+      if (sec.brk && i === sec.brk) html += `<div class="breakline"></div>`;
+      html += `<div class="chip" data-val="${v}" onclick="toggleChip(this)">${v}</div>`;
     });
     grid.innerHTML += html + `</div>`;
   });
@@ -449,6 +452,7 @@ function initFilters(){
   syncModeButtons();
   renderMainSubStatus();
 }
+
 
 function updateStatTableUI(){
   const h1=document.getElementById('stat-head-1'), b1=document.getElementById('stat-body-1');
@@ -899,9 +903,9 @@ function changeMode(mode, btn){
 }
 
 
-function syncModeButtons(){
-  document.querySelectorAll('.mode-btn').forEach(b=>{
-    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
+function syncModeButtons() {
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('btn-orange', b.textContent.trim() === currentMode);
   });
 }
 
@@ -986,6 +990,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
