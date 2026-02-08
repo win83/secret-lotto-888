@@ -1,3 +1,5 @@
+記憶現在程式碼,名稱V1
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -386,12 +388,10 @@ function newGroup(mode, title){
   const gLimit=(currentGame==="539") ? 39 : 49;
   return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
 }
-  
 function addRowToGroup(group, label, dataArr){
   group.rows.push({label, data:dataArr});
   for(let i=1;i<=group.limit;i++) group.sum[i]+= (dataArr[i]||0);
 }
-
 
 function getSelectedFilters(){
   const filters={};
@@ -634,23 +634,24 @@ function computeNextPair(validRows, cond1, cond2, a, b, gameMax){
   const f2={}; f2[cond2.cat]=[String(cond2.val)];
   const counts=Array(gameMax+1).fill(0);
 
+  // 遍歷每一行資料，並檢查前一行是否符合條件
   for(let i=0;i<validRows.length-1;i++){
     const row=validRows[i];
     const nxt=validRows[i+1];
-    const rd1=buildRd(rowMetaFromRow(row));
-    const rd2=buildRd(rowMetaFromRow(nxt));
-    if(!matchFilters(rd1, f1)) continue;
-    if(!matchFilters(rd2, f2)) continue;
+    const rd1=buildRd(rowMetaFromRow(row)); // 當前行
+    const rd2=buildRd(rowMetaFromRow(nxt)); // 下一行
+    if(!matchFilters(rd1, f1)) continue;  // 確認當前行符合條件
+    if(!matchFilters(rd2, f2)) continue;  // 確認下一行符合條件
 
-    const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) continue;
+    const balls=rowBalls(row);  // 獲取當前行號碼
+    if(!(balls.includes(a) && balls.includes(b))) continue; // 確保前期號碼包含 a 和 b
 
-    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });
+    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });  // 計算符合條件的號碼出現次數
   }
   return counts;
 }
 
-// ✅ 當期對碰：filters(交集) + 2碼同列出現 → 統計同列球號
+
 // ✅ 當期對碰：filters(交集) + 2碼同列出現 → 統計同列球號
 function computePairSameRow(validRows, filters, a, b, gameMax){
   const counts=Array(gameMax+1).fill(0);
@@ -845,17 +846,13 @@ function renderCurrentReports(){
 }
 
 function exportToExcel(){
-  const table = document.querySelector(".report-table");
+  const table=document.querySelector(".report-table");
   if(!table) return alert("無資料");
-
-  // 確保匯出的 Excel 表格包含報表的加總
-  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
-  const link = document.createElement("a");
-  link.download = `分析_${Date.now()}.xls`;
-  link.href = url;
-  link.click();
+  const url='data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
+  const link=document.createElement("a");
+  link.download=`分析_${Date.now()}.xls`;
+  link.href=url; link.click();
 }
-
 function clearAllReports(){
   if(confirm("確定清空？")){
     reportStorage[currentUser][currentGame]=[];
@@ -972,8 +969,4 @@ start();
 </script>
 </body>
 </html>
-
-
-
-
 
