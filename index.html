@@ -463,28 +463,28 @@ function updateStatTableUI(){
 function toggleChip(el){
   const cat = el?.parentElement?.dataset?.label || "";
   const val = String(el?.dataset?.val ?? el?.textContent ?? "").trim();
-  const isNumber = (cat==="號碼");
+  const isNumber = (cat === "號碼");
 
-  // 拖牌/下期對碰：非號碼 chip 用來設定 ①②
-  if(!isNumber && (currentMode==="拖牌模式" || currentMode==="下期對碰") && pickState==="normal"){
+  // 拖牌模式：非號碼 chip 用來設定 ①②
+  if (!isNumber && (currentMode === "拖牌模式" || currentMode === "下期對碰") && pickState === "normal") {
     setDragPick(el, cat, val);
     renderMainSubStatus();
     return;
   }
 
   // 主體指定
-  if(!isNumber && pickState==="main_armed"){
+  if (!isNumber && pickState === "main_armed") {
     const ok = confirm(`設定「主體」為：${cat}：${val} ？`);
-    if(!ok) return;
-    document.querySelectorAll('.chip.mainpick').forEach(x=>x.classList.remove('mainpick'));
-    document.querySelectorAll('.chip.subpick').forEach(x=>x.classList.remove('subpick'));
-    subPicks=[];
-    mainPick={cat,val};
+    if (!ok) return;
+    document.querySelectorAll('.chip.mainpick').forEach(x => x.classList.remove('mainpick'));
+    document.querySelectorAll('.chip.subpick').forEach(x => x.classList.remove('subpick'));
+    subPicks = [];
+    mainPick = { cat, val };
     el.classList.add('mainpick');
 
     // 主體保持 on（同類別只留一個）
-    const box=el.parentElement;
-    if(box) box.querySelectorAll('.chip.on').forEach(x=>x.classList.remove('on'));
+    const box = el.parentElement;
+    if (box) box.querySelectorAll('.chip.on').forEach(x => x.classList.remove('on'));
     el.classList.add('on');
 
     setPickState("sub");
@@ -493,21 +493,22 @@ function toggleChip(el){
   }
 
   // 副體多選（不影響 on）
-  if(!isNumber && pickState==="sub"){
-    if(!mainPick){ alert("請先設定主體"); setPickState("normal"); return; }
-    if(samePick(mainPick,{cat,val})) return;
-    const idx=subPicks.findIndex(s=>samePick(s,{cat,val}));
-    if(idx>=0){ subPicks.splice(idx,1); el.classList.remove('subpick'); }
-    else { subPicks.push({cat,val}); el.classList.add('subpick'); }
+  if (!isNumber && pickState === "sub") {
+    if (!mainPick) { alert("請先設定主體"); setPickState("normal"); return; }
+    if (samePick(mainPick, { cat, val })) return;
+    const idx = subPicks.findIndex(s => samePick(s, { cat, val }));
+    if (idx >= 0) { subPicks.splice(idx, 1); el.classList.remove('subpick'); }
+    else { subPicks.push({ cat, val }); el.classList.add('subpick'); }
     renderMainSubStatus();
     return;
   }
 
   // 一般模式（含號碼）
   el.classList.toggle('on');
-  if(isNumber) updateNumOrder(val, el.classList.contains('on'));
+  if (isNumber) updateNumOrder(val, el.classList.contains('on'));
   updateStats();
 }
+
 
 function fetchSheetData(callback){
   document.getElementById('loadingOverlay').style.display='flex';
@@ -928,9 +929,15 @@ function autoClick(label, val){
   }
 }
 function clearFilters(){
-  document.querySelectorAll('.chip.on').forEach(c=>c.classList.remove('on'));
-  numOrder=[];
+  // 清除所有選中的 chip
+  document.querySelectorAll('.chip.on').forEach(c => c.classList.remove('on'));
+
+  // 清空號碼的選擇
+  numOrder = [];
+  
+  // 更新篩選條件
   updateStats();
+  renderMainSubStatus();  // 更新主副體狀態顯示
 }
 
 document.querySelectorAll('.tab').forEach(tab=>{
@@ -979,6 +986,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
