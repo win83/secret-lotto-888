@@ -324,15 +324,19 @@ function hasEnoughBalls(row){ return rowBalls(row).length >= requiredBallCount()
 function getValidRows(){
   const sk=startKeyByUser();
   return cloudData.filter(row=>{
-    if(!row||row.length<7) return false;
-    const {y,m,d}=parseYMD(row[1]);
-    let k=ymdKey(y,m,d);
-    if(isNaN(k)){ const alt=parseYMD(row[0]); k=ymdKey(alt.y,alt.m,alt.d); }
-    if(!Number.isFinite(k)||k<sk) return false;
-    if(!hasEnoughBalls(row)) return false;
+    if(!row || row.length < 7) return false;
+    const {y,m,d} = parseYMD(row[1]);
+    let k = ymdKey(y,m,d);
+    if (isNaN(k)) {
+      const alt = parseYMD(row[0]);
+      k = ymdKey(alt.y, alt.m, alt.d);
+    }
+    if (!Number.isFinite(k) || k < sk) return false;
+    if (!hasEnoughBalls(row)) return false;
     return true;
   });
 }
+
 
 /* =========================
    ✅ Excel 對齊：優先用欄位值
@@ -975,6 +979,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
