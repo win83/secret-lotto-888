@@ -687,9 +687,10 @@ function addToReport(){
     group.title = `【歷史模式】${entries.map(e => `${e.cat}:${e.val}`).join('、')}`;
   }
 
-  // 2) 主體模式：主體+每個副體各一列（2條件統計）
+  // 2) 主體模式：每個主體與副體組合各一列（2條件統計）
   else if(mainPick && subPicks.length > 0){
     subPicks.forEach(s => {
+      // 計算主體與副體組合
       const counts = computeHistoryTwo(validRows, mainPick, s, gameMax);
       addRowToGroup(group, `${mainPick.cat}:${mainPick.val} + ${s.cat}:${s.val}`, counts);
     });
@@ -750,6 +751,7 @@ function addToReport(){
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
   if(targetTab) targetTab.click();
 }
+
 
 /* =========================
    fmt helper：顯示「其餘條件」
@@ -937,6 +939,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
