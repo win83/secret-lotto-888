@@ -96,8 +96,6 @@
     <div class="mainSubBox">
       <button class="btn btn-red" id="btnMainArm" onclick="armMainPick()">主體</button>
       <button class="btn btn-cyan" id="btnSubMode" onclick="toggleSubMode()">副體(多選)</button>
-      <button class="btn btn-purple" onclick="clearDragPair()">清除拖牌①②</button>
-      <button class="btn" onclick="clearMainSub()">清除主體/副體</button>
       <div id="mainSubStatus" class="mainSubHint">主體：未指定｜副體：0 個｜拖牌①②：未設定｜狀態：一般</div>
     </div>
 
@@ -761,6 +759,10 @@ function addToReport(){
     group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}｜2碼配對:${pairs.length}組`;
   }
 
+  // 清除主副體和拖牌，直接在加入報表後執行
+  clearMainSub();
+  clearDragPair();
+
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
   const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
@@ -969,4 +971,5 @@ start();
 </script>
 </body>
 </html>
+
 
