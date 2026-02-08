@@ -671,7 +671,7 @@ function addToReport(){
   const validRows = getValidRows();
   if(!validRows.length) return alert("無有效資料列");
   const gameMax = (currentGame === "539") ? 39 : 49;
-  const group = newGroup(currentMode, `【${currentMode}】${currentGame}`);
+  const group = newGroup(currentMode, `【主副體模式】${currentGame}`);
 
   // 1) 歷史模式：每個選到的條件值各一列（單條件統計）
   if(currentMode === "歷史模式"){
@@ -694,7 +694,7 @@ function addToReport(){
       const counts = computeHistoryTwo(validRows, mainPick, s, gameMax);
       addRowToGroup(group, `${mainPick.cat}:${mainPick.val} + ${s.cat}:${s.val}`, counts);
     });
-    group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s => `${s.cat}:${s.val}`).join('、')}`;
+    group.title = `【主副體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s => `${s.cat}:${s.val}`).join('、')}`;
   }
 
   // 3) 拖牌模式：①②條件 + 每個號碼一列（原拖牌）
@@ -728,30 +728,7 @@ function addToReport(){
         addRowToGroup(group, `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`, counts);
       });
     });
-    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;
-  }
-
-  // 5) 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
-  else if(currentMode === "下期對碰"){
-    if(!dragPick1 || !dragPick2) return alert("下期對碰：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums = getSelectedNums();
-    const pairs = buildAllPairs(nums);
-    if(pairs.length === 0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
-
-    pairs.forEach(([a, b]) => {
-      const counts = computeNextPair(validRows, dragPick1, dragPick2, a, b, gameMax);
-      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
-    });
-
-    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}｜2碼配對:${pairs.length}組`;
-  }
-
-  reportStorage[currentUser][currentGame].push(group);
-  renderCurrentReports();
-  const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
-  if(targetTab) targetTab.click();
-}
-
+    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;*
 
 /* =========================
    fmt helper：顯示「其餘條件」
@@ -939,6 +916,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
