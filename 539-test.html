@@ -281,46 +281,60 @@ function setDragPick(el, cat, val){
 const excelFilePath = "/secret-lotto-888/data/new-folder/539-49.xlsx";
 
 // 2. 修改資料獲取邏輯
-function fetchSheetData(callback) {
-  document.getElementById('loadingOverlay').style.display = 'flex';
+function fetchSheetData(callback){
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'flex';
 
-  fetch(excelFilePath + "?t=" + Date.now())
-    .then(response => {
-      if (!response.ok) throw new Error("檔案讀取失敗，請確認路徑是否正確");
-      return response.arrayBuffer();
-    })
-    .then(data => {
-      const workbook = XLSX.read(data, { type: 'array' });
-      
-      // 根據目前遊戲切換對應的活頁名稱 (539 對應 "539", Lotto 對應 "49")
-      const sheetName = (currentGame === "539") ? "539" : "49";
-      const worksheet = workbook.Sheets[sheetName];
-      
-      if (!worksheet) {
-        alert(`找不到活頁簿: ${sheetName}`);
-        document.getElementById('loadingOverlay').style.display = 'none';
-        return;
-      }
+    // 延遲解析，給瀏覽器時間渲染「雲端大數據運算中」的畫面
+    setTimeout(async () => {
+        try {
+            const response = await fetch(excelFilePath + "?t=" + Date.now());
+            if (!response.ok) throw new Error("檔案讀取失敗");
+            
+            const data = await response.arrayBuffer();
+            
+            // 優化解析參數：使用密集模式與關閉樣式
+            const workbook = XLSX.read(data, { 
+                type: 'array',
+                bookVBA: false,
+                bookDeps: false,
+                bookSheets: false, // 設為 false 提高速度，手動指定
+                cellDates: false,  // 關閉日期轉換，維持原字串速度最快
+                cellStyles: false,
+                cellHTML: false,
+                cellFormula: false
+            });
+            
+            const sheetName = (currentGame === "539") ? "539" : "49";
+            const worksheet = workbook.Sheets[sheetName];
+            
+            if (!worksheet) {
+                alert(`找不到活頁簿: ${sheetName}`);
+                overlay.style.display = 'none';
+                return;
+            }
 
-      // 將 Excel 轉為二維陣列 (與 PapaParse 格式一致)
-      // 使用 raw: false 確保日期與號碼格式轉為字串以相容後續處理
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            // header: 1 代表轉成純二維陣列
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+                header: 1, 
+                defval: "",
+                raw: true // 讀取原始值，不進行格式化處理以提升速度
+            });
 
-      document.getElementById('loadingOverlay').style.display = 'none';
-      
-      // 跳過標題列並儲存至 cloudData
-      cloudData = jsonData.slice(1);
-      
-      if (callback) {
-        callback(jsonData[jsonData.length - 1]);
-      }
-      updateStats();
-    })
-    .catch(error => {
-      console.error(error);
-      alert("載入失敗: " + error.message);
-      document.getElementById('loadingOverlay').style.display = 'none';
-    });
+            cloudData = jsonData.slice(1);
+            
+            // 執行統計
+            updateStats();
+            
+            if(callback) callback(jsonData[jsonData.length - 1]);
+            
+            overlay.style.display = 'none';
+        } catch (error) {
+            console.error(error);
+            alert("載入失敗: " + error.message);
+            overlay.style.display = 'none';
+        }
+    }, 50); // 延遲 50 毫秒啟動解析
 }
 
 function updateStats(){
@@ -473,4 +487,5 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
 
