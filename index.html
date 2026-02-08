@@ -240,13 +240,19 @@ function updateNumOrder(num, isOn){
 function renderMainSubStatus(){
   const el = document.getElementById('mainSubStatus');
   if(!el) return;
+
   const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
-  const subStr = subPicks.length ? subPicks.map(s=>`${s.cat}:${s.val}`).join('、') : "";
-  const dragStr = (dragPick1 && dragPick2) ? `①${dragPick1.cat}:${dragPick1.val}｜②${dragPick2.cat}:${dragPick2.val}` :
-                  (dragPick1 ? `①${dragPick1.cat}:${dragPick1.val}｜②未設定` : "未設定");
-  const stMap = { normal:"一般", main_armed:"等待主體確認", sub:"副體多選中" };
-  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length?`（${subStr}）`:``}｜拖牌①②：${dragStr}｜狀態：${stMap[pickState] || pickState}`;
+  const subStr = subPicks.length ? subPicks.map(s => `${s.cat}:${s.val}`).join('、') : "";
+
+  const stMap = { 
+    normal: "一般", 
+    main_armed: "等待主體確認", 
+    sub: "副體多選中" 
+  };
+  
+  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length ? `（${subStr}）` : ``}｜狀態：${stMap[pickState] || pickState}`;
 }
+
 
 /* =========================
    日期 / 干支
@@ -401,12 +407,23 @@ function getSelectedNums(){
    UI init
    ========================= */
 function switchUser(role){
-  currentUser=role;
-  document.getElementById('mode-dad').classList.toggle('btn-cyan', role==='dad');
-  document.getElementById('mode-bro').classList.toggle('btn-cyan', role==='bro');
-  clearMainSub(); clearDragPair();
-  initFilters(); updateStats();
+  currentUser = role;
+  
+  // 顯示或隱藏「主體」和「副體」選擇按鈕
+  if (role === 'dad') {
+    document.getElementById('btnMainArm').style.display = 'block';  // 顯示主體按鈕
+    document.getElementById('btnSubMode').style.display = 'block';  // 顯示副體選擇
+  } else {
+    document.getElementById('btnMainArm').style.display = 'none';  // 隱藏主體按鈕
+    document.getElementById('btnSubMode').style.display = 'none';  // 隱藏副體選擇
+  }
+  
+  clearMainSub(); 
+  clearDragPair(); 
+  initFilters(); 
+  updateStats();
 }
+
 
 function initFilters(){
   maxNum=(currentGame==="539") ? 39 : 49;
@@ -851,21 +868,25 @@ function clearAllReports(){
    ========================= */
 function changeMode(mode, btn){
   currentMode = mode; // 保持你按鈕文字
-  
-  // 切換模式時，清除主體/副體和拖牌模式相關狀態
-  if(currentMode !== "主體模式" && currentMode !== "副體模式") {
-    clearMainSub();  // 清除主體副體選擇
+
+  // 切換模式時，清除其他模式選項
+  if(currentMode !== "主體模式") {
+    document.getElementById('btnMainArm').style.display = 'none';  // 隱藏主體按鈕
+  } else {
+    document.getElementById('btnMainArm').style.display = 'block';  // 顯示主體按鈕
   }
 
-  if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
-    setPickState("normal");  // 切換到拖牌/下期對碰時清除主體副體選擇
+  if(currentMode !== "副體模式") {
+    document.getElementById('btnSubMode').style.display = 'none';  // 隱藏副體選擇
+  } else {
+    document.getElementById('btnSubMode').style.display = 'block';  // 顯示副體選擇
   }
 
-  // 同步切換按鈕的顯示狀態
   syncModeButtons();
   updateStats();
-  renderMainSubStatus();  // 更新顯示狀態
+  renderMainSubStatus();
 }
+
 
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
@@ -962,4 +983,5 @@ start();
 </script>
 </body>
 </html>
+
 
