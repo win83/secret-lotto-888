@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>專業樂透統計系統 V2.2 - 報表顯示規格版</title>
+  <title>專業樂透統計系統 V2.2 - 報表顯示規格版（當期對碰/下期對碰修正版）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
     :root{
@@ -49,7 +49,7 @@
     .report-header .title { flex:1; }
     .report-table { width:100%; border-collapse:collapse; font-size:11px; min-width: 1000px; }
     .report-table td { border:1px solid #000; text-align:center; padding:2px; }
-    .cond-col { background:#ffff00; font-weight: bold; width: 320px; text-align: left; padding-left: 6px; }
+    .cond-col { background:#ffff00; font-weight: bold; width: 420px; text-align: left; padding-left: 6px; }
     .sum-row { background:#ddebf7; font-weight:bold; }
     .hidden { display: none !important; }
 
@@ -104,7 +104,7 @@
     <div class="btnbar">
       <button class="btn btn-orange mode-btn" onclick="changeMode('歷史模式', this)">歷史模式</button>
       <button class="btn btn-yellow mode-btn" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
-      <button class="btn btn-yellow mode-btn" onclick="changeMode('當期對碰', this)">對碰模式</button>
+      <button class="btn btn-yellow mode-btn" onclick="changeMode('當期對碰', this)">當期對碰</button>
       <button class="btn btn-yellow mode-btn" onclick="changeMode('下期對碰', this)">下期對碰</button>
       <button class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
       <button class="btn" onclick="clearFilters()">清空篩選</button>
@@ -181,7 +181,7 @@ function clearMainSub(){
 }
 
 /* =========================
-   拖牌 ①② 條件（依點擊順序）
+   拖牌 ①②（下期對碰也用）
    ========================= */
 let dragPick1 = null; // {cat,val}
 let dragPick2 = null; // {cat,val}
@@ -192,22 +192,17 @@ function clearDragPair(){
   renderMainSubStatus();
 }
 function setDragPick(el, cat, val){
-  // 重點：拖牌模式下，非號碼 chip 用於設定 ①②（不當一般 on）
   if(!dragPick1){
     dragPick1 = {cat,val};
     el.classList.add('drag1');
     return;
   }
   if(dragPick1 && dragPick1.cat===cat && dragPick1.val===val){
-    // 點同一顆：清除①
     dragPick1 = null;
     el.classList.remove('drag1');
-    // 若②存在，提升為①（視覺也調整）
     if(dragPick2){
       const old2 = dragPick2; dragPick2 = null;
-      // 移除所有 drag2 class，再重套
       document.querySelectorAll('.chip.drag2').forEach(x=>x.classList.remove('drag2'));
-      // 把 old2 變成 drag1
       dragPick1 = old2;
       const node = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
       if(node) node.classList.add('drag1');
@@ -219,7 +214,6 @@ function setDragPick(el, cat, val){
     el.classList.add('drag2');
     return;
   }
-  // 如果①②都已經有：以「新點的」當②，舊②丟掉
   const old2 = dragPick2;
   const oldNode2 = document.querySelector(`.chips[data-label="${old2.cat}"] .chip[data-val="${cssEsc(old2.val)}"]`);
   if(oldNode2) oldNode2.classList.remove('drag2');
@@ -228,14 +222,13 @@ function setDragPick(el, cat, val){
 }
 
 /* =========================
-   號碼點擊順序（對碰固定 2 碼組合）
+   號碼點擊順序（保持，但本次規格不再依 base 固定）
    ========================= */
-let numOrder = []; // 依點擊順序記錄（只記 on 的）
+let numOrder = [];
 function updateNumOrder(num, isOn){
   const n = parseInt(num,10);
   if(!Number.isFinite(n)) return;
   if(isOn){
-    // 若已存在先移除再 push（保持最新點到的在最後）
     numOrder = numOrder.filter(x=>x!==n);
     numOrder.push(n);
   }else{
@@ -255,7 +248,7 @@ function renderMainSubStatus(){
 }
 
 /* =========================
-   日期 / 星期 / 日干支
+   日期 / 干支
    ========================= */
 function parseYMD(dateCell){
   const s = String(dateCell || "").trim();
@@ -314,7 +307,7 @@ function startKeyByUser(){ return (currentUser==="dad") ? 20200101 : 20060101; }
 function startYearByUser(){ return (currentUser==="dad") ? 2020 : 2006; }
 
 /* =========================
-   球號欄位讀取與驗證
+   球號讀取
    ========================= */
 function requiredBallCount(){ return (currentGame==="539") ? 5 : 6; }
 function rowBalls(row){
@@ -339,7 +332,7 @@ function getValidRows(){
 }
 
 /* =========================
-   ✅ Excel 對齊：優先用欄位值 C週 / D天干 / E地支 / F節氣
+   ✅ Excel 對齊：優先用欄位值
    ========================= */
 function normWeek(v){
   const s=String(v??"").trim();
@@ -401,9 +394,6 @@ function getSelectedNums(){
   return Array.from(document.querySelectorAll(`.chips[data-label="號碼"] .chip.on`))
     .map(c=>parseInt(c.textContent,10))
     .filter(n=>Number.isFinite(n));
-}
-function fmtFilters(filters){
-  return Object.entries(filters).map(([k,v])=>`${k}:${v.join(',')}`).join(' + ') || "無條件";
 }
 
 /* =========================
@@ -468,10 +458,8 @@ function toggleChip(el){
   const val = String(el?.dataset?.val ?? el?.textContent ?? "").trim();
   const isNumber = (cat==="號碼");
 
-  // 拖牌模式：非號碼 chip 用來設定 ①②（不影響 on）
-  if(!isNumber && currentMode==="拖牌模式" && pickState==="normal"){
-    // 清掉既有拖牌 class 再重掛，避免殘留
-    //（setDragPick 會自己處理）
+  // 拖牌/下期對碰：非號碼 chip 用來設定 ①②
+  if(!isNumber && (currentMode==="拖牌模式" || currentMode==="下期對碰") && pickState==="normal"){
     setDragPick(el, cat, val);
     renderMainSubStatus();
     return;
@@ -487,7 +475,7 @@ function toggleChip(el){
     mainPick={cat,val};
     el.classList.add('mainpick');
 
-    // 主體也保持 on（同類別只留一個）
+    // 主體保持 on（同類別只留一個）
     const box=el.parentElement;
     if(box) box.querySelectorAll('.chip.on').forEach(x=>x.classList.remove('on'));
     el.classList.add('on');
@@ -501,7 +489,6 @@ function toggleChip(el){
   if(!isNumber && pickState==="sub"){
     if(!mainPick){ alert("請先設定主體"); setPickState("normal"); return; }
     if(samePick(mainPick,{cat,val})) return;
-
     const idx=subPicks.findIndex(s=>samePick(s,{cat,val}));
     if(idx>=0){ subPicks.splice(idx,1); el.classList.remove('subpick'); }
     else { subPicks.push({cat,val}); el.classList.add('subpick'); }
@@ -509,7 +496,7 @@ function toggleChip(el){
     return;
   }
 
-  // 一般模式（含號碼）：照舊 + 記錄號碼順序
+  // 一般模式（含號碼）
   el.classList.toggle('on');
   if(isNumber) updateNumOrder(val, el.classList.contains('on'));
   updateStats();
@@ -545,11 +532,12 @@ function updateStats(){
     if(currentMode==="歷史模式"){
       nums.forEach(n=>{ if(n<=maxNum) counts[n]++; });
     }else if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
+      // 這裡即時統計維持你原本（選號帶下一期）；報表才用新規格
       if(selNums.length>0 && selNums.some(sn=>nums.includes(sn))){
         const nxt=validRows[idx+1];
         if(nxt) rowBalls(nxt).forEach(n=>{ if(n<=maxNum) counts[n]++; });
       }
-    }else{ // 對碰模式(當期對碰)
+    }else{ // 當期對碰
       if(selNums.length>0 && selNums.every(sn=>nums.includes(sn))){
         nums.forEach(n=>{ if(n<=maxNum) counts[n]++; });
       }
@@ -581,7 +569,7 @@ function updateStats(){
    報表計算器
    ========================= */
 
-// 歷史模式：只用「單一條件」(cat=val) 統計同列球號出現次數
+// 歷史：單條件
 function computeHistorySingle(validRows, cat, val, gameMax){
   const counts=Array(gameMax+1).fill(0);
   validRows.forEach(row=>{
@@ -592,7 +580,7 @@ function computeHistorySingle(validRows, cat, val, gameMax){
   return counts;
 }
 
-// 主體模式：只用 2 個條件 (main + sub) 統計同列球號出現次數（像 Excel 篩兩欄）
+// 主體：2條件
 function computeHistoryTwo(validRows, a, b, gameMax){
   const filters={};
   filters[a.cat]=[String(a.val)];
@@ -606,7 +594,7 @@ function computeHistoryTwo(validRows, a, b, gameMax){
   return counts;
 }
 
-// 拖牌模式：①(前期條件) + 前號num → ②(後期條件) 統計後期球號
+// 拖牌：①條件 + 前號num → ②條件（下一期）
 function computeDrag(validRows, cond1, cond2, num, gameMax){
   const f1={}; f1[cond1.cat]=[String(cond1.val)];
   const f2={}; f2[cond2.cat]=[String(cond2.val)];
@@ -628,8 +616,30 @@ function computeDrag(validRows, cond1, cond2, num, gameMax){
   return counts;
 }
 
-// 對碰模式：filters(交集) + 2碼同列出現 → 統計同列球號出現次數
-function computePair(validRows, filters, a, b, gameMax){
+// ✅ 下期對碰：①條件 + 前號(a,b 同時出現) → ②條件（下一期）
+function computeNextPair(validRows, cond1, cond2, a, b, gameMax){
+  const f1={}; f1[cond1.cat]=[String(cond1.val)];
+  const f2={}; f2[cond2.cat]=[String(cond2.val)];
+  const counts=Array(gameMax+1).fill(0);
+
+  for(let i=0;i<validRows.length-1;i++){
+    const row=validRows[i];
+    const nxt=validRows[i+1];
+    const rd1=buildRd(rowMetaFromRow(row));
+    const rd2=buildRd(rowMetaFromRow(nxt));
+    if(!matchFilters(rd1, f1)) continue;
+    if(!matchFilters(rd2, f2)) continue;
+
+    const balls=rowBalls(row);
+    if(!(balls.includes(a) && balls.includes(b))) continue;
+
+    rowBalls(nxt).forEach(n=>{ if(n<=gameMax) counts[n]++; });
+  }
+  return counts;
+}
+
+// ✅ 當期對碰：filters(交集) + 2碼同列出現 → 統計同列球號
+function computePairSameRow(validRows, filters, a, b, gameMax){
   const counts=Array(gameMax+1).fill(0);
   validRows.forEach(row=>{
     const rd=buildRd(rowMetaFromRow(row));
@@ -641,6 +651,18 @@ function computePair(validRows, filters, a, b, gameMax){
   return counts;
 }
 
+// 組合：全部 2碼配對（不固定 base）
+function buildAllPairs(nums){
+  const arr=[...nums].filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
+  const out=[];
+  for(let i=0;i<arr.length;i++){
+    for(let j=i+1;j<arr.length;j++){
+      out.push([arr[i], arr[j]]);
+    }
+  }
+  return out;
+}
+
 /* =========================
    addToReport：按一次只新增 1 張報表（依模式規則產生多列）
    ========================= */
@@ -650,16 +672,13 @@ function addToReport(){
   if(!validRows.length) return alert("無有效資料列");
   const gameMax=(currentGame==="539") ? 39 : 49;
 
-  // 一律新增「一張」
   const group = newGroup(currentMode, `【${currentMode}】${currentGame}`);
 
-  // === A) 歷史模式：每個選到的條件值各一列（單條件統計）
+  // ===== 1) 歷史模式：每個選到的條件值各一列（單條件統計）
   if(currentMode==="歷史模式"){
     const filters=getSelectedFilters();
     const entries=[];
-    Object.entries(filters).forEach(([cat, vals])=>{
-      vals.forEach(v=> entries.push({cat, val:v}));
-    });
+    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
     if(entries.length===0) return alert("請先選擇至少 1 個條件");
     entries.forEach(e=>{
       const counts = computeHistorySingle(validRows, e.cat, e.val, gameMax);
@@ -668,15 +687,8 @@ function addToReport(){
     group.title = `【歷史模式】${entries.map(e=>`${e.cat}:${e.val}`).join('、')}`;
   }
 
-  // === B) 主體模式：主體+每個副體各一列（2條件統計）
-  else if(currentMode==="下期對碰"){ 
-    // 這裡你沒定義新規格，我暫時沿用舊邏輯不動（避免破壞）
-    // 若你要下期對碰也套新規格，下一句你說我就調整。
-    return alert("下期對碰：目前未套用新報表規格（避免破壞舊功能）。你要我按你同一套規格定義也可以。");
-  }
-
-  else if(mainPick && subPicks.length>0 && (pickState==="sub" || pickState==="normal")){
-    // 視為「主體模式」
+  // ===== 2) 主體模式：主體+每個副體各一列（2條件統計）
+  else if(mainPick && subPicks.length>0){
     subPicks.forEach(s=>{
       const counts = computeHistoryTwo(validRows, mainPick, s, gameMax);
       addRowToGroup(group, `${mainPick.cat}:${mainPick.val} + ${s.cat}:${s.val}`, counts);
@@ -684,12 +696,11 @@ function addToReport(){
     group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s=>`${s.cat}:${s.val}`).join('、')}`;
   }
 
-  // === C) 拖牌模式：①②條件必須有 + 號碼至少 1 個；每個號碼一列
+  // ===== 3) 拖牌模式：①②條件 + 每個號碼一列（原拖牌）
   else if(currentMode==="拖牌模式"){
     if(!dragPick1 || !dragPick2) return alert("拖牌模式：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums = getSelectedNums();
+    const nums=getSelectedNums();
     if(nums.length===0) return alert("拖牌模式：請先在【號碼】區選至少 1 個前期號碼。");
-
     nums.forEach(n=>{
       const counts = computeDrag(validRows, dragPick1, dragPick2, n, gameMax);
       addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(n).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
@@ -697,56 +708,79 @@ function addToReport(){
     group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}`;
   }
 
-  // === D) 對碰模式：條件多選 + 號碼固定 2 碼組合（第一顆為基底）
+  // ===== 4) ✅ 當期對碰：每「單一條件」+「2碼」為一列；其他條件用交集
   else if(currentMode==="當期對碰"){
     const filters=getSelectedFilters();
-    const nums = getSelectedNums();
-    if(nums.length<2) return alert("對碰模式：請至少選 2 個號碼。");
+    const nums=getSelectedNums();
+    const pairs=buildAllPairs(nums);
+    if(pairs.length===0) return alert("當期對碰：請至少選 2 個號碼。");
 
-    // 固定 2 碼：以「第一個被點到的號碼」當基底（若 numOrder 無法對齊，就用 nums[0]）
-    const base = (numOrder.length && nums.includes(numOrder[0])) ? numOrder[0] : nums[0];
-    const others = nums.filter(n=>n!==base);
-    if(others.length===0) return alert("對碰模式：請再多選 1 個不同的號碼。");
+    // 把所有被選的「條件值」攤平成 entries：每個(類別,值)都算一個條件
+    const entries=[];
+    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
+    if(entries.length===0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
 
-    // 分組欄位：優先 年份，沒有才往下
-    const splitPriority = ["年份","月份","日期","星期","天干","地支","節氣"];
-    let splitCat = splitPriority.find(k=>filters[k] && filters[k].length>0) || null;
+    // 對每個 entry：filters2 = (所有條件交集) 但 entry 類別只保留該一值（避免該類別多選造成錯）
+    // 同時其他條件保持交集
+    entries.forEach(entry=>{
+      const filters2 = {...filters};
+      filters2[entry.cat] = [String(entry.val)];
 
-    // 若有 splitCat：每個 splitVal 產生多列
-    // 其餘條件維持「交集」(filters 그대로)，但 splitCat 當下改成單值
-    if(splitCat){
-      const splitVals = filters[splitCat].slice();
-      splitVals.forEach(splitVal=>{
-        const filters2 = {...filters};
-        filters2[splitCat] = [String(splitVal)];
-        others.forEach(o=>{
-          const counts = computePair(validRows, filters2, base, o, gameMax);
-          addRowToGroup(group, `${splitCat}:${splitVal}｜號碼:${String(base).padStart(2,'0')},${String(o).padStart(2,'0')}｜其餘條件:${fmtFilters({...filters2, [splitCat]:[]})||"無"}`, counts);
-        });
+      pairs.forEach(([a,b])=>{
+        const counts = computePairSameRow(validRows, filters2, a, b, gameMax);
+        addRowToGroup(
+          group,
+          `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`,
+          counts
+        );
       });
-      group.title = `【對碰模式】分組:${splitCat}｜${splitVals.join(',')}｜2碼基底:${String(base).padStart(2,'0')}｜配對:${others.map(o=>String(o).padStart(2,'0')).join(',')}`;
-    }else{
-      // 沒有任何條件：就只用 2碼條件
-      others.forEach(o=>{
-        const counts = computePair(validRows, {}, base, o, gameMax);
-        addRowToGroup(group, `號碼:${String(base).padStart(2,'0')},${String(o).padStart(2,'0')}（無條件）`, counts);
-      });
-      group.title = `【對碰模式】無條件｜2碼基底:${String(base).padStart(2,'0')}｜配對:${others.map(o=>String(o).padStart(2,'0')).join(',')}`;
-    }
+    });
+
+    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length*pairs.length}列）`;
+  }
+
+  // ===== 5) ✅ 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
+  else if(currentMode==="下期對碰"){
+    if(!dragPick1 || !dragPick2) return alert("下期對碰：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
+    const nums=getSelectedNums();
+    const pairs=buildAllPairs(nums);
+    if(pairs.length===0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
+
+    pairs.forEach(([a,b])=>{
+      const counts = computeNextPair(validRows, dragPick1, dragPick2, a, b, gameMax);
+      addRowToGroup(
+        group,
+        `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`,
+        counts
+      );
+    });
+
+    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}｜2碼配對:${pairs.length}組`;
   }
 
   else{
-    // 沒進入任何新規則（例如你有點一些條件但沒主體副體/沒拖牌①②/沒對碰2碼）
-    // 就提醒使用方式
-    return alert("目前選擇狀態不足以產生報表：\n- 歷史模式：請至少選 1 個條件\n- 主體模式：請先設定主體並選至少 1 個副體\n- 拖牌模式：請先設定拖牌①②並選至少 1 個號碼\n- 對碰模式：請選至少 2 個號碼");
+    return alert("目前選擇狀態不足以產生報表：\n- 歷史模式：至少選 1 個條件\n- 主體模式：先主體再選至少 1 個副體\n- 拖牌/下期對碰：先點①②，再選至少 1~2 個號碼\n- 當期對碰：至少選 1 個條件 + 至少 2 個號碼");
   }
 
-  // 儲存：按一次只新增一張
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
-
   const targetTab=document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
   if(targetTab) targetTab.click();
+}
+
+/* =========================
+   fmt helper：顯示「其餘條件」
+   ========================= */
+function fmtFilters(filters){
+  return Object.entries(filters).map(([k,v])=>`${k}:${(v||[]).join(',')}`).join(' + ') || "無";
+}
+function fmtFiltersWithout(filters, excludeCat){
+  const out={};
+  for(const k in filters){
+    if(k===excludeCat) continue;
+    if(filters[k] && filters[k].length) out[k]=filters[k];
+  }
+  return fmtFilters(out);
 }
 
 /* =========================
@@ -760,7 +794,6 @@ function deleteReport(groupId){
   list.splice(idx,1);
   renderCurrentReports();
 }
-
 function renderCurrentReports(){
   const cont=document.getElementById('reportContainer');
   cont.innerHTML='';
@@ -831,23 +864,18 @@ function clearAllReports(){
    modes / misc
    ========================= */
 function changeMode(mode, btn){
-  // 你的按鈕上仍用「當期對碰」字樣，我這裡改成對碰模式展示
-  if(mode==="當期對碰") currentMode="當期對碰";
-  else currentMode = (mode.includes('模式')) ? mode : mode + '模式';
-
-  // 切拖牌模式時，清掉主體/副體狀態，避免干擾
-  if(currentMode==="拖牌模式"){
+  currentMode = mode; // 保持你按鈕文字
+  // 切拖牌/下期對碰時，主副體狀態不影響，拖牌用①②
+  if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
     setPickState("normal");
   }
   syncModeButtons();
   updateStats();
   renderMainSubStatus();
 }
-
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
-    const txt=b.textContent.trim();
-    b.classList.toggle('btn-orange', txt===currentMode || (currentMode==="當期對碰" && txt==="對碰模式"));
+    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
   });
 }
 
@@ -874,16 +902,12 @@ function autoClick(label, val){
     if(label==="號碼") updateNumOrder(vv, true);
   }
 }
-
 function clearFilters(){
   document.querySelectorAll('.chip.on').forEach(c=>c.classList.remove('on'));
   numOrder=[];
   updateStats();
 }
 
-/* =========================
-   tabs
-   ========================= */
 document.querySelectorAll('.tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
     currentGame=tab.dataset.game;
@@ -899,19 +923,34 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 
-/* =========================
-   small helpers
-   ========================= */
-function cssEsc(s){
-  // for querySelector attribute value
-  return String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+function fetchSheetData(callback){
+  document.getElementById('loadingOverlay').style.display='flex';
+  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
+    download:true, header:false, skipEmptyLines:true,
+    complete:function(results){
+      document.getElementById('loadingOverlay').style.display='none';
+      cloudData=results.data.slice(1);
+      if(callback) callback(results.data[results.data.length-1]);
+      updateStats();
+    }
+  });
 }
 
-/* =========================
-   boot
-   ========================= */
-initFilters();
-fetchSheetData();
+function updateStatTableUI(){
+  const h1=document.getElementById('stat-head-1'), b1=document.getElementById('stat-body-1');
+  const h2=document.getElementById('stat-head-2'), b2=document.getElementById('stat-body-2');
+  h1.innerHTML=b1.innerHTML=h2.innerHTML=b2.innerHTML='';
+  for(let i=1;i<=maxNum;i++){
+    h1.innerHTML += `<th>${i}</th>`; b1.innerHTML += `<td id="val1-${i}">0</td>`;
+    h2.innerHTML += `<th>${i}</th>`; b2.innerHTML += `<td id="val2-${i}">0</td>`;
+  }
+}
+function cssEsc(s){ return String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
+function start(){
+  initFilters();
+  fetchSheetData();
+}
+start();
 </script>
 </body>
 </html>
