@@ -865,15 +865,22 @@ function changeMode(mode, btn){
   
   // Clear previous 'active' classes and set 'active' to the selected mode
   document.querySelectorAll('.mode-btn').forEach(button => {
-    button.classList.remove('btn-orange');
+    button.classList.remove('btn-orange', 'btn-yellow'); // Remove existing styles
   });
-  btn.classList.add('btn-orange');
-  
+  btn.classList.add('btn-orange'); // Add orange class to the active button
+
+  // Specifically check for "歷史模式" and set it to yellow
+  if (currentMode === "歷史模式") {
+    btn.classList.add('btn-yellow'); // Apply yellow color to the "歷史模式" button
+  }
+
   // Handle the changes based on the selected mode
   if (currentMode === "主體模式") {
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   } else if (currentMode === "歷史模式") {
-    document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
+    // Make sure cloudData is populated and then update the stats
+    const validRows = getValidRows(); // Get valid rows based on filters and data
+    document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${validRows.length} | 起算日:${startKeyByUser()}`;
   }
 
   // Clear main/sub body when switching from 主體模式
@@ -885,6 +892,7 @@ function changeMode(mode, btn){
   updateStats();
   renderMainSubStatus();  // Update the display status
 }
+
 
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
@@ -967,6 +975,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
