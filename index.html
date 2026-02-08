@@ -845,13 +845,17 @@ function renderCurrentReports(){
 }
 
 function exportToExcel(){
-  const table=document.querySelector(".report-table");
+  const table = document.querySelector(".report-table");
   if(!table) return alert("無資料");
-  const url='data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
-  const link=document.createElement("a");
-  link.download=`分析_${Date.now()}.xls`;
-  link.href=url; link.click();
+
+  // 確保匯出的 Excel 表格包含報表的加總
+  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(table.outerHTML);
+  const link = document.createElement("a");
+  link.download = `分析_${Date.now()}.xls`;
+  link.href = url;
+  link.click();
 }
+
 function clearAllReports(){
   if(confirm("確定清空？")){
     reportStorage[currentUser][currentGame]=[];
@@ -968,6 +972,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
