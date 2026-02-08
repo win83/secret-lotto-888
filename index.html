@@ -97,8 +97,6 @@
       <div id="mainSubStatus" class="mainSubHint">主體：未指定｜副體：0 個｜拖牌①②：未設定｜狀態：一般</div>
     </div>
 
-    <div class="filters-box"><div class="grid" id="filterGrid"></div></div>
-
     <div class="btnbar">
       <button class="btn btn-orange mode-btn" onclick="changeMode('歷史模式', this)">歷史模式</button>
       <button class="btn btn-yellow mode-btn" onclick="changeMode('拖牌模式', this)">拖牌模式</button>
@@ -107,6 +105,8 @@
       <button class="btn btn-green" onclick="addToReport()">🧪 加入報表</button>
       <button class="btn" onclick="clearFilters()">清空篩選</button>
     </div>
+
+    <div class="filters-box"><div class="grid" id="filterGrid"></div></div>
 
     <div class="btnbar" style="margin-top:15px; flex-direction: column; align-items: flex-start;">
       <button class="btn btn-purple" onclick="selectToday()">一鍵選取今日條件 & 同步雲端</button>
@@ -971,6 +971,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
