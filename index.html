@@ -861,27 +861,29 @@ function clearAllReports(){
    modes / misc
    ========================= */
 function changeMode(mode, btn){
-  currentMode = mode; // 設置當前模式
-
-  // 當切換至主體模式時，更新「模式：主體模式」並顯示相應的統計條件
+  currentMode = mode; // Set current mode
+  
+  // Clear previous 'active' classes and set 'active' to the selected mode
+  document.querySelectorAll('.mode-btn').forEach(button => {
+    button.classList.remove('btn-orange');
+  });
+  btn.classList.add('btn-orange');
+  
+  // Handle the changes based on the selected mode
   if (currentMode === "主體模式") {
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-  }
-
-  // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
-  if (currentMode === "歷史模式") {
+  } else if (currentMode === "歷史模式") {
     document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
 
-  // 切換到其他模式時，清除主副體
+  // Clear main/sub body when switching from 主體模式
   if (currentMode !== "主體模式") {
-    clearMainSub(); // 清除主副體
+    clearMainSub(); 
   }
 
-  // 清除或顯示對應的按鈕、欄位等
   syncModeButtons();
   updateStats();
-  renderMainSubStatus();  // 更新顯示的狀態
+  renderMainSubStatus();  // Update the display status
 }
 
 function syncModeButtons(){
@@ -965,6 +967,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
