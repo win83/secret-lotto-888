@@ -860,46 +860,35 @@ function clearAllReports(){
 /* =========================
    modes / misc
    ========================= */
-function changeMode(mode, btn) {
-  // 設置當前模式
-  currentMode = mode;
+function changeMode(mode, btn){
+  currentMode = mode; // 設置當前模式
 
-  // 更新篩選條件顯示
+  // 當切換至主體模式時，更新「模式：主體模式」並顯示相應的統計條件
+  if (currentMode === "主體模式") {
+    document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
+  }
+
+  // 其他模式下的處理邏輯（例如歷史模式、拖牌模式等）
   if (currentMode === "歷史模式") {
     document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-  } else if (currentMode === "主體模式") {
-    document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-  } else {
-    document.getElementById('filterCounter').textContent = `模式：${currentMode} | 條件數:0 | 參與統計期數:${cloudData.length}`;
   }
 
-  // 切換到主體模式時，清除主副體
+  // 切換到其他模式時，清除主副體
   if (currentMode !== "主體模式") {
-    clearMainSub(); // 清除主副體狀態
+    clearMainSub(); // 清除主副體
   }
 
-  // 更新 UI，重新渲染按鈕
+  // 清除或顯示對應的按鈕、欄位等
   syncModeButtons();
-
-  // 清空篩選，重新更新統計並渲染狀態
-  clearFilters();
   updateStats();
-  renderMainSubStatus();
+  renderMainSubStatus();  // 更新顯示的狀態
 }
 
-// 切換模式的按鈕樣式
-function syncModeButtons() {
-  // 確保所有模式按鈕都能正確反應，並且切換樣式
-  document.querySelectorAll('.mode-btn').forEach(b => {
-    b.classList.remove('btn-orange'); // 移除之前的高亮樣式
-    if (b.textContent.trim() === currentMode) {
-      b.classList.add('btn-orange'); // 為當前模式按鈕加上高亮樣式
-    }
-    // 確保每個按鈕不會被禁用
-    b.disabled = false; // 確保按鈕啟用
+function syncModeButtons(){
+  document.querySelectorAll('.mode-btn').forEach(b=>{
+    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
   });
 }
-
 
 function selectToday(){
   clearFilters();
@@ -976,6 +965,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
