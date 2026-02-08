@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>專業樂透統計系統 V2.2 - 優化穩定版</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     :root{
       --page-bg:#cfe8cf; --panel-bg:#fff8e8; --tab-bg:#ededed;
@@ -276,17 +277,50 @@ function setDragPick(el, cat, val){
   renderMainSubStatus();
 }
 
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(), {
-    download:true, header:false, skipEmptyLines:true,
-    complete: function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData = results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
+// 1. 修改路徑 (檔案路徑現在統一指向同一個 Excel 檔)
+const excelFilePath = "/secret-lotto-888/data/new-folder/539-49.xlsx";
+
+// 2. 修改資料獲取邏輯
+function fetchSheetData(callback) {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+
+  fetch(excelFilePath + "?t=" + Date.now())
+    .then(response => {
+      if (!response.ok) throw new Error("檔案讀取失敗，請確認路徑是否正確");
+      return response.arrayBuffer();
+    })
+    .then(data => {
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      // 根據目前遊戲切換對應的活頁名稱 (539 對應 "539", Lotto 對應 "49")
+      const sheetName = (currentGame === "539") ? "539" : "49";
+      const worksheet = workbook.Sheets[sheetName];
+      
+      if (!worksheet) {
+        alert(`找不到活頁簿: ${sheetName}`);
+        document.getElementById('loadingOverlay').style.display = 'none';
+        return;
+      }
+
+      // 將 Excel 轉為二維陣列 (與 PapaParse 格式一致)
+      // 使用 raw: false 確保日期與號碼格式轉為字串以相容後續處理
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+      document.getElementById('loadingOverlay').style.display = 'none';
+      
+      // 跳過標題列並儲存至 cloudData
+      cloudData = jsonData.slice(1);
+      
+      if (callback) {
+        callback(jsonData[jsonData.length - 1]);
+      }
       updateStats();
-    }
-  });
+    })
+    .catch(error => {
+      console.error(error);
+      alert("載入失敗: " + error.message);
+      document.getElementById('loadingOverlay').style.display = 'none';
+    });
 }
 
 function updateStats(){
@@ -439,3 +473,4 @@ fetchSheetData();
 </script>
 </body>
 </html>
+
