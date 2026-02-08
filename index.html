@@ -668,105 +668,89 @@ function buildAllPairs(nums){
    ========================= */
 function addToReport(){
   if(!cloudData.length) return alert("尚未載入資料");
-  const validRows=getValidRows();
+  const validRows = getValidRows();
   if(!validRows.length) return alert("無有效資料列");
-  const gameMax=(currentGame==="539") ? 39 : 49;
-
+  const gameMax = (currentGame === "539") ? 39 : 49;
   const group = newGroup(currentMode, `【${currentMode}】${currentGame}`);
 
-  // ===== 1) 歷史模式：每個選到的條件值各一列（單條件統計）
-  if(currentMode==="歷史模式"){
-    const filters=getSelectedFilters();
-    const entries=[];
-    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
-    if(entries.length===0) return alert("請先選擇至少 1 個條件");
-    entries.forEach(e=>{
+  // 1) 歷史模式：每個選到的條件值各一列（單條件統計）
+  if(currentMode === "歷史模式"){
+    const filters = getSelectedFilters();
+    const entries = [];
+    Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
+    if(entries.length === 0) return alert("請先選擇至少 1 個條件");
+
+    entries.forEach(e => {
       const counts = computeHistorySingle(validRows, e.cat, e.val, gameMax);
       addRowToGroup(group, `${e.cat}:${e.val}`, counts);
     });
-    group.title = `【歷史模式】${entries.map(e=>`${e.cat}:${e.val}`).join('、')}`;
+    group.title = `【歷史模式】${entries.map(e => `${e.cat}:${e.val}`).join('、')}`;
   }
 
-  // ===== 2) 主體模式：主體+每個副體各一列（2條件統計）
-  else if(mainPick && subPicks.length>0){
-    subPicks.forEach(s=>{
+  // 2) 主體模式：主體+每個副體各一列（2條件統計）
+  else if(mainPick && subPicks.length > 0){
+    subPicks.forEach(s => {
       const counts = computeHistoryTwo(validRows, mainPick, s, gameMax);
       addRowToGroup(group, `${mainPick.cat}:${mainPick.val} + ${s.cat}:${s.val}`, counts);
     });
-    group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s=>`${s.cat}:${s.val}`).join('、')}`;
+    group.title = `【主體模式】主:${mainPick.cat}:${mainPick.val}｜副:${subPicks.map(s => `${s.cat}:${s.val}`).join('、')}`;
   }
 
-  // ===== 3) 拖牌模式：①②條件 + 每個號碼一列（原拖牌）
-  else if(currentMode==="拖牌模式"){
+  // 3) 拖牌模式：①②條件 + 每個號碼一列（原拖牌）
+  else if(currentMode === "拖牌模式"){
     if(!dragPick1 || !dragPick2) return alert("拖牌模式：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums=getSelectedNums();
-    if(nums.length===0) return alert("拖牌模式：請先在【號碼】區選至少 1 個前期號碼。");
-    nums.forEach(n=>{
+    const nums = getSelectedNums();
+    if(nums.length === 0) return alert("拖牌模式：請先在【號碼】區選至少 1 個前期號碼。");
+    nums.forEach(n => {
       const counts = computeDrag(validRows, dragPick1, dragPick2, n, gameMax);
-      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(n).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
+      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(n).padStart(2, '0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
     });
-    group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}`;
+    group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}`;
   }
 
-  // ===== 4) ✅ 當期對碰：每「單一條件」+「2碼」為一列；其他條件用交集
-  else if(currentMode==="當期對碰"){
-    const filters=getSelectedFilters();
-    const nums=getSelectedNums();
-    const pairs=buildAllPairs(nums);
-    if(pairs.length===0) return alert("當期對碰：請至少選 2 個號碼。");
+  // 4) 當期對碰：每「單一條件」+「2碼」為一列；其他條件用交集
+  else if(currentMode === "當期對碰"){
+    const filters = getSelectedFilters();
+    const nums = getSelectedNums();
+    const pairs = buildAllPairs(nums);
+    if(pairs.length === 0) return alert("當期對碰：請至少選 2 個號碼。");
 
-    // 把所有被選的「條件值」攤平成 entries：每個(類別,值)都算一個條件
-    const entries=[];
-    Object.entries(filters).forEach(([cat, vals])=> vals.forEach(v=>entries.push({cat, val:v})) );
-    if(entries.length===0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
+    const entries = [];
+    Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
+    if(entries.length === 0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
 
-    // 對每個 entry：filters2 = (所有條件交集) 但 entry 類別只保留該一值（避免該類別多選造成錯）
-    // 同時其他條件保持交集
-    entries.forEach(entry=>{
+    entries.forEach(entry => {
       const filters2 = {...filters};
       filters2[entry.cat] = [String(entry.val)];
-
-      pairs.forEach(([a,b])=>{
+      pairs.forEach(([a, b]) => {
         const counts = computePairSameRow(validRows, filters2, a, b, gameMax);
-        addRowToGroup(
-          group,
-          `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`,
-          counts
-        );
+        addRowToGroup(group, `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`, counts);
       });
     });
-
-    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length*pairs.length}列）`;
+    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;
   }
 
-  // ===== 5) ✅ 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
-  else if(currentMode==="下期對碰"){
+  // 5) 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
+  else if(currentMode === "下期對碰"){
     if(!dragPick1 || !dragPick2) return alert("下期對碰：請先用點擊順序設定 ① 和 ② 條件（非號碼區）。");
-    const nums=getSelectedNums();
-    const pairs=buildAllPairs(nums);
-    if(pairs.length===0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
+    const nums = getSelectedNums();
+    const pairs = buildAllPairs(nums);
+    if(pairs.length === 0) return alert("下期對碰：請至少選 2 個前期號碼（例如5碼）。");
 
-    pairs.forEach(([a,b])=>{
+    pairs.forEach(([a, b]) => {
       const counts = computeNextPair(validRows, dragPick1, dragPick2, a, b, gameMax);
-      addRowToGroup(
-        group,
-        `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2,'0')},${String(b).padStart(2,'0')} → ②${dragPick2.cat}:${dragPick2.val}`,
-        counts
-      );
+      addRowToGroup(group, `①${dragPick1.cat}:${dragPick1.val} + 前號:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')} → ②${dragPick2.cat}:${dragPick2.val}`, counts);
     });
 
-    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n=>String(n).padStart(2,'0')).join(',')}｜2碼配對:${pairs.length}組`;
-  }
-
-  else{
-    return alert("目前選擇狀態不足以產生報表：\n- 歷史模式：至少選 1 個條件\n- 主體模式：先主體再選至少 1 個副體\n- 拖牌/下期對碰：先點①②，再選至少 1~2 個號碼\n- 當期對碰：至少選 1 個條件 + 至少 2 個號碼");
+    group.title = `【下期對碰】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}｜2碼配對:${pairs.length}組`;
   }
 
   reportStorage[currentUser][currentGame].push(group);
   renderCurrentReports();
-  const targetTab=document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
+  const targetTab = document.querySelector(`.tab[data-target="reportPage"][data-game="${currentGame}"]`);
   if(targetTab) targetTab.click();
 }
+
 
 /* =========================
    fmt helper：顯示「其餘條件」
@@ -954,3 +938,4 @@ start();
 </script>
 </body>
 </html>
+
