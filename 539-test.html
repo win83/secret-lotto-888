@@ -73,6 +73,8 @@
 </head>
 <body>
 
+<div id="loadingOverlay">雲端大數據運算中...</div>
+
 <div class="tabs">
   <div class="tab active" data-game="539" data-target="mainPage">今彩 539</div>
   <div class="tab" data-game="539" data-target="reportPage">539 報表</div>
@@ -137,14 +139,10 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
-// 修改路徑對應
 const sheetUrls = {
   "539": "/secret-lotto-888/data/new-folder/539.csv",
   "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
 };
-
-// 確保初始啟動時能正確對應
-let currentGame = "539";
 
 /* =========================
    主體/副體 狀態
@@ -512,38 +510,15 @@ function toggleChip(el){
 }
 
 
-function fetchSheetData(callback) {
-  const overlay = document.getElementById('loadingOverlay');
-  overlay.style.display = 'flex';
-
-  const fullUrl = sheetUrls[currentGame] + "?t=" + Date.now();
-  console.log("正在嘗試讀取檔案:", fullUrl);
-
-  Papa.parse(fullUrl, {
-    download: true,
-    header: false,
-    skipEmptyLines: true,
-    complete: function(results) {
-      overlay.style.display = 'none';
-      
-      if (!results.data || results.data.length < 2) {
-        console.error("檔案內容為空或解析失敗", results);
-        alert("檔案讀取成功但內容格式不正確，請確認 CSV 內容。");
-        return;
-      }
-
-      cloudData = results.data.slice(1).filter(row => row.length >= 7);
-      console.log(`成功載入 ${currentGame} 資料，共 ${cloudData.length} 筆`);
-      
+function fetchSheetData(callback){
+  document.getElementById('loadingOverlay').style.display='flex';
+  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
+    download:true, header:false, skipEmptyLines:true,
+    complete:function(results){
+      document.getElementById('loadingOverlay').style.display='none';
+      cloudData=results.data.slice(1);
+      if(callback) callback(results.data[results.data.length-1]);
       updateStats();
-      if (callback) callback(results.data[results.data.length - 1]);
-    },
-    error: function(err, file, inputElem, reason) {
-      overlay.style.display = 'none';
-      console.error("PapaParse 錯誤原因:", err, reason);
-      
-      // 這裡會彈出更精確的錯誤訊息
-      alert("【讀取失敗】\n檔案路徑：" + fullUrl + "\n可能原因：" + err);
     }
   });
 }
@@ -966,65 +941,31 @@ function clearFilters(){
 }
 
 
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const newGame = tab.dataset.game;
-    const targetPage = tab.dataset.target;
-
-    // 更新當前遊戲狀態
-    const isGameChanged = (currentGame !== newGame);
-    currentGame = newGame;
-
-    // UI 狀態切換
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(targetPage).classList.add('active');
-
-    if (targetPage === 'mainPage') {
-      initFilters(); // 根據 39 或 49 重新初始化篩選器
-      if (isGameChanged || cloudData.length === 0) {
-        fetchSheetData();
-      } else {
-        updateStats();
-      }
-    } else {
-      renderCurrentReports();
-    }
-  });
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    currentGame=tab.dataset.game;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(tab.dataset.target).classList.add('active');
+    if(tab.dataset.target==='mainPage'){
+      initFilters(); fetchSheetData();
+    }else{
+      renderCurrentReports();
+    }
+  });
 });
 
-function fetchSheetData(callback) {
-  const overlay = document.getElementById('loadingOverlay');
-  overlay.style.display = 'flex';
-
-  // 使用 requestAnimationFrame 確保瀏覽器先渲染出「運算中」的畫面，避免視覺死機
-  requestAnimationFrame(() => {
-    Papa.parse(sheetUrls[currentGame] + "?t=" + Date.now(), {
-      download: true,
-      header: false,
-      skipEmptyLines: true,
-      fastMode: true, // 針對單純結構的 CSV 開啟快速模式
-      complete: function(results) {
-        overlay.style.display = 'none';
-        
-        // 取得數據並過濾掉可能的空列
-        cloudData = results.data.slice(1).filter(row => row.length > 5);
-        
-        // 更新即時統計
-        updateStats();
-
-        // 執行回調（例如自動選取今日功能）
-        if (callback && results.data.length > 1) {
-          callback(results.data[results.data.length - 1]);
-        }
-      },
-      error: function(err) {
-        console.error("檔案讀取失敗:", err);
-        overlay.style.display = 'none';
-        alert(`無法載入 ${currentGame} 的資料，請檢查檔案路徑。`);
-      }
-    });
+function fetchSheetData(callback){
+  document.getElementById('loadingOverlay').style.display='flex';
+  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
+    download:true, header:false, skipEmptyLines:true,
+    complete:function(results){
+      document.getElementById('loadingOverlay').style.display='none';
+      cloudData=results.data.slice(1);
+      if(callback) callback(results.data[results.data.length-1]);
+      updateStats();
+    }
   });
 }
 
@@ -1046,9 +987,6 @@ start();
 </script>
 </body>
 </html>
-
-
-
 
 
 
