@@ -1,5 +1,3 @@
-記憶現在程式碼,名稱V1
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -686,19 +684,22 @@ function addToReport(){
   const gameMax = (currentGame === "539") ? 39 : 49;
   const group = newGroup(currentMode, `【${currentMode}】${currentGame}`);
 
-  // 1) 歷史模式：每個選到的條件值各一列（單條件統計）
-  if(currentMode === "歷史模式"){
-    const filters = getSelectedFilters();
-    const entries = [];
-    Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
-    if(entries.length === 0) return alert("請先選擇至少 1 個條件");
+// 歷史模式加到報表，應該確保資料正確地傳遞並篩選
+if(currentMode === "歷史模式"){
+  const filters = getSelectedFilters();
+  const entries = [];
+  Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
+  if(entries.length === 0) return alert("請先選擇至少 1 個條件");
 
-    entries.forEach(e => {
-      const counts = computeHistorySingle(validRows, e.cat, e.val, gameMax);
+  entries.forEach(e => {
+    const counts = computeHistorySingle(validRows, e.cat, e.val, gameMax);
+    if(counts.some(count => count > 0)) {  // 確保有有效的資料
       addRowToGroup(group, `${e.cat}:${e.val}`, counts);
-    });
-    group.title = `【歷史模式】${entries.map(e => `${e.cat}:${e.val}`).join('、')}`;
-  }
+    }
+  });
+  group.title = `【歷史模式】${entries.map(e => `${e.cat}:${e.val}`).join('、')}`;
+}
+
 
   // 2) 主體模式：每個主體與副體組合各一列（2條件統計）
   else if(mainPick && subPicks.length > 0){
@@ -722,27 +723,26 @@ function addToReport(){
     group.title = `【拖牌模式】①${dragPick1.cat}:${dragPick1.val} → ②${dragPick2.cat}:${dragPick2.val}｜前號:${nums.map(n => String(n).padStart(2, '0')).join(',')}`;
   }
 
-  // 4) 當期對碰：每「單一條件」+「2碼」為一列；其他條件用交集
   else if(currentMode === "當期對碰"){
-    const filters = getSelectedFilters();
-    const nums = getSelectedNums();
-    const pairs = buildAllPairs(nums);
-    if(pairs.length === 0) return alert("當期對碰：請至少選 2 個號碼。");
+  const filters = getSelectedFilters();
+  const nums = getSelectedNums();
+  const pairs = buildAllPairs(nums);
+  if(pairs.length === 0) return alert("當期對碰：請至少選 2 個號碼。");
 
-    const entries = [];
-    Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
-    if(entries.length === 0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
+  const entries = [];
+  Object.entries(filters).forEach(([cat, vals]) => vals.forEach(v => entries.push({cat, val:v})));
+  if(entries.length === 0) return alert("當期對碰：請至少選 1 個條件（例如月份/星期/天干/地支/節氣）。");
 
-    entries.forEach(entry => {
-      const filters2 = {...filters};
-      filters2[entry.cat] = [String(entry.val)];
-      pairs.forEach(([a, b]) => {
-        const counts = computePairSameRow(validRows, filters2, a, b, gameMax);
-        addRowToGroup(group, `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')}｜其餘條件(交集): ${fmtFiltersWithout(filters2, entry.cat)}`, counts);
-      });
+  entries.forEach(entry => {
+    pairs.forEach(([a, b]) => {
+      // 移除其餘條件交集，直接統計這個條件下的2個號碼
+      const counts = computePairSameRow(validRows, { [entry.cat]: [String(entry.val)] }, a, b, gameMax);
+      addRowToGroup(group, `${entry.cat}:${entry.val} + 號碼:${String(a).padStart(2, '0')},${String(b).padStart(2, '0')}`, counts);
     });
-    group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;
-  }
+  });
+  group.title = `【當期對碰】條件數:${entries.length}｜2碼組合:${pairs.length}（共${entries.length * pairs.length}列）`;
+}
+
 
   // 5) 下期對碰：像拖牌，但前期必須 2碼同時出現才帶下一期，且 5碼全部兩兩配
   else if(currentMode === "下期對碰"){
@@ -971,5 +971,6 @@ start();
 </script>
 </body>
 </html>
+
 
 
