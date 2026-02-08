@@ -168,6 +168,7 @@ function setPickState(st){
   renderMainSubStatus();
 }
 // 按下主體按鈕時進行更新
+// 按下主體按鈕時進行更新
 function armMainPick() {
   setPickState("main_armed");
 
@@ -177,6 +178,7 @@ function armMainPick() {
   // 更新狀態顯示
   document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
 }
+
 
 function toggleSubMode(){
   if(!mainPick){ alert("請先設定主體"); return; }
@@ -900,6 +902,13 @@ function changeMode(mode, btn){
 }
 
 
+  // 清除或顯示對應的按鈕、欄位等
+  syncModeButtons();
+  updateStats();
+  renderMainSubStatus();  // 更新顯示的狀態
+}
+
+
 
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
@@ -996,6 +1005,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
