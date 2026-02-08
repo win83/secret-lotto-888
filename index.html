@@ -860,7 +860,7 @@ function clearAllReports(){
 /* =========================
    modes / misc
    ========================= */
-function changeMode(mode, btn){
+function changeMode(mode, btn) {
   // 設置當前模式
   currentMode = mode;
 
@@ -888,11 +888,18 @@ function changeMode(mode, btn){
 }
 
 // 切換模式的按鈕樣式
-function syncModeButtons(){
-  document.querySelectorAll('.mode-btn').forEach(b=>{
-    b.classList.toggle('btn-orange', b.textContent.trim() === currentMode); // 高亮當前選擇的模式按鈕
+function syncModeButtons() {
+  // 確保所有模式按鈕都能正確反應，並且切換樣式
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.remove('btn-orange'); // 移除之前的高亮樣式
+    if (b.textContent.trim() === currentMode) {
+      b.classList.add('btn-orange'); // 為當前模式按鈕加上高亮樣式
+    }
+    // 確保每個按鈕不會被禁用
+    b.disabled = false; // 確保按鈕啟用
   });
 }
+
 
 function selectToday(){
   clearFilters();
@@ -969,6 +976,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
