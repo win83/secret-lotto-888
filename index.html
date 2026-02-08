@@ -387,9 +387,15 @@ function newGroup(mode, title){
   const gLimit=(currentGame==="539") ? 39 : 49;
   return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
 }
+// 組合：當期對碰
 function addRowToGroup(group, label, dataArr){
-  group.rows.push({label, data:dataArr});
-  for(let i=1;i<=group.limit;i++) group.sum[i]+= (dataArr[i]||0);
+  // 在這裡將“交集”部分剔除，僅顯示選擇的條件與對應結果
+  if (currentMode === "當期對碰") {
+    group.rows.push({label: label, data: dataArr});
+  }
+  for (let i = 1; i <= group.limit; i++) {
+    group.sum[i] += (dataArr[i] || 0);
+  }
 }
 
 function getSelectedFilters(){
@@ -654,13 +660,14 @@ function computePairSameRow(validRows, filters, a, b, gameMax){
   const counts=Array(gameMax+1).fill(0);
   validRows.forEach(row=>{
     const rd=buildRd(rowMetaFromRow(row));
-    if(!matchFilters(rd, filters)) return;
+    if(!matchFilters(rd, filters)) return; // 繼續篩選條件
     const balls=rowBalls(row);
-    if(!(balls.includes(a) && balls.includes(b))) return;
-    balls.forEach(n=>{ if(n<=gameMax) counts[n]++; });
+    if(!(balls.includes(a) && balls.includes(b))) return; // 確保兩個號碼在同一列中
+    balls.forEach(n=>{ if(n<=gameMax) counts[n]++; });  // 更新計數
   });
   return counts;
 }
+
 
 // 組合：全部 2碼配對（不固定 base）
 function buildAllPairs(nums){
@@ -964,6 +971,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
