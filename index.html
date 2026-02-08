@@ -894,12 +894,6 @@ function syncModeButtons(){
   });
 }
 
-function syncModeButtons(){
-  document.querySelectorAll('.mode-btn').forEach(b=>{
-    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
-  });
-}
-
 function selectToday(){
   clearFilters();
   fetchSheetData((lastRow)=>{
@@ -975,5 +969,6 @@ start();
 </script>
 </body>
 </html>
+
 
 
