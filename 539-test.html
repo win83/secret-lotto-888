@@ -137,10 +137,14 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
+// 修改路徑對應
 const sheetUrls = {
-  "539": "/secret-lotto-888/data/new-folder/539.csv",
-  "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
+  "539": "/secret-lotto-888/data/new-folder/539.csv",
+  "Lotto": "/secret-lotto-888/data/new-folder/49.csv"
 };
+
+// 確保初始啟動時能正確對應
+let currentGame = "539";
 
 /* =========================
    主體/副體 狀態
@@ -508,17 +512,34 @@ function toggleChip(el){
 }
 
 
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData=results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
-      updateStats();
-    }
-  });
+function fetchSheetData(callback) {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.display = 'flex';
+
+  // 使用 requestAnimationFrame 確保「運算中」的畫面能即時渲染
+  requestAnimationFrame(() => {
+    Papa.parse(sheetUrls[currentGame] + "?t=" + Date.now(), {
+      download: true,
+      header: false,
+      skipEmptyLines: true,
+      complete: function(results) {
+        overlay.style.display = 'none';
+        
+        // 取得數據並進行基本格式檢查 (過濾掉長度不足的異常列)
+        cloudData = results.data.slice(1).filter(row => row.length >= 7);
+        
+        if (callback && results.data.length > 1) {
+          callback(results.data[results.data.length - 1]);
+        }
+        updateStats();
+      },
+      error: function(err) {
+        console.error("CSV 讀取失敗:", err);
+        overlay.style.display = 'none';
+        alert(`檔案讀取失敗，請確認 ${sheetUrls[currentGame]} 是否存在。`);
+      }
+    });
+  });
 }
 
 function updateStats(){
@@ -940,32 +961,31 @@ function clearFilters(){
 
 
 document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    // 切換遊戲模式
-    const targetGame = tab.dataset.game; // "539" 或 "Lotto"
-    const targetPage = tab.dataset.target;
+  tab.addEventListener('click', () => {
+    const newGame = tab.dataset.game;
+    const targetPage = tab.dataset.target;
 
-    // 只有在更換遊戲種類時才重新抓取資料
-    const gameChanged = (currentGame !== targetGame);
-    currentGame = targetGame;
+    // 更新當前遊戲狀態
+    const isGameChanged = (currentGame !== newGame);
+    currentGame = newGame;
 
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(targetPage).classList.add('active');
+    // UI 狀態切換
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(targetPage).classList.add('active');
 
-    if (targetPage === 'mainPage') {
-      initFilters(); 
-      // 如果遊戲更換了，立即抓取對應的 CSV
-      if (gameChanged || cloudData.length === 0) {
-        fetchSheetData();
-      } else {
-        updateStats();
-      }
-    } else {
-      renderCurrentReports();
-    }
-  });
+    if (targetPage === 'mainPage') {
+      initFilters(); // 根據 39 或 49 重新初始化篩選器
+      if (isGameChanged || cloudData.length === 0) {
+        fetchSheetData();
+      } else {
+        updateStats();
+      }
+    } else {
+      renderCurrentReports();
+    }
+  });
 });
 
 function fetchSheetData(callback) {
@@ -1020,6 +1040,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
