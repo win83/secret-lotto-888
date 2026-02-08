@@ -386,15 +386,10 @@ function newGroup(mode, title){
   const gLimit=(currentGame==="539") ? 39 : 49;
   return { id:`${Date.now()}_${Math.random().toString(16).slice(2)}`, mode, title, limit:gLimit, rows:[], sum:Array(gLimit+1).fill(0) };
 }
-// 組合：當期對碰
+  
 function addRowToGroup(group, label, dataArr){
-  // 在這裡將“交集”部分剔除，僅顯示選擇的條件與對應結果
-  if (currentMode === "當期對碰") {
-    group.rows.push({label: label, data: dataArr});
-  }
-  for (let i = 1; i <= group.limit; i++) {
-    group.sum[i] += (dataArr[i] || 0);
-  }
+  group.rows.push({label, data:dataArr});
+  for(let i=1;i<=group.limit;i++) group.sum[i]+= (dataArr[i]||0);
 }
 
 
@@ -973,6 +968,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
