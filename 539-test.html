@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>專業樂透統計系統 V2.2 - 報表顯示規格版（當期對碰/下期對碰修正版）</title>
@@ -139,29 +140,41 @@ let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxN
 
 const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
 
+// 1. 確保網址正確（注意大小寫需與 GitHub 檔案完全一致）
 const sheetUrls = {
   "539": "https://raw.githubusercontent.com/win83/secret-lotto-888/main/data/new-folder/539-49.xlsx"
 };
 
-// 使用 Fetch API 下載檔案
-function fetchExcelData() {
-  fetch(sheetUrls["539"])
-    .then(response => response.arrayBuffer()) // 讀取檔案為 ArrayBuffer
-    .then(data => {
-      const workbook = XLSX.read(data, { type: 'array' }); // 使用 xlsx.js 解析 Excel 檔案
-      const sheet539 = workbook.Sheets['539']; // 取得 '539' 活頁
-      const sheet49 = workbook.Sheets['49']; // 取得 '49' 活頁
+async function fetchExcelData() {
+  try {
+    const response = await fetch(sheetUrls["539"]);
+    if (!response.ok) throw new Error('檔案讀取失敗，請檢查路徑');
+    
+    const data = await response.arrayBuffer();
+    // 使用引入的 XLSX 庫解析
+    const workbook = XLSX.read(data, { type: 'array' }); 
+    
+    // 取得活頁簿內容
+    const sheet539 = workbook.Sheets['539'];
+    const sheet49 = workbook.Sheets['49'];
 
-      // 將活頁轉換為 JSON 格式
-      const json539 = XLSX.utils.sheet_to_json(sheet539, { header: 1 }); // 用 header: 1 來保證將資料轉為陣列
-      const json49 = XLSX.utils.sheet_to_json(sheet49, { header: 1 });
+    if (!sheet539) {
+      console.error("找不到名為 '539' 的分頁，請檢查 Excel 標籤名稱");
+      return;
+    }
 
-      console.log('539 活頁資料:', json539);
-      console.log('49 活頁資料:', json49);
+    // 轉換為 JSON 並存入你的全域變數 cloudData
+    const json539 = XLSX.utils.sheet_to_json(sheet539, { header: 1 });
+    cloudData = json539.slice(1); // 假設第一列是標題，跳過它
+    
+    console.log('539 資料載入成功:', cloudData);
+    
+    // 載入成功後手動觸發一次統計更新
+    updateStats(); 
 
-      // 在此處處理資料，根據您的需求進行操作
-    })
-    .catch(error => console.error('讀取 Excel 檔案錯誤:', error));
+  } catch (error) {
+    console.error('讀取 Excel 檔案錯誤:', error);
+  }
 }
 
 // 呼叫函式開始讀取資料
@@ -1012,6 +1025,7 @@ start();
 </body>
 
 </html>
+
 
 
 
