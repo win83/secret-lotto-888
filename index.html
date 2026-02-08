@@ -175,10 +175,11 @@ function toggleSubMode(){
 function clearMainSub(){
   mainPick = null;
   subPicks = [];
-  document.querySelectorAll('.chip.mainpick').forEach(el=>el.classList.remove('mainpick'));
-  document.querySelectorAll('.chip.subpick').forEach(el=>el.classList.remove('subpick'));
+  document.querySelectorAll('.chip.mainpick').forEach(el => el.classList.remove('mainpick'));
+  document.querySelectorAll('.chip.subpick').forEach(el => el.classList.remove('subpick'));
   setPickState("normal");
 }
+
 
 /* =========================
    拖牌 ①②（下期對碰也用）
@@ -850,19 +851,41 @@ function clearAllReports(){
    ========================= */
 function changeMode(mode, btn){
   currentMode = mode; // 保持你按鈕文字
-  // 切拖牌/下期對碰時，主副體狀態不影響，拖牌用①②
-  if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
-    setPickState("normal");
+  
+  // 切換模式時，清除主體/副體和拖牌模式相關狀態
+  if(currentMode !== "主體模式" && currentMode !== "副體模式") {
+    clearMainSub();  // 清除主體副體選擇
   }
+
+  if(currentMode==="拖牌模式" || currentMode==="下期對碰"){
+    setPickState("normal");  // 切換到拖牌/下期對碰時清除主體副體選擇
+  }
+
+  // 同步切換按鈕的顯示狀態
   syncModeButtons();
   updateStats();
-  renderMainSubStatus();
+  renderMainSubStatus();  // 更新顯示狀態
 }
+
 function syncModeButtons(){
   document.querySelectorAll('.mode-btn').forEach(b=>{
-    b.classList.toggle('btn-orange', b.textContent.trim()===currentMode);
+    // 清除所有模式按鈕的 'btn-orange' 樣式
+    b.classList.remove('btn-orange');
+    
+    // 只將當前模式的按鈕設為 'btn-orange'
+    if(b.textContent.trim() === currentMode){
+      b.classList.add('btn-orange');
+    }
+  });
+
+  // 清除歷史模式的狀態
+  document.querySelectorAll('.btn.btn-yellow').forEach(b => {
+    if(b.textContent.trim() !== currentMode) {
+      b.classList.remove('btn-orange');
+    }
   });
 }
+
 
 function selectToday(){
   clearFilters();
@@ -939,9 +962,4 @@ start();
 </script>
 </body>
 </html>
-
-
-
-
-
 
