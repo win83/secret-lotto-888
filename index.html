@@ -1,3 +1,4 @@
+歷史按鈕在切換到其它模式就無法再切回
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -324,19 +325,15 @@ function hasEnoughBalls(row){ return rowBalls(row).length >= requiredBallCount()
 function getValidRows(){
   const sk=startKeyByUser();
   return cloudData.filter(row=>{
-    if(!row || row.length < 7) return false;
-    const {y,m,d} = parseYMD(row[1]);
-    let k = ymdKey(y,m,d);
-    if (isNaN(k)) {
-      const alt = parseYMD(row[0]);
-      k = ymdKey(alt.y, alt.m, alt.d);
-    }
-    if (!Number.isFinite(k) || k < sk) return false;
-    if (!hasEnoughBalls(row)) return false;
+    if(!row||row.length<7) return false;
+    const {y,m,d}=parseYMD(row[1]);
+    let k=ymdKey(y,m,d);
+    if(isNaN(k)){ const alt=parseYMD(row[0]); k=ymdKey(alt.y,alt.m,alt.d); }
+    if(!Number.isFinite(k)||k<sk) return false;
+    if(!hasEnoughBalls(row)) return false;
     return true;
   });
 }
-
 
 /* =========================
    ✅ Excel 對齊：優先用欄位值
@@ -816,7 +813,7 @@ function renderCurrentReports(){
       </div>
       <table class="report-table">
         <thead>
-          <tr><td class="cond-col">統計明細</td>${Array.from({length:M},(_,i)=>`<td>${i+1}</td>`).join('')}</tr>
+          <tr><td class="cond-col">統計明細</td>${Array.from({length:L},(_,i)=>`<td>${i+1}</td>`).join('')}</tr>
         </thead>
         <tbody>`;
 
@@ -887,9 +884,7 @@ function changeMode(mode, btn){
   if (currentMode === "主體模式") {
     document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   } else if (currentMode === "歷史模式") {
-    // Make sure cloudData is populated and then update the stats
-    const validRows = getValidRows(); // Get valid rows based on filters and data
-    document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${validRows.length} | 起算日:${startKeyByUser()}`;
+    document.getElementById('filterCounter').textContent = `模式：歷史模式 | 條件數:0 | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
   }
 
   // Clear main/sub body when switching from 主體模式
@@ -903,11 +898,13 @@ function changeMode(mode, btn){
 }
 
 
+
 function syncModeButtons() {
   document.querySelectorAll('.mode-btn').forEach(b => {
     b.classList.toggle('btn-orange', b.textContent.trim() === currentMode);
   });
 }
+
 
 function selectToday(){
   clearFilters();
@@ -943,6 +940,7 @@ function clearFilters(){
   updateStats();
   renderMainSubStatus();  // 更新主副體狀態顯示
 }
+
 
 document.querySelectorAll('.tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
