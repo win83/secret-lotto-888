@@ -1,197 +1,180 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>專業樂透統計系統 V2.2 - 報表顯示規格版（當期對碰/下期對碰修正版）</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-  <style>
-    :root{
-      --page-bg:#cfe8cf; --panel-bg:#fff8e8; --tab-bg:#ededed;
-      --tab-border:#9a9a9a; --blue:#1f73ff; --red:#e51b1b;
-      --line:#d0d0d0; --label:#efefef; --btn-border:#7a7a7a;
-      --stat-green: #92d050; --stat-light: #e2efda;
-      --top5-bg: #ff0000; --top5-text: #ffffff;
-      --report-header-bg: #fce4d6;
-    }
-    *{ box-sizing:border-box; font-family:"Microsoft JhengHei"; }
-    body{ margin:0; background:var(--page-bg); color:#111; }
-    /* 省略其他樣式... */
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>樂透數據實際統計系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .filter-row { display: flex; border-bottom: 1px solid #e5e7eb; align-items: stretch; }
+        .filter-label { width: 90px; background-color: #f3f4f6; color: #4b5563; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; border-right: 1px solid #e5e7eb; flex-shrink: 0; }
+        .filter-content { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: white; flex-grow: 1; }
+        .btn-sq { border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 8px; min-width: 40px; text-align: center; background: white; cursor: pointer; font-size: 0.85rem; }
+        .btn-sq.selected { background-color: #2563eb; color: white; border-color: #1e40af; }
+        
+        /* 報表表格 */
+        .report-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
+        .report-table th, .report-table td { border: 1px solid #999; padding: 4px 2px; }
+        .bg-yellow { background-color: #ffff00; font-weight: bold; }
+        .bg-pink { background-color: #fee2e2; }
+        .text-hot { background-color: #ff0000; color: white; font-weight: bold; }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50 p-2 text-sm">
 
-<div id="loadingOverlay">雲端大數據運算中...</div>
+    <div class="max-w-[1600px] mx-auto bg-white border border-gray-300">
+        
+        <div class="p-3 border-b space-y-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-red-600 font-bold">目前模式：539 - 實際數據統計</h1>
+                <div class="flex gap-2">
+                    <button onclick="switchUser('dad')" id="u-dad" class="px-4 py-1 border rounded font-bold">爸使用模式</button>
+                    <button onclick="switchUser('bro')" id="u-bro" class="px-4 py-1 border rounded font-bold">哥使用模式</button>
+                </div>
+            </div>
 
-<!-- Tabs and other HTML content... -->
+            <div class="flex gap-2">
+                <button onclick="fetchAndAnalyze()" class="px-8 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700">🧪 執行實際數據分析</button>
+                <button onclick="location.reload()" class="px-4 py-2 bg-white border border-gray-300 rounded font-bold">清空報表</button>
+            </div>
+        </div>
 
-<script>
-let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxNum = 39, cloudData = [];
+        <div class="m-3 border-2 border-red-500">
+            <div class="filter-row"><div class="filter-label">年份</div><div id="row-year" class="filter-content"></div></div>
+            <div class="filter-row"><div class="filter-label">月份</div><div id="row-month" class="filter-content"></div></div>
+            <div class="filter-row"><div class="filter-label">日期</div><div id="row-day" class="filter-content"></div></div>
+        </div>
 
-const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
+        <div id="report-area" class="p-3 space-y-6">
+            <div id="loading" class="hidden text-center py-10 font-bold text-blue-600">正在從 GitHub 抓取數據並計算中...</div>
+        </div>
 
-const sheetUrls = {
-  "539": "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv",  // GitHub 連結
-  "Lotto": "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/Lotto.csv"  // GitHub 連結
-};
+        <div class="p-2 bg-gray-100 flex gap-4 text-[10px] font-mono border-t">
+            <span id="conn-539">539: 連結中...</span>
+        </div>
+    </div>
 
-/* =========================
-   主體/副體 狀態
-   ========================= */
-let pickState = "normal"; // normal | main_armed | sub
-let mainPick = null;      // {cat, val}
-let subPicks = [];        // [{cat,val}, ...]
-function samePick(a,b){ return !!a && !!b && a.cat===b.cat && a.val===b.val; }
+    <script>
+        const CSV_URL = "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv";
+        let cachedData = []; // 存儲抓下來的原始數據
 
-function setPickState(st){
-  pickState = st;
-  const btnMain = document.getElementById('btnMainArm');
-  const btnSub  = document.getElementById('btnSubMode');
-  if(btnMain) btnMain.classList.toggle('btn-orange', st === 'main_armed');
-  if(btnSub)  btnSub.classList.toggle('btn-orange', st === 'sub');
-  renderMainSubStatus();
-}
-// 按下主體按鈕時進行更新
-function armMainPick() {
-  setPickState("main_armed");
+        window.onload = () => {
+            initUI();
+            switchUser('dad');
+            checkConn();
+        };
 
-  // 切換模式顯示為「主體模式」
-  changeMode("主體模式", document.querySelector('.mode-btn'));
+        async function checkConn() {
+            try {
+                const res = await fetch(CSV_URL);
+                if(res.ok) document.getElementById('conn-539').innerHTML = "539: <span class='text-green-600 font-bold'>OK</span>";
+            } catch(e) { document.getElementById('conn-539').innerHTML = "539: <span class='text-red-600'>FAIL</span>"; }
+        }
 
-  // 更新狀態顯示
-  document.getElementById('filterCounter').textContent = `模式：主體模式 | 條件數:${subPicks.length} | 參與統計期數:${cloudData.length} | 起算日:${startKeyByUser()}`;
-}
+        function initUI() {
+            const mRow = document.getElementById('row-month');
+            for(let i=1; i<=12; i++) mRow.innerHTML += `<button onclick="this.classList.toggle('selected')" class="btn-sq" data-val="${i}">${i}</button>`;
+            const dRow = document.getElementById('row-day');
+            for(let i=1; i<=31; i++) dRow.innerHTML += `<button onclick="this.classList.toggle('selected')" class="btn-sq" data-val="${i}">${i}</button>`;
+        }
 
-function toggleSubMode(){
-  if(!mainPick){ alert("請先設定主體"); return; }
-  setPickState(pickState === "sub" ? "normal" : "sub");
-}
-function clearMainSub(){
-  mainPick = null;
-  subPicks = [];
-  document.querySelectorAll('.chip.mainpick').forEach(el=>el.classList.remove('mainpick'));
-  document.querySelectorAll('.chip.subpick').forEach(el=>el.classList.remove('subpick'));
-  setPickState("normal");
-}
+        function switchUser(user) {
+            const isDad = user === 'dad';
+            document.getElementById('u-dad').className = `px-4 py-1 border rounded font-bold ${isDad ? 'bg-cyan-400 text-white' : 'bg-gray-100'}`;
+            document.getElementById('u-bro').className = `px-4 py-1 border rounded font-bold ${!isDad ? 'bg-cyan-400 text-white' : 'bg-gray-100'}`;
+            const start = isDad ? 2020 : 2006;
+            const yRow = document.getElementById('row-year');
+            yRow.innerHTML = '';
+            for(let y=start; y<=2026; y++) yRow.innerHTML += `<button onclick="this.classList.toggle('selected')" class="btn-sq" data-val="${y}">${y}</button>`;
+        }
 
-/* =========================
-   號碼點擊順序（保持，但本次規格不再依 base 固定）
-   ========================= */
-let numOrder = [];
-function updateNumOrder(num, isOn){
-  const n = parseInt(num,10);
-  if(!Number.isFinite(n)) return;
-  if(isOn){
-    numOrder = numOrder.filter(x=>x!==n);
-    numOrder.push(n);
-  }else{
-    numOrder = numOrder.filter(x=>x!==n);
-  }
-}
+        async function fetchAndAnalyze() {
+            const loading = document.getElementById('loading');
+            loading.classList.remove('hidden');
+            
+            // 抓取選中的條件
+            const selYears = Array.from(document.querySelectorAll('#row-year .selected')).map(b => b.dataset.val);
+            const selMonths = Array.from(document.querySelectorAll('#row-month .selected')).map(b => b.dataset.val);
+            const selDays = Array.from(document.querySelectorAll('#row-day .selected')).map(b => b.dataset.val);
 
-function renderMainSubStatus(){
-  const el = document.getElementById('mainSubStatus');
-  if(!el) return;
-  const mainStr = mainPick ? `${mainPick.cat}:${mainPick.val}` : "未指定";
-  const subStr = subPicks.length ? subPicks.map(s=>`${s.cat}:${s.val}`).join('、') : "";
-  const dragStr = (dragPick1 && dragPick2) ? `①${dragPick1.cat}:${dragPick1.val}｜②${dragPick2.cat}:${dragPick2.val}` :
-                  (dragPick1 ? `①${dragPick1.cat}:${dragPick1.val}｜②未設定` : "未設定");
-  const stMap = { normal:"一般", main_armed:"等待主體確認", sub:"副體多選中" };
-  el.textContent = `主體：${mainStr}｜副體：${subPicks.length} 個${subPicks.length?`（${subStr}）`:``}｜拖牌①②：${dragStr}｜狀態：${stMap[pickState] || pickState}`;
-}
+            try {
+                if (cachedData.length === 0) {
+                    const response = await fetch(CSV_URL);
+                    const text = await response.text();
+                    cachedData = text.split('\n').map(line => line.split(','));
+                }
 
-/* =========================
-   讀取 CSV 數據
-   ========================= */
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      if (results.errors.length) {
-        console.error('解析錯誤:', results.errors);
-        alert('數據解析錯誤');
-      } else {
-        cloudData = results.data.slice(1);  // 去掉標題行
-        updateStats();
-        if (callback) callback(results.data[results.data.length-1]);
-      }
-    },
-    error: function(error) {
-      console.error('數據讀取錯誤:', error);
-      alert('數據讀取失敗');
-    }
-  });
-}
+                // 核心統計邏輯
+                // 假設 CSV 格式: 日期(0), 期別(1), 號碼(2,3,4,5,6), 天干地支(7)...
+                const stats = { month: new Array(40).fill(0), day: new Array(40).fill(0), total: new Array(40).fill(0) };
+                
+                cachedData.forEach(row => {
+                    if (row.length < 5) return;
+                    const dateStr = row[0]; // 2024/01/01
+                    const d = new Date(dateStr);
+                    const Y = d.getFullYear().toString();
+                    const M = (d.getMonth() + 1).toString();
+                    const D = d.getDate().toString();
 
-/* =========================
-   更新統計
-   ========================= */
-function updateStats(){
-  if (!cloudData.length) return;
-  const filters = getSelectedFilters();
-  const catCount = Object.keys(filters).length;
-  const selNums = getSelectedNums();
-  const counts = Array(maxNum + 1).fill(0);
-  const validRows = getValidRows();
+                    // 檢查是否符合選中年份
+                    if (selYears.length > 0 && !selYears.includes(Y)) return;
 
-  validRows.forEach((row, idx) => {
-    const meta = rowMetaFromRow(row);
-    const rd = buildRd(meta);
-    if (!matchFilters(rd, filters)) return;
+                    const nums = [row[2], row[3], row[4], row[5], row[6]].map(n => parseInt(n));
 
-    const nums = rowBalls(row);
-    if (currentMode === "歷史模式") {
-      nums.forEach(n => { if (n <= maxNum) counts[n]++; });
-    } else if (currentMode === "拖牌模式" || currentMode === "下期對碰") {
-      if (selNums.length > 0 && selNums.some(sn => nums.includes(sn))) {
-        const nxt = validRows[idx + 1];
-        if (nxt) rowBalls(nxt).forEach(n => { if (n <= maxNum) counts[n]++; });
-      }
-    } else {
-      if (selNums.length > 0 && selNums.every(sn => nums.includes(sn))) {
-        nums.forEach(n => { if (n <= maxNum) counts[n]++; });
-      }
-    }
-  });
+                    // 月份符合
+                    if (selMonths.includes(M)) {
+                        nums.forEach(n => { if(n) stats.month[n]++; });
+                    }
+                    // 日期符合
+                    if (selDays.includes(D)) {
+                        nums.forEach(n => { if(n) stats.day[n]++; });
+                    }
+                });
 
-  const sorted = [...counts].sort((a, b) => b - a);
-  const threshold = sorted[4] > 0 ? sorted[4] : 999;
-  const sk = startKeyByUser();
-  const skStr = `${String(Math.floor(sk / 10000))}/${String(Math.floor((sk % 10000) / 100)).padStart(2, '0')}/${String(sk % 100).padStart(2, '0')}`;
-  document.getElementById('filterCounter').textContent =
-    `模式:${currentMode} | 條件數:${catCount} | 參與統計期數:${validRows.length} | 起算日:${skStr}`;
+                for(let i=1; i<=39; i++) stats.total[i] = stats.month[i] + stats.day[i];
 
-  for (let i = 1; i <= maxNum; i++) {
-    const td = document.getElementById(`val1-${i}`);
-    td.textContent = counts[i] || 0;
-    td.className = (counts[i] >= threshold && counts[i] > 0) ? "top5" : "";
-    let gap = 0;
-    for (let j = validRows.length - 1; j >= 0; j--) {
-      if (rowBalls(validRows[j]).includes(i)) break;
-      gap++;
-    }
-    document.getElementById(`val2-${i}`).textContent = gap;
-  }
-  renderMainSubStatus();
-}
+                renderReport(stats, selMonths, selDays);
+            } catch (err) {
+                alert("數據讀取錯誤，請檢查網路或 GitHub 檔案路徑。");
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
 
-/* =========================
-   報表功能
-   ========================= */
-// 略過報表相關函數，保持不變
+        function renderReport(stats, ms, ds) {
+            const area = document.getElementById('report-area');
+            const findMax = (arr) => Math.max(...arr.slice(1));
+            const maxM = findMax(stats.month);
+            const maxD = findMax(stats.day);
+            const maxT = findMax(stats.total);
 
-/* =========================
-   程式初始化
-   ========================= */
-function start() {
-  initFilters();
-  fetchSheetData();
-}
-
-start();
-</script>
-
+            const html = `
+                <div class="border border-gray-400 bg-white">
+                    <div class="bg-orange-100 p-2 font-bold border-b">
+                        【實際統計】 月份:${ms.join(',')} | 日期:${ds.join(',')}
+                    </div>
+                    <table class="report-table">
+                        <tr class="bg-yellow">
+                            <td class="w-24">統計明細</td>
+                            ${Array.from({length: 39}, (_, i) => `<td class="w-8">${i+1}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <td class="bg-yellow">月份:${ms.join(',')}</td>
+                            ${stats.month.slice(1).map(v => `<td class="${v === maxM && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <td class="bg-yellow">日期:${ds.join(',')}</td>
+                            ${stats.day.slice(1).map(v => `<td class="${v === maxD && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                        </tr>
+                        <tr class="bg-pink font-bold">
+                            <td class="bg-yellow">加總(Sum)</td>
+                            ${stats.total.slice(1).map(v => `<td class="${v === maxT && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                        </tr>
+                    </table>
+                </div>
+            `;
+            area.insertAdjacentHTML('afterbegin', html);
+        }
+    </script>
 </body>
 </html>
