@@ -851,20 +851,20 @@ function exportToExcel(){
   const table = document.querySelector(".report-table");
   if(!table) return alert("無資料");
 
-  // Include header row as part of the Excel export
-  const headers = table.querySelector("thead").innerHTML;
-  const data = table.querySelector("tbody").innerHTML;
-
-  // Combine headers and data
-  const tableHTML = `<table>${headers}${data}</table>`;
+  const headers = table.querySelector("thead").innerHTML;  // Get header row
+  const dataRows = table.querySelector("tbody").innerHTML;  // Get all data rows
   
-  // Prepare for export
+  // Combine header and data rows into a complete table HTML
+  const tableHTML = `<table>${headers}${dataRows}</table>`;
+  
+  // Prepare Excel export link
   const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(tableHTML);
   const link = document.createElement("a");
-  link.download = `分析_${Date.now()}.xls`;
+  link.download = `分析_${Date.now()}.xls`;  // Customize the filename
   link.href = url;
-  link.click();
+  link.click();  // Trigger download
 }
+
 
 /* =========================
    modes / misc
@@ -991,6 +991,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
