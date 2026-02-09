@@ -3,75 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>樂透數據實際統計系統</title>
+    <title>樂透數據分析 - 實際數據版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .filter-row { display: flex; border-bottom: 1px solid #e5e7eb; align-items: stretch; }
         .filter-label { width: 90px; background-color: #f3f4f6; color: #4b5563; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; border-right: 1px solid #e5e7eb; flex-shrink: 0; }
-        .filter-content { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: white; flex-grow: 1; }
-        .btn-sq { border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 8px; min-width: 40px; text-align: center; background: white; cursor: pointer; font-size: 0.85rem; }
+        .filter-content { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; background: white; flex-grow: 1; }
+        .btn-sq { border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 8px; min-width: 38px; text-align: center; background: white; cursor: pointer; font-size: 0.85rem; }
         .btn-sq.selected { background-color: #2563eb; color: white; border-color: #1e40af; }
         
-        /* 報表表格 */
-        .report-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
-        .report-table th, .report-table td { border: 1px solid #999; padding: 4px 2px; }
+        .report-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; margin-top: 10px; }
+        .report-table th, .report-table td { border: 1px solid #999; padding: 4px 1px; }
         .bg-yellow { background-color: #ffff00; font-weight: bold; }
         .bg-pink { background-color: #fee2e2; }
-        .text-hot { background-color: #ff0000; color: white; font-weight: bold; }
+        .text-hot { background-color: #ff0000 !important; color: white !important; font-weight: bold; }
     </style>
 </head>
-<body class="bg-gray-50 p-2 text-sm">
+<body class="bg-gray-50 p-2">
 
-    <div class="max-w-[1600px] mx-auto bg-white border border-gray-300">
+    <div class="max-w-[1600px] mx-auto bg-white border border-gray-300 shadow-lg">
         
-        <div class="p-3 border-b space-y-3">
-            <div class="flex justify-between items-center">
-                <h1 class="text-red-600 font-bold">目前模式：539 - 實際數據統計</h1>
-                <div class="flex gap-2">
-                    <button onclick="switchUser('dad')" id="u-dad" class="px-4 py-1 border rounded font-bold">爸使用模式</button>
-                    <button onclick="switchUser('bro')" id="u-bro" class="px-4 py-1 border rounded font-bold">哥使用模式</button>
-                </div>
-            </div>
-
+        <div class="p-4 border-b space-y-3">
+            <h1 class="text-red-600 font-bold text-xl">目前模式：539 - 實際數據連線</h1>
             <div class="flex gap-2">
-                <button onclick="fetchAndAnalyze()" class="px-8 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700">🧪 執行實際數據分析</button>
-                <button onclick="location.reload()" class="px-4 py-2 bg-white border border-gray-300 rounded font-bold">清空報表</button>
+                <button onclick="switchUser('dad')" id="u-dad" class="px-4 py-1.5 border rounded font-bold shadow-sm">爸使用模式</button>
+                <button onclick="switchUser('bro')" id="u-bro" class="px-4 py-1.5 border rounded font-bold shadow-sm">哥使用模式</button>
+            </div>
+            
+            <div class="flex gap-3 items-center">
+                <button onclick="runAnalysis()" class="px-10 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 active:scale-95 transition-all">
+                    🧪 執行數據分析 (抓取 CSV)
+                </button>
+                <button onclick="location.reload()" class="px-4 py-2 bg-white border border-gray-300 rounded font-bold text-gray-500">清空</button>
+                <span id="data-count" class="text-sm font-bold text-blue-600"></span>
             </div>
         </div>
 
-        <div class="m-3 border-2 border-red-500">
+        <div class="m-4 border-2 border-red-500 rounded-sm">
             <div class="filter-row"><div class="filter-label">年份</div><div id="row-year" class="filter-content"></div></div>
             <div class="filter-row"><div class="filter-label">月份</div><div id="row-month" class="filter-content"></div></div>
             <div class="filter-row"><div class="filter-label">日期</div><div id="row-day" class="filter-content"></div></div>
         </div>
 
-        <div id="report-area" class="p-3 space-y-6">
-            <div id="loading" class="hidden text-center py-10 font-bold text-blue-600">正在從 GitHub 抓取數據並計算中...</div>
+        <div id="report-output" class="p-4 space-y-6">
+            <div id="status-msg" class="text-center text-gray-400 py-10 italic">請先選擇上方條件並點擊執行...</div>
         </div>
 
-        <div class="p-2 bg-gray-100 flex gap-4 text-[10px] font-mono border-t">
-            <span id="conn-539">539: 連結中...</span>
+        <div class="p-3 bg-slate-800 text-white text-[10px] font-mono flex gap-4">
+            <span id="conn-status">正在連線 GitHub...</span>
+            <span id="csv-debug"></span>
         </div>
     </div>
 
     <script>
         const CSV_URL = "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv";
-        let cachedData = []; // 存儲抓下來的原始數據
+        let rawCSVData = [];
 
         window.onload = () => {
-            initUI();
+            initFilters();
             switchUser('dad');
-            checkConn();
+            preFetchData();
         };
 
-        async function checkConn() {
+        async function preFetchData() {
+            const status = document.getElementById('conn-status');
             try {
-                const res = await fetch(CSV_URL);
-                if(res.ok) document.getElementById('conn-539').innerHTML = "539: <span class='text-green-600 font-bold'>OK</span>";
-            } catch(e) { document.getElementById('conn-539').innerHTML = "539: <span class='text-red-600'>FAIL</span>"; }
+                const response = await fetch(CSV_URL);
+                if (!response.ok) throw new Error();
+                const text = await response.text();
+                // 處理 CSV 換行，過濾掉空行
+                rawCSVData = text.split(/\r?\n/).filter(line => line.trim() !== "").map(line => line.split(','));
+                status.innerHTML = `539 連線: <span class="text-green-400">OK</span> | 總共 ${rawCSVData.length} 期數據`;
+            } catch (e) {
+                status.innerHTML = `539 連線: <span class="text-red-400">FAIL (請確認檔案路徑)</span>`;
+            }
         }
 
-        function initUI() {
+        function initFilters() {
             const mRow = document.getElementById('row-month');
             for(let i=1; i<=12; i++) mRow.innerHTML += `<button onclick="this.classList.toggle('selected')" class="btn-sq" data-val="${i}">${i}</button>`;
             const dRow = document.getElementById('row-day');
@@ -80,95 +88,90 @@
 
         function switchUser(user) {
             const isDad = user === 'dad';
-            document.getElementById('u-dad').className = `px-4 py-1 border rounded font-bold ${isDad ? 'bg-cyan-400 text-white' : 'bg-gray-100'}`;
-            document.getElementById('u-bro').className = `px-4 py-1 border rounded font-bold ${!isDad ? 'bg-cyan-400 text-white' : 'bg-gray-100'}`;
+            document.getElementById('u-dad').className = `px-6 py-1.5 border rounded font-bold ${isDad ? 'bg-cyan-500 text-white' : 'bg-gray-100'}`;
+            document.getElementById('u-bro').className = `px-6 py-1.5 border rounded font-bold ${!isDad ? 'bg-cyan-500 text-white' : 'bg-gray-100'}`;
+            
             const start = isDad ? 2020 : 2006;
             const yRow = document.getElementById('row-year');
             yRow.innerHTML = '';
             for(let y=start; y<=2026; y++) yRow.innerHTML += `<button onclick="this.classList.toggle('selected')" class="btn-sq" data-val="${y}">${y}</button>`;
         }
 
-        async function fetchAndAnalyze() {
-            const loading = document.getElementById('loading');
-            loading.classList.remove('hidden');
+        function runAnalysis() {
+            if (rawCSVData.length === 0) { alert("尚未讀取到數據，請重新整理頁面。"); return; }
             
-            // 抓取選中的條件
-            const selYears = Array.from(document.querySelectorAll('#row-year .selected')).map(b => b.dataset.val);
-            const selMonths = Array.from(document.querySelectorAll('#row-month .selected')).map(b => b.dataset.val);
-            const selDays = Array.from(document.querySelectorAll('#row-day .selected')).map(b => b.dataset.val);
+            const selY = Array.from(document.querySelectorAll('#row-year .selected')).map(b => b.dataset.val);
+            const selM = Array.from(document.querySelectorAll('#row-month .selected')).map(b => b.dataset.val);
+            const selD = Array.from(document.querySelectorAll('#row-day .selected')).map(b => b.dataset.val);
 
-            try {
-                if (cachedData.length === 0) {
-                    const response = await fetch(CSV_URL);
-                    const text = await response.text();
-                    cachedData = text.split('\n').map(line => line.split(','));
-                }
+            if (selM.length === 0 && selD.length === 0) { alert("請至少選擇一個月份或日期！"); return; }
 
-                // 核心統計邏輯
-                // 假設 CSV 格式: 日期(0), 期別(1), 號碼(2,3,4,5,6), 天干地支(7)...
-                const stats = { month: new Array(40).fill(0), day: new Array(40).fill(0), total: new Array(40).fill(0) };
+            const stats = { month: new Array(40).fill(0), day: new Array(40).fill(0), total: new Array(40).fill(0) };
+            let matchCount = 0;
+
+            rawCSVData.forEach(row => {
+                // 數據清洗：尋找符合日期格式的第一欄 (例: 2024/01/01)
+                const datePart = row[0].trim();
+                if (!datePart.includes('/')) return; 
+
+                const d = new Date(datePart);
+                const Y = d.getFullYear().toString();
+                const M = (d.getMonth() + 1).toString();
+                const D = d.getDate().toString();
+
+                // 檢查年份過濾
+                if (selY.length > 0 && !selY.includes(Y)) return;
+
+                // 抓取該列中所有的號碼 (過濾掉非數字，取 01-39 範圍)
+                const rowNums = row.map(cell => parseInt(cell.trim())).filter(n => n >= 1 && n <= 39);
                 
-                cachedData.forEach(row => {
-                    if (row.length < 5) return;
-                    const dateStr = row[0]; // 2024/01/01
-                    const d = new Date(dateStr);
-                    const Y = d.getFullYear().toString();
-                    const M = (d.getMonth() + 1).toString();
-                    const D = d.getDate().toString();
+                let matched = false;
+                if (selM.includes(M)) {
+                    rowNums.forEach(n => stats.month[n]++);
+                    matched = true;
+                }
+                if (selD.includes(D)) {
+                    rowNums.forEach(n => stats.day[n]++);
+                    matched = true;
+                }
+                if(matched) matchCount++;
+            });
 
-                    // 檢查是否符合選中年份
-                    if (selYears.length > 0 && !selYears.includes(Y)) return;
-
-                    const nums = [row[2], row[3], row[4], row[5], row[6]].map(n => parseInt(n));
-
-                    // 月份符合
-                    if (selMonths.includes(M)) {
-                        nums.forEach(n => { if(n) stats.month[n]++; });
-                    }
-                    // 日期符合
-                    if (selDays.includes(D)) {
-                        nums.forEach(n => { if(n) stats.day[n]++; });
-                    }
-                });
-
-                for(let i=1; i<=39; i++) stats.total[i] = stats.month[i] + stats.day[i];
-
-                renderReport(stats, selMonths, selDays);
-            } catch (err) {
-                alert("數據讀取錯誤，請檢查網路或 GitHub 檔案路徑。");
-            } finally {
-                loading.classList.add('hidden');
-            }
+            for(let i=1; i<=39; i++) stats.total[i] = stats.month[i] + stats.day[i];
+            
+            document.getElementById('status-msg').className = "hidden";
+            renderReport(stats, selM, selD, matchCount);
         }
 
-        function renderReport(stats, ms, ds) {
-            const area = document.getElementById('report-area');
-            const findMax = (arr) => Math.max(...arr.slice(1));
-            const maxM = findMax(stats.month);
-            const maxD = findMax(stats.day);
-            const maxT = findMax(stats.total);
+        function renderReport(stats, ms, ds, count) {
+            const area = document.getElementById('report-output');
+            const getHighClass = (val, arr) => {
+                const max = Math.max(...arr.slice(1));
+                return (val === max && val > 0) ? 'text-hot' : '';
+            };
 
             const html = `
                 <div class="border border-gray-400 bg-white">
-                    <div class="bg-orange-100 p-2 font-bold border-b">
-                        【實際統計】 月份:${ms.join(',')} | 日期:${ds.join(',')}
+                    <div class="bg-amber-50 p-2 font-bold flex justify-between text-gray-700">
+                        <span>【第 ${area.children.length} 張】 篩選：月份(${ms.join(',')}) 日期(${ds.join(',')})</span>
+                        <span class="text-blue-600">符合期數：${count} 期</span>
                     </div>
                     <table class="report-table">
                         <tr class="bg-yellow">
-                            <td class="w-24">統計明細</td>
-                            ${Array.from({length: 39}, (_, i) => `<td class="w-8">${i+1}</td>`).join('')}
+                            <td class="w-20">統計明細</td>
+                            ${Array.from({length: 39}, (_, i) => `<td class="w-6">${i+1}</td>`).join('')}
                         </tr>
                         <tr>
-                            <td class="bg-yellow">月份:${ms.join(',')}</td>
-                            ${stats.month.slice(1).map(v => `<td class="${v === maxM && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                            <td class="bg-yellow">月份:${ms.length?ms.join(','):'無'}</td>
+                            ${stats.month.slice(1).map(v => `<td class="${getHighClass(v, stats.month)}">${v}</td>`).join('')}
                         </tr>
                         <tr>
-                            <td class="bg-yellow">日期:${ds.join(',')}</td>
-                            ${stats.day.slice(1).map(v => `<td class="${v === maxD && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                            <td class="bg-yellow">日期:${ds.length?ds.join(','):'無'}</td>
+                            ${stats.day.slice(1).map(v => `<td class="${getHighClass(v, stats.day)}">${v}</td>`).join('')}
                         </tr>
                         <tr class="bg-pink font-bold">
                             <td class="bg-yellow">加總(Sum)</td>
-                            ${stats.total.slice(1).map(v => `<td class="${v === maxT && v>0 ? 'text-hot' : ''}">${v}</td>`).join('')}
+                            ${stats.total.slice(1).map(v => `<td class="${getHighClass(v, stats.total)}">${v}</td>`).join('')}
                         </tr>
                     </table>
                 </div>
