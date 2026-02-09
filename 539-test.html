@@ -9,27 +9,25 @@
     <pre id="display"></pre>
 
     <script>
-        async function fetchLottoData(type) {
-            const url = `https://raw.githubusercontent.com/secret-lotto-888/fine/main/${type}.csv`;
-            
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('連線失敗');
-                
-                const csvText = await response.text();
-                
-                // 顯示原始數據到網頁上
-                document.getElementById('display').innerText = csvText;
-
-                // 簡單解析 CSV (以換行和逗號拆分)
-                const rows = csvText.split('\n').map(row => row.split(','));
-                console.log(`${type} 數據矩陣:`, rows);
-                
-            } catch (error) {
-                console.error('抓取錯誤:', error);
-                alert('無法讀取數據，請檢查儲存庫是否為公開(Public)');
+            async function fetchLottoData(type) {
+        // 注意這裡加入了 /fine/ 路徑
+        const url = `https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/${type}.csv`;
+        
+        console.log("正在讀取路徑:", url);
+    
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`找不到檔案 (錯誤代碼: ${response.status})。請確認儲存庫已設為 Public 且路徑正確。`);
             }
+            const csvText = await response.text();
+            document.getElementById('display').innerText = csvText;
+        } catch (error) {
+            console.error('Error:', error);
+            alert('讀取失敗: ' + error.message);
         }
+    }
     </script>
 </body>
 </html>
+
