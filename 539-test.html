@@ -510,18 +510,30 @@ function toggleChip(el){
 }
 
 
-function fetchSheetData(callback){
-  document.getElementById('loadingOverlay').style.display='flex';
-  Papa.parse(sheetUrls[currentGame] + "&t=" + Date.now(),{
-    download:true, header:false, skipEmptyLines:true,
-    complete:function(results){
-      document.getElementById('loadingOverlay').style.display='none';
-      cloudData=results.data.slice(1);
-      if(callback) callback(results.data[results.data.length-1]);
-      updateStats();
-    }
-  });
+// 增加異步處理
+async function fetchSheetData(callback){
+  try {
+    document.getElementById('loadingOverlay').style.display = 'flex'; // 顯示載入中
+    let response = await fetch(sheetUrls[currentGame]);
+    if (!response.ok) throw new Error("資料載入失敗");
+    let text = await response.text();
+    Papa.parse(text, {
+      header: false,
+      skipEmptyLines: true,
+      complete: function(results) {
+        document.getElementById('loadingOverlay').style.display = 'none'; // 隱藏載入提示
+        cloudData = results.data.slice(1);
+        if(callback) callback(results.data[results.data.length-1]);
+        updateStats();  // 更新統計
+      }
+    });
+  } catch (error) {
+    console.error("錯誤：", error);
+    document.getElementById('loadingOverlay').style.display = 'none'; // 隱藏載入提示
+    alert("資料載入失敗，請稍後再試");
+  }
 }
+
 
 function updateStats(){
   if(!cloudData.length) return;
@@ -987,4 +999,5 @@ start();
 </script>
 </body>
 </html>
+
 
