@@ -847,23 +847,68 @@ function renderCurrentReports(){
   cont.innerHTML=html;
 }
 
-function exportToExcel(){
-  const table = document.querySelector(".report-table");
-  if(!table) return alert("無資料");
+function exportToExcel() {
+    const wb = XLSX.utils.book_new(); // 新建一個 Excel 工作簿
+    const sheetData = [];
+    
+    const groups = reportStorage[currentUser][currentGame];
+    if (groups.length === 0) return alert("無資料");
 
-  const headers = table.querySelector("thead").innerHTML;  // Get header row
-  const dataRows = table.querySelector("tbody").innerHTML;  // Get all data rows
-  
-  // Combine header and data rows into a complete table HTML
-  const tableHTML = `<table>${headers}${dataRows}</table>`;
-  
-  // Prepare Excel export link
-  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(tableHTML);
-  const link = document.createElement("a");
-  link.download = `分析_${Date.now()}.xls`;  // Customize the filename
-  link.href = url;
-  link.click();  // Trigger download
+    let rowIndex = 0; // 用來追蹤在工作表中插入每個報表的位置
+
+    // 生成每一個報表並將其添加到同一個工作表
+    groups.forEach((g, gi) => {
+        // 每個報表的標題行，這裡可以放更多的詳細資訊，如篩選條件等
+        sheetData.push([`【第 ${gi + 1} 張】${g.title}`]);
+        rowIndex++;
+
+        // 顯示報表的篩選條件（例如：年份、月份等）
+        const filters = getSelectedFilters();
+        const filtersInfo = Object.entries(filters).map(([k, v]) => `${k}: ${v.join(", ")}`).join(" | ");
+        sheetData.push([`篩選條件: ${filtersInfo || "無"}`]);
+        rowIndex++;
+
+        // 添加表頭，報表標題行
+        sheetData.push(["統計明細", ...Array.from({ length: g.limit }, (_, i) => i + 1)]); // 報表標題行
+        rowIndex++;
+
+        // 將每一個報表的數據行加入
+        g.rows.forEach(r => {
+            const sorted = [...r.data].slice(1).sort((a, b) => b - a); // 排序
+            const th = (sorted[4] > 0) ? sorted[4] : 999;
+            sheetData.push([r.label, ...r.data.slice(1).map(v => {
+                const vv = v || 0;
+                const cls = (vv >= th && vv > 0) ? 'top5' : '';
+                return vv || ''; // 避免空格
+            })]);
+            rowIndex++;
+        });
+
+        // 添加總和行
+        const sumSorted = [...g.sum].slice(1).sort((a, b) => b - a);
+        const sumTh = (sumSorted[4] > 0) ? sumSorted[4] : 999;
+        sheetData.push(["加總(Sum)", ...g.sum.slice(1).map(v => {
+            const vv = v || 0;
+            const cls = (vv >= sumTh && vv > 0) ? 'top5' : '';
+            return vv || ''; // 避免空格
+        })]);
+        rowIndex++;
+
+        // 每個報表後添加一行分隔
+        sheetData.push([""]); // 添加空行作為分隔
+        rowIndex++;
+    });
+
+    // 將報表數據轉換為工作表
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // 將工作表加入工作簿
+    XLSX.utils.book_append_sheet(wb, ws, "報表");
+
+    // 匯出 Excel 文件
+    XLSX.writeFile(wb, `分析報表_${Date.now()}.xlsx`);
 }
+
 
 
 /* =========================
@@ -991,6 +1036,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
