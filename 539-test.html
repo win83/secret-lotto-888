@@ -135,14 +135,42 @@
 </div>
 
 <script>
-let currentMode = "歷史模式", currentGame = "539", currentUser = "dad", maxNum = 39, cloudData = [];
+const CONFIG = {
+            "539": { 
+                url: "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv", 
+                max: 39, name: "今彩 539", data: [] 
+            },
+            "49": { 
+                url: "https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/49.csv", 
+                max: 49, name: "大樂透 (49)", data: [] 
+            }
+        };
 
-const reportStorage = { dad: { "539": [], "Lotto": [] }, bro: { "539": [], "Lotto": [] } };
+        let curGame = "539";
+        let curUser = "dad";
 
-const sheetUrls = {
-  "539": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=1316642624&single=true&output=csv",
-  "Lotto": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRhDtkfS1lZWSOtI58BCPr1Auwgsv-2SkuWNh9OWY6QnrwlMoNZwJcvs9voSH9wf1EkK53MyRVwNZPd/pub?gid=213544897&single=true&output=csv"
-};
+        window.onload = () => {
+            initStaticFilters();
+            switchGame("539");
+            switchUser("dad");
+            fetchAllData();
+        };
+
+        // 同時抓取兩個資料庫
+        async function fetchAllData() {
+            for (let key in CONFIG) {
+                try {
+                    const res = await fetch(CONFIG[key].url);
+                    if (!res.ok) throw new Error();
+                    const text = await res.text();
+                    CONFIG[key].data = text.split(/\r?\n/)
+                        .filter(l => l.trim() !== "")
+                        .map(l => l.split(','));
+                    document.getElementById(`stat-${key}`).innerHTML = `${key}: <span class="text-green-400">OK (${CONFIG[key].data.length}期)</span>`;
+                } catch (e) {
+                    document.getElementById(`stat-${key}`).innerHTML = `${key}: <span class="text-red-400">FAIL</span>`;
+                }
+            }
 
 /* =========================
    主體/副體 狀態
@@ -1011,6 +1039,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
