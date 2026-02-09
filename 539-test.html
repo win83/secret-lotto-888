@@ -848,24 +848,23 @@ function renderCurrentReports(){
 }
 
 function exportToExcel(){
-  const tables = document.querySelectorAll(".report-table"); // 獲取所有報表表格
-  if (!tables.length) return alert("無資料");
+  const table = document.querySelector(".report-table");
+  if(!table) return alert("無資料");
 
-  // 準備 Excel 檔案內容，將所有報表表格內容拼接起來
-  let excelContent = "";
+  // Include header row as part of the Excel export
+  const headers = table.querySelector("thead").innerHTML;
+  const data = table.querySelector("tbody").innerHTML;
+
+  // Combine headers and data
+  const tableHTML = `<table>${headers}${data}</table>`;
   
-  tables.forEach(table => {
-    excelContent += table.outerHTML + "<br>"; // 拼接每個表格的 HTML 內容
-  });
-
-  // 使用 data URI 生成 Excel 下載鏈接
-  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(excelContent);
+  // Prepare for export
+  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(tableHTML);
   const link = document.createElement("a");
-  link.download = `分析_${Date.now()}.xls`; // 設置檔案名
+  link.download = `分析_${Date.now()}.xls`;
   link.href = url;
-  link.click(); // 觸發下載
+  link.click();
 }
-
 
 /* =========================
    modes / misc
@@ -992,6 +991,7 @@ start();
 </script>
 </body>
 </html>
+
 
 
 
