@@ -847,24 +847,44 @@ function renderCurrentReports(){
   cont.innerHTML=html;
 }
 
-function exportToExcel(){
-  const tables = document.querySelectorAll(".report-table"); // 獲取所有報表表格
-  if (!tables.length) return alert("無資料");
+function exportToExcel() {
+    const tables = document.querySelectorAll(".report-table"); // Get all report tables
+    if (!tables.length) return alert("無資料");
 
-  // 準備 Excel 檔案內容，將所有報表表格內容拼接起來
-  let excelContent = "";
-  
-  tables.forEach(table => {
-    excelContent += table.outerHTML + "<br>"; // 拼接每個表格的 HTML 內容
-  });
+    let excelContent = "<table border='1' cellpadding='5' cellspacing='0'>"; // Excel table structure
 
-  // 使用 data URI 生成 Excel 下載鏈接
-  const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(excelContent);
-  const link = document.createElement("a");
-  link.download = `分析_${Date.now()}.xls`; // 設置檔案名
-  link.href = url;
-  link.click(); // 觸發下載
+    tables.forEach(table => {
+        // Add a title for each report table
+        const title = table.previousElementSibling.querySelector('.title') ? table.previousElementSibling.querySelector('.title').textContent : '未命名報表';
+        
+        // Add a report header
+        excelContent += `<tr><th colspan="${table.rows[0].cells.length}" style="background-color:#fce4d6; font-weight:bold;">${title}</th></tr>`;
+
+        // Loop through each table to append to the Excel content
+        const rows = table.querySelectorAll('tr');
+        rows.forEach(row => {
+            excelContent += "<tr>";
+            const cells = row.querySelectorAll('td, th');
+            cells.forEach(cell => {
+                excelContent += `<td style="background-color:${window.getComputedStyle(cell).backgroundColor}">${cell.innerHTML}</td>`;
+            });
+            excelContent += "</tr>";
+        });
+
+        // Add a line break between tables
+        excelContent += "<tr><td colspan='" + table.rows[0].cells.length + "'></td></tr>";
+    });
+
+    excelContent += "</table>"; // End Excel table structure
+
+    // Use data URI to generate Excel download link
+    const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(excelContent);
+    const link = document.createElement("a");
+    link.download = `分析_${Date.now()}.xls`; // Set file name
+    link.href = url;
+    link.click(); // Trigger download
 }
+
 
 
 /* =========================
@@ -992,3 +1012,4 @@ start();
 </script>
 </body>
 </html>
+
