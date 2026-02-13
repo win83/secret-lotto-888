@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>樂透分析系統 v15.1 - 總和聯動強化版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; padding: 10px; margin: 0; }
+        .control-panel { margin-bottom: 10px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .lotto-table { border-collapse: collapse; background: #fff; margin-bottom: 15px; width: 100%; table-layout: fixed; border: 2px solid #333; }
+        .lotto-table th, .lotto-table td { border: 1px solid #ccc; padding: 6px; text-align: center; font-size: 14px; }
+        .current-row { background-color: #ffff00 !important; font-weight: bold; } 
+        
+        #stickyStats { position: sticky; top: 0; z-index: 100; background: #f0f2f5; padding-bottom: 10px; }
+        .global-group { background: white; border: 3px solid #1565c0; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        
+        .report-group { background: white; margin-bottom: 25px; border-radius: 8px; border: 1px solid #d1d9e0; overflow-x: auto; position: relative; }
+        .report-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 1600px; }
+        .report-table th, .report-table td { border: 1px solid #dee2e6; padding: 5px 0; font-size: 13px; text-align: center; }
+        .report-table thead th { background: #37474f; color: white; height: 35px; }
+        .report-table th:first-child, .report-table td:first-child { width: 400px; text-align: left; padding-left: 15px; background: #f8f9fa; position: sticky; left: 0; z-index: 2; border-right: 2px solid #37474f; }
+        
+        .divider-row td { border-bottom: 2px solid #000 !important; }
+
+        .btn { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; margin-right: 8px; }
+        .btn-blue { background: #1a73e8; color: white; }
+        .btn-red { background: #d93025; color: white; }
+        .btn-del-left { background: #ff5252; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 3px 10px; font-size: 12px; margin-top: 8px; display: inline-block; font-weight: bold; }
+        .btn-del-left:hover { background: #d32f2f; }
+        
+        .active-mode { background: #188038 !important; color: white; }
+        .sum-col { background-color: #e3f2fd; font-weight: bold; color: #1565c0; } /* 總和列樣式 */
+
+        .top-cell { background-color: #fff176 !important; font-weight: bold; } 
+        .sum-top-cell { background-color: #bbdefb !important; font-weight: bold; } 
+        .high-count-top-cell { background-color: #ffccbc !important; font-weight: bold; } 
+        .footer-row { font-weight: bold; background: #fafafa; }
+        .date-text { color: #c62828; font-size: 11px; margin-left: 5px; }
+        .path-label { color: #d32f2f; font-weight: bold; font-size: 15px; display: block; margin-bottom: 4px; }
+        .mode-text { color: #666; font-size: 12px; }
+        .clickable { cursor: pointer; font-weight: bold; color: #1a73e8; }
+        .selected { background-color: #ff5722 !important; color: white !important; }
+    </style>
+</head>
+<body>
+
+<div class="control-panel">
+    <button id="btn539" class="btn" onclick="switchMode('539')">今彩 539</button>
+    <button id="btn49" class="btn" onclick="switchMode('49')">大樂透 49</button>
+    預覽期數：<input type="number" id="periodLimit" value="6" style="width: 45px;">
+    下推 N 期：<input type="number" id="pushN" value="5" style="width: 45px;">
+    <label><input type="radio" name="searchType" value="any" checked> 不分球位</label>
+    <label><input type="radio" name="searchType" value="fixed"> 依點選球位</label>
+</div>
+
+<table class="lotto-table" id="mainTable"></table>
+
+<div style="margin: 10px 0; padding: 15px; background: #fff; border-radius: 8px; border-left: 5px solid #1a73e8;">
+    <strong>目前選取：</strong> <code id="conditionText">請點選球號或總和...</code>
+    <div style="margin-top: 12px;">
+        <button class="btn btn-blue" onclick="executeAnalysis()">生成明細報表 (Enter)</button>
+        <button class="btn btn-red" onclick="clearReport()">清除全部</button>
+    </div>
+</div>
+
+<div id="stickyStats">
+    <div id="globalSummaryContainer" class="global-group">
+        <div style="padding: 10px; text-align: center; color: #999;">尚未生成報表</div>
+    </div>
+</div>
+
+<div id="reportContainer"></div>
+
+<script>
+const CONFIG = {
+    '539': { maxNum: 39, colEnd: 11, lottoDays: [1,2,3,4,5,6], url: 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv' },
+    '49': { maxNum: 49, colEnd: 12, lottoDays: [2,5], url: 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/49.csv' }
+};
+
+let currentMode = '539', fullProcessedData = [], selectedConditions = [], reportData = [], calcStack = [];
+
+window.onload = () => switchMode('539');
+
+function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn539').className = mode === '539' ? 'btn active-mode' : 'btn';
+    document.getElementById('btn49').className = mode === '49' ? 'btn active-mode' : 'btn';
+    Papa.parse(CONFIG[mode].url, {
+        download: true, header: false,
+        complete: function(results) { processCSVData(results.data); renderMainTable(); }
+    });
+}
+
+function processCSVData(rows) {
+    let cleanData = [];
+    rows.forEach(row => {
+        let idVal = parseInt(row[0]);
+        if (isNaN(idVal)) return;
+        let balls = [];
+        let rowSum = 0;
+        for (let i = 2; i < CONFIG[currentMode].colEnd; i++) {
+            let b = parseInt(row[i]);
+            if (!isNaN(b)) {
+                balls.push(b.toString().padStart(2, '0'));
+                rowSum += b;
+            }
+        }
+        if (balls.length >= 5) {
+            cleanData.push({ id: idVal.toString(), date: row[1] || "", balls: balls, sum: rowSum.toString() });
+        }
+    });
+    fullProcessedData = cleanData.sort((a,b) => parseInt(a.id) - parseInt(b.id));
+}
+
+function getNextLottoDate(baseDate, offsetCount) {
+    if (!baseDate) return "";
+    let date = new Date(baseDate);
+    let validDays = CONFIG[currentMode].lottoDays;
+    let found = 0;
+    while (found < offsetCount) {
+        date.setDate(date.getDate() + 1);
+        if (validDays.includes(date.getDay())) found++;
+    }
+    return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
+}
+
+function renderMainTable() {
+    let limit = parseInt(document.getElementById('periodLimit').value) || 6;
+    const table = document.getElementById('mainTable');
+    const lastDate = fullProcessedData[fullProcessedData.length - 1].date;
+    const nextDate = getNextLottoDate(lastDate, 1);
+    
+    let header = `<thead><tr><th>距離</th><th>期別</th><th>日期</th>`;
+    for(let i=1; i<=(currentMode==='49'?6:5); i++) header += `<th>球${i}</th>`;
+    header += `<th class="sum-col">總和</th></tr></thead>`;
+    table.innerHTML = header;
+
+    let tbody = document.createElement('tbody');
+    const displayData = [...fullProcessedData.slice(-(limit-1)), { id: "預測", date: nextDate, balls: Array(currentMode==='49'?6:5).fill(""), sum: "" }];
+    
+    displayData.forEach((data, idx) => {
+        const dist = displayData.length - idx;
+        let tr = document.createElement('tr');
+        if (dist === 1) tr.className = 'current-row';
+        tr.innerHTML = `<td>第${dist}期</td><td>${data.id}</td><td>${data.date}</td>`;
+        
+        // 球號
+        for(let i=0; i<(currentMode==='49'?6:5); i++) {
+            let val = data.balls[i] || "";
+            let td = document.createElement('td');
+            td.innerText = val;
+            if (dist > 1 && val) {
+                td.className = 'clickable';
+                td.onclick = () => toggleCondition(dist, val, i, td, false);
+            }
+            tr.appendChild(td);
+        }
+        
+        // 總和
+        let sumTd = document.createElement('td');
+        sumTd.innerText = data.sum || "";
+        sumTd.className = 'sum-col';
+        if (dist > 1 && data.sum) {
+            sumTd.classList.add('clickable');
+            sumTd.onclick = () => toggleCondition(dist, data.sum, 99, sumTd, true); // 99 代表總和位
+        }
+        tr.appendChild(sumTd);
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+}
+
+function toggleCondition(dist, val, pos, el, isSum) {
+    const idx = selectedConditions.findIndex(c => c.dist === dist && c.val === val && c.isSum === isSum);
+    if (idx > -1) { 
+        selectedConditions.splice(idx, 1); 
+        el.classList.remove('selected'); 
+    } else { 
+        selectedConditions.push({ dist, val, pos, isSum }); 
+        el.classList.add('selected'); 
+    }
+    updateConditionText();
+}
+
+function executeAnalysis() {
+    const searchType = document.querySelector('input[name="searchType"]:checked').value;
+    const searchTypeText = searchType === 'fixed' ? '依點選球位' : '不分球位';
+    const pushN = parseInt(document.getElementById('pushN').value) || 5;
+    const maxNum = CONFIG[currentMode].maxNum;
+    const targets = [...calcStack, ...selectedConditions.map(c => ({...c, op: null}))];
+    if (targets.length === 0) return;
+
+    let multiStats = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
+    let matchCount = 0;
+    const isArithmetic = calcStack.length > 0;
+    let targetStr = "";
+    let finalPath = "";
+
+    if (isArithmetic) {
+        let targetNum = parseInt(targets[0].val);
+        let formulaStr = `D${targets[0].dist}(${targets[0].isSum?'總':''}${targets[0].val})`;
+        for(let j=0; j<targets.length-1; j++) {
+            let vNext = parseInt(targets[j+1].val);
+            let op = targets[j].op;
+            if(op === '+') targetNum += vNext; else targetNum -= vNext;
+            formulaStr += ` ${op} D${targets[j+1].dist}(${targets[j+1].isSum?'總':''}${targets[j+1].val})`;
+        }
+        // 算術結果如果是針對一般球號則取模，若是總和則不取模(或自定義)
+        // 此處維持針對球號的取模邏輯
+        let modResult = targetNum;
+        while(modResult > maxNum) modResult -= maxNum;
+        while(modResult < 1) modResult += maxNum;
+        targetStr = modResult.toString().padStart(2, '0');
+        finalPath = `${formulaStr} = [ ${targetStr} ]`;
+
+        for (let i = 20; i < fullProcessedData.length - pushN; i++) {
+            let structOk = true, histCalcVal = 0;
+            for(let j=0; j<targets.length; j++) {
+                let idx = i - (targets[j].dist - 1);
+                if(idx < 0) { structOk = false; break; }
+                let row = fullProcessedData[idx];
+                let val;
+                if(targets[j].isSum) {
+                    val = parseInt(row.sum);
+                } else {
+                    val = (searchType === 'fixed') ? parseInt(row.balls[targets[j].pos]) : (row.balls.includes(targets[j].val) ? parseInt(targets[j].val) : NaN);
+                }
+                if(isNaN(val)) { structOk = false; break; }
+                if(j === 0) histCalcVal = val; else { if(targets[j-1].op==='+') histCalcVal += val; else histCalcVal -= val; }
+            }
+            if(structOk) {
+                let checkVal = histCalcVal;
+                while(checkVal > maxNum) checkVal -= maxNum;
+                while(checkVal < 1) checkVal += maxNum;
+                if(checkVal === parseInt(targetStr) && fullProcessedData[i].balls.includes(targetStr)) {
+                    matchCount++;
+                    for (let k = 0; k < pushN; k++) { fullProcessedData[i+k].balls.forEach(b => multiStats[k][parseInt(b)]++); }
+                }
+            }
+        }
+    } else {
+        // 聯動模式
+        finalPath = targets.map(t => `D${t.dist}(${t.isSum?'總':''}${t.val})`).join(' ');
+        for (let i = 20; i < fullProcessedData.length - pushN; i++) {
+            let allOk = true;
+            for(let t of targets) {
+                let idx = i - (t.dist - 1);
+                if(idx < 0) { allOk = false; break; }
+                let row = fullProcessedData[idx];
+                if(t.isSum) {
+                    if(row.sum !== t.val) { allOk = false; break; }
+                } else {
+                    if(searchType === 'fixed') { if(row.balls[t.pos] !== t.val) { allOk = false; break; } }
+                    else { if(!row.balls.includes(t.val)) { allOk = false; break; } }
+                }
+            }
+            if(allOk) {
+                matchCount++;
+                for (let k = 0; k < pushN; k++) { fullProcessedData[i+k].balls.forEach(b => multiStats[k][parseInt(b)]++); }
+            }
+        }
+    }
+
+    reportData.push({ 
+        id: Date.now(),
+        mode: isArithmetic ? `算術` : `聯動`, 
+        sType: searchTypeText,
+        path: finalPath, 
+        stats: multiStats, 
+        matches: matchCount,
+        baseDate: fullProcessedData[fullProcessedData.length-1].date
+    });
+    renderReport(); resetCalc();
+}
+
+function getTop5Indices(arr) {
+    return arr.map((v, i) => ({v, i})).slice(1).sort((a,b) => b.v - a.v).slice(0, 5).filter(x => x.v > 0).map(x => x.i);
+}
+
+function renderReport() {
+    const maxNum = CONFIG[currentMode].maxNum;
+    const pushN = parseInt(document.getElementById('pushN').value) || 5;
+    let container = document.getElementById('reportContainer');
+    container.innerHTML = "";
+    let globalSums = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
+    let globalHighs = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
+
+    reportData.forEach((row, rid) => {
+        let groupDiv = document.createElement('div');
+        groupDiv.className = 'report-group';
+        let reportSums = new Array(maxNum + 1).fill(0);
+        let highCounts = new Array(maxNum + 1).fill(0);
+        
+        let html = `<table class="report-table"><thead><tr><th><span class="path-label">${row.path}</span> <span class="mode-text">模式：${row.mode} [${row.sType}] (命中 ${row.matches} 次)</span><br><button class="btn-del-left" onclick="deleteSingleReport(${row.id})">刪除此報表</button></th>`;
+        for(let i=1; i<=maxNum; i++) html += `<th>${i}</th>`;
+        html += `</tr></thead><tbody>`;
+        
+        for(let k=0; k < pushN; k++) {
+            let top5 = getTop5Indices(row.stats[k]);
+            top5.forEach(num => { highCounts[num]++; globalHighs[k][num]++; });
+            let dStr = getNextLottoDate(row.baseDate, k + 1);
+            let isLastPeriod = (k === pushN - 1);
+            
+            html += `<tr class="${isLastPeriod?'divider-row':''}"><td>下推 ${k} 期 <span class="date-text">(${dStr})</span></td>`;
+            for(let i=1; i<=maxNum; i++) {
+                let val = row.stats[k][i];
+                reportSums[i] += val;
+                globalSums[k][i] += val;
+                html += `<td class="${top5.includes(i)?'top-cell':''}">${val || ''}</td>`;
+            }
+            html += `</tr>`;
+        }
+        let sumTop5 = getTop5Indices(reportSums);
+        html += `<tr class="footer-row"><td>報表總計 (藍底 TOP5)</td>`;
+        for(let i=1; i<=maxNum; i++) html += `<td class="${sumTop5.includes(i)?'sum-top-cell':''}">${reportSums[i] || ''}</td>`;
+        html += `</tr>`;
+        let highTop5 = getTop5Indices(highCounts);
+        html += `<tr class="footer-row"><td>高亮次數 (橘底 TOP5)</td>`;
+        for(let i=1; i<=maxNum; i++) html += `<td class="${highTop5.includes(i)?'high-count-top-cell':''}">${highCounts[i] || ''}</td>`;
+        html += `</tr></tbody></table>`;
+        groupDiv.innerHTML = html;
+        container.appendChild(groupDiv);
+    });
+    renderGlobalStats(globalSums, globalHighs);
+}
+
+function renderGlobalStats(sums, highs) {
+    const maxNum = CONFIG[currentMode].maxNum;
+    const container = document.getElementById('globalSummaryContainer');
+    if (reportData.length === 0) { container.innerHTML = `<div style="padding: 10px; text-align: center;">尚未生成報表</div>`; return; }
+    let finalTotalSums = new Array(maxNum + 1).fill(0);
+    let finalHighCounts = new Array(maxNum + 1).fill(0);
+    let html = `<table class="report-table"><thead><tr><th style="background:#1565c0; color:white;">總體報表極簡統計</th>`;
+    for(let i=1; i<=maxNum; i++) html += `<th style="background:#1565c0; color:white;">${i}</th>`;
+    html += `</tr></thead><tbody>`;
+    
+    for(let k=0; k < sums.length; k++) {
+        let top5 = getTop5Indices(sums[k]);
+        let isLastPeriod = (k === sums.length - 1);
+        html += `<tr class="${isLastPeriod?'divider-row':''}"><td>下推 ${k} 期：所有報表總次數 (黃底 TOP5)</td>`;
+        for(let i=1; i<=maxNum; i++) {
+            let val = sums[k][i];
+            finalTotalSums[i] += val;
+            html += `<td class="${top5.includes(i)?'top-cell':''}">${val || ''}</td>`;
+        }
+        html += `</tr>`;
+        for(let i=1; i<=maxNum; i++) finalHighCounts[i] += highs[k][i];
+    }
+    let finalSumTop5 = getTop5Indices(finalTotalSums);
+    html += `<tr class="footer-row"><td>所有期數：總計加總 (藍底 TOP5)</td>`;
+    for(let i=1; i<=maxNum; i++) html += `<td class="${finalSumTop5.includes(i)?'sum-top-cell':''}">${finalTotalSums[i] || ''}</td>`;
+    html += `</tr>`;
+    let finalHighTop5 = getTop5Indices(finalHighCounts);
+    html += `<tr class="footer-row"><td>所有期數：高亮累積 (橘底 TOP5)</td>`;
+    for(let i=1; i<=maxNum; i++) html += `<td class="${finalHighTop5.includes(i)?'high-count-top-cell':''}">${finalHighCounts[i] || ''}</td>`;
+    html += `</tr></tbody></table>`;
+    container.innerHTML = html;
+}
+
+function deleteSingleReport(id) {
+    reportData = reportData.filter(r => r.id !== id);
+    renderReport();
+}
+
+function clearReport() { reportData = []; renderReport(); resetCalc(); }
+
+function resetCalc() { 
+    calcStack = []; 
+    selectedConditions = []; 
+    updateConditionText(); 
+    document.querySelectorAll('.selected').forEach(e=>e.classList.remove('selected')); 
+}
+
+function updateConditionText() {
+    let text = calcStack.map(s => `D${s.dist}(${s.isSum?'總':''}${s.val}) ${s.op||''}`).join(' ');
+    text += selectedConditions.map(c => `D${c.dist}(${c.isSum?'總':''}${c.val})`).join(' ');
+    document.getElementById('conditionText').innerText = text || '請點選球號或總和...';
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') executeAnalysis();
+    else if (e.key === '+' || e.key === '-') {
+        if (selectedConditions.length > 0) {
+            calcStack.push({ ...selectedConditions[0], op: e.key });
+            selectedConditions = [];
+            updateConditionText();
+        }
+    }
+});
+</script>
+</body>
+</html>
