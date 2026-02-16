@@ -49,7 +49,7 @@
         .report-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
         .report-table th, .report-table td { border: 1px solid #ccc; text-align: center; padding: 5px 0; }
         .report-table th { background: #f8f9fa; position: sticky; top: 0; z-index: 5; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-        .report-table th:first-child { min-width: 140px; z-index: 6; left: 0; } /* 固定第一欄 */
+        .report-table th:first-child { min-width: 140px; z-index: 6; left: 0; }
         
         .top5-cell { background: #fbc02d !important; font-weight: bold; }
         .total-row { background: #fbc02d; font-weight: bold; }
@@ -67,104 +67,199 @@
 
         /* 當期/下期對碰組合徽章 */
         .pair-badge { display: inline-block; background: #fff; border: 1px solid #b2bec3; padding: 3px 8px; border-radius: 4px; margin: 3px; font-size: 13px; color: #2d3436; font-weight:bold; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        /* ====== 新增：登入防護畫面樣式 ====== */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #2c3e50; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 99999;
+            color: white; font-family: "Microsoft JhengHei", sans-serif;
+        }
+        #login-screen h2 { margin-bottom: 10px; font-size: 28px; letter-spacing: 2px; }
+        #login-screen p { margin-bottom: 25px; color: #bdc3c7; font-size: 15px; }
+        #login-screen input { 
+            padding: 12px; font-size: 20px; border-radius: 6px; border: 2px solid #34495e; 
+            text-align: center; margin-bottom: 20px; outline: none; background: #ecf0f1;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); width: 200px; transition: border 0.3s;
+        }
+        #login-screen input:focus { border-color: #3498db; background: #fff; }
+        #login-screen button { 
+            padding: 12px 40px; font-size: 18px; border-radius: 6px; border: none; 
+            background: #27ae60; color: white; cursor: pointer; font-weight: bold; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background 0.2s, transform 0.1s;
+        }
+        #login-screen button:hover { background: #219150; transform: translateY(-2px); }
+        #login-screen button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.2); }
+        
+        /* 隱藏主程式直到登入成功 */
+        #app-content { display: none; }
+        /* =================================== */
     </style>
 </head>
 <body>
 
-<div id="main-ui" class="main-container">
-    <div class="row" style="align-items: center;">
-        <div class="label">操作者</div>
-        <div class="btn-group">
-            <button class="btn active-blue" onclick="switchUser(this, '爸')">爸使用模式</button>
-            <button class="btn" onclick="switchUser(this, '哥')">哥使用模式</button>
-        </div>
-        <div style="width:1px; height:25px; background:#ddd; margin:0 10px;"></div>
-        <div class="label">資料類別</div>
-        <div class="btn-group" id="cat-btns-main">
-            <button class="btn active-blue" onclick="switchCat('539')">539</button>
-            <button class="btn" onclick="switchCat('539報表')">539報表</button>
-            <button class="btn" onclick="switchCat('49')">49</button>
-            <button class="btn" onclick="switchCat('49報表')">49報表</button>
-            <button class="btn" style="background: #d32f2f; color: white; margin-left:10px;" onclick="clearReports()">清空報表</button>
-            <span id="conn-status" style="margin-left:15px; font-size:13px; font-weight:bold; color:#7f8c8d;">📡 GitHub 資料載入中...</span>
-        </div>
-    </div>
-
-    <div class="row" style="background: #fffdf2; padding: 10px; border: 1px solid #ffe082; border-radius: 8px; margin-top: 10px;">
-        <div class="label">統計模式</div>
-        <div class="btn-group" id="mode-btns-group">
-            <button class="btn mode-btn active-yellow" id="btn-history" onclick="switchMode(this, '歷史模式')">歷史模式</button>
-            <button class="btn mode-btn" id="btn-drag-pre" onclick="switchMode(this, '拖牌前期')">拖牌前期</button>
-            <button class="btn mode-btn" id="btn-drag-post" onclick="switchMode(this, '拖牌後期')">拖牌後期</button>
-            <button class="btn mode-btn" id="btn-drag-n" onclick="switchMode(this, '拖牌下推')">拖牌下推N期</button>
-            
-            <div id="push-n-container" class="hidden">
-                下推 <input type="number" id="pushN" value="5" min="1" max="20" style="width: 50px;"> 期
-            </div>
-
-            <button class="btn mode-btn" onclick="switchMode(this, '當期對碰')">當期對碰</button>
-            <button class="btn mode-btn" onclick="switchMode(this, '下期對碰')">下期對碰</button>
-            <button class="btn mode-btn" id="btn-main-body" onclick="switchMode(this, '主體')">主體</button>
-            <button class="btn mode-btn" id="btn-sub-body" onclick="switchMode(this, '副體')">副體</button>
-            <button class="btn active-green" style="margin-left: 20px; font-weight:bold;" onclick="addToReport()">🚀 加入報表 (ENTER)</button>
-            <button class="btn" onclick="resetFilters()">清空篩選 (ESC)</button>
-            <span id="toast-msg">✅ 已成功加入報表</span>
-        </div>
-    </div>
-
-    <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-        <div class="row" data-type="年份"><div class="label">年份</div><div class="btn-group" id="year-btns"></div></div>
-        <div class="row" data-type="月份"><div class="label">月份</div><div class="btn-group" id="month-btns"></div></div>
-        <div class="row" data-type="日期"><div class="label">日期</div><div class="btn-group" id="day-btns"></div></div>
-        <div class="row" data-type="星期"><div class="label">星期</div><div class="btn-group" id="week-btns"></div></div>
-        <div class="row filter-extra" data-type="天干"><div class="label">天干</div><div class="btn-group" id="tian-gan"></div></div>
-        <div class="row filter-extra" data-type="地支"><div class="label">地支</div><div class="btn-group" id="di-zhi"></div></div>
-        <div class="row filter-extra" data-type="節氣"><div class="label">節氣/術語</div>
-            <div class="btn-group" style="flex-direction: column; align-items: flex-start;">
-                <div id="s-row" class="btn-group" style="margin-bottom: 5px;"></div>
-                <div id="t-row" class="btn-group"></div>
-            </div>
-        </div>
-        <div class="row" data-type="號碼"><div class="label">號碼</div><div class="btn-group" id="num-btns"></div></div>
-    </div>
+<div id="login-screen">
+    <h2>🔒 Lotto System Pro</h2>
+    <p>機密分析系統 ｜ 請輸入通行密碼</p>
+    <input type="password" id="pwd-input" placeholder="••••" autocomplete="off">
+    <button onclick="checkPassword()">登入系統</button>
 </div>
-
-<div id="report-ui" class="main-container hidden" style="max-width: 1650px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <div class="label" style="background:#000; color:#fff; min-width:120px;">報表管理系統</div>
-            <span id="report-user-label" style="font-weight:bold; color:var(--report-blue); font-size:16px;">[當前操作者：爸]</span>
-            <div class="btn-group" id="cat-btns-report" style="margin-left:15px;">
-                <button class="btn" onclick="switchCat('539')">539</button>
-                <button class="btn active-blue" onclick="switchCat('539報表')">539報表</button>
+<div id="app-content">
+    <div id="main-ui" class="main-container">
+        <div class="row" style="align-items: center;">
+            <div class="label">操作者</div>
+            <div class="btn-group">
+                <button class="btn active-blue" onclick="switchUser(this, '爸')">爸使用模式</button>
+                <button class="btn" onclick="switchUser(this, '哥')">哥使用模式</button>
+            </div>
+            <div style="width:1px; height:25px; background:#ddd; margin:0 10px;"></div>
+            <div class="label">資料類別</div>
+            <div class="btn-group" id="cat-btns-main">
+                <button class="btn active-blue" onclick="switchCat('539')">539</button>
+                <button class="btn" onclick="switchCat('539報表')">539報表</button>
                 <button class="btn" onclick="switchCat('49')">49</button>
                 <button class="btn" onclick="switchCat('49報表')">49報表</button>
-                <button class="btn" style="background: #d32f2f; color: white;" onclick="clearReports()">清空報表</button>
-                <button class="btn" style="background: #27ae60; color: white; font-weight:bold; margin-left: 10px;" onclick="exportToExcel()">📊 匯出Excel</button>
+                <button class="btn" style="background: #d32f2f; color: white; margin-left:10px;" onclick="clearReports()">清空報表</button>
+                <span id="conn-status" style="margin-left:15px; font-size:13px; font-weight:bold; color:#7f8c8d;">📡 GitHub 資料載入中...</span>
+                
+                <div id="latest-update-info" style="margin-left:auto; font-weight:bold; color:#d35400; font-size:14px; background:#fbeee6; padding:6px 15px; border-radius:6px; border:1px solid #e67e22; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    📅 最新開獎日 - 539：<span id="date-539" style="color:#c0392b;">讀取中</span> ｜ 49：<span id="date-49" style="color:#c0392b;">讀取中</span>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row" style="margin-bottom:10px;">
-        <div class="label">顯示模式</div>
-        <div class="btn-group" id="mode-filter-bar">
-            <button class="btn active-blue" onclick="filterByMode('全部', this)">全部</button>
-            <button class="btn" onclick="filterByMode('歷史模式', this)">歷史</button>
-            <button class="btn" onclick="filterByMode('拖牌', this)">拖牌</button>
-            <button class="btn" onclick="filterByMode('拖牌下推', this)">下推N期</button>
-            <button class="btn" onclick="filterByMode('當期對碰', this)">當期對碰</button>
-            <button class="btn" onclick="filterByMode('下期對碰', this)">下期對碰</button>
-            <button class="btn" onclick="filterByMode('主體', this)">主體</button>
+
+        <div class="row" style="background: #fffdf2; padding: 10px; border: 1px solid #ffe082; border-radius: 8px; margin-top: 10px;">
+            <div class="label">統計模式</div>
+            <div class="btn-group" id="mode-btns-group">
+                <button class="btn mode-btn active-yellow" id="btn-history" onclick="switchMode(this, '歷史模式')">歷史模式</button>
+                <button class="btn mode-btn" id="btn-drag-pre" onclick="switchMode(this, '拖牌前期')">拖牌前期</button>
+                <button class="btn mode-btn" id="btn-drag-post" onclick="switchMode(this, '拖牌後期')">拖牌後期</button>
+                <button class="btn mode-btn" id="btn-drag-n" onclick="switchMode(this, '拖牌下推')">拖牌下推N期</button>
+                
+                <div id="push-n-container" class="hidden">
+                    下推 <input type="number" id="pushN" value="5" min="1" max="20" style="width: 50px;"> 期
+                </div>
+
+                <button class="btn mode-btn" onclick="switchMode(this, '當期對碰')">當期對碰</button>
+                <button class="btn mode-btn" onclick="switchMode(this, '下期對碰')">下期對碰</button>
+                <button class="btn mode-btn" id="btn-main-body" onclick="switchMode(this, '主體')">主體</button>
+                <button class="btn mode-btn" id="btn-sub-body" onclick="switchMode(this, '副體')">副體</button>
+                <button class="btn active-green" style="margin-left: 20px; font-weight:bold;" onclick="addToReport()">🚀 加入報表 (ENTER)</button>
+                <button class="btn" onclick="resetFilters()">清空篩選 (ESC)</button>
+                <span id="toast-msg">✅ 已成功加入報表</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+            <div class="row" data-type="年份"><div class="label">年份</div><div class="btn-group" id="year-btns"></div></div>
+            <div class="row" data-type="月份"><div class="label">月份</div><div class="btn-group" id="month-btns"></div></div>
+            <div class="row" data-type="日期"><div class="label">日期</div><div class="btn-group" id="day-btns"></div></div>
+            <div class="row" data-type="星期"><div class="label">星期</div><div class="btn-group" id="week-btns"></div></div>
+            <div class="row filter-extra" data-type="天干"><div class="label">天干</div><div class="btn-group" id="tian-gan"></div></div>
+            <div class="row filter-extra" data-type="地支"><div class="label">地支</div><div class="btn-group" id="di-zhi"></div></div>
+            <div class="row filter-extra" data-type="節氣"><div class="label">節氣/術語</div>
+                <div class="btn-group" style="flex-direction: column; align-items: flex-start;">
+                    <div id="s-row" class="btn-group" style="margin-bottom: 5px;"></div>
+                    <div id="t-row" class="btn-group"></div>
+                </div>
+            </div>
+            <div class="row" data-type="號碼"><div class="label">號碼</div><div class="btn-group" id="num-btns"></div></div>
         </div>
     </div>
-    <div id="dynamic-filter-bar"></div>
-    <div id="report-display-area"></div>
+
+    <div id="report-ui" class="main-container hidden" style="max-width: 1650px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="label" style="background:#000; color:#fff; min-width:120px;">報表管理系統</div>
+                <span id="report-user-label" style="font-weight:bold; color:var(--report-blue); font-size:16px;">[當前操作者：爸]</span>
+                <div class="btn-group" id="cat-btns-report" style="margin-left:15px;">
+                    <button class="btn" onclick="switchCat('539')">539</button>
+                    <button class="btn active-blue" onclick="switchCat('539報表')">539報表</button>
+                    <button class="btn" onclick="switchCat('49')">49</button>
+                    <button class="btn" onclick="switchCat('49報表')">49報表</button>
+                    <button class="btn" style="background: #d32f2f; color: white;" onclick="clearReports()">清空報表</button>
+                    <button class="btn" style="background: #27ae60; color: white; font-weight:bold; margin-left: 10px;" onclick="exportToExcel()">📊 匯出Excel</button>
+                    <button class="btn" style="background: #8e44ad; color: white; font-weight:bold; margin-left: 10px;" onclick="analyzeBestCombinations()">💡 分析報表號碼</button>
+                </div>
+            </div>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+            <div class="label">顯示模式</div>
+            <div class="btn-group" id="mode-filter-bar">
+                <button class="btn active-blue" onclick="filterByMode('全部', this)">全部</button>
+                <button class="btn" onclick="filterByMode('歷史模式', this)">歷史</button>
+                <button class="btn" onclick="filterByMode('拖牌', this)">拖牌</button>
+                <button class="btn" onclick="filterByMode('拖牌下推', this)">下推N期</button>
+                <button class="btn" onclick="filterByMode('當期對碰', this)">當期對碰</button>
+                <button class="btn" onclick="filterByMode('下期對碰', this)">下期對碰</button>
+                <button class="btn" onclick="filterByMode('主體', this)">主體</button>
+            </div>
+        </div>
+        <div id="dynamic-filter-bar"></div>
+        <div id="analysis-result-area" style="margin-bottom: 20px;"></div>
+        <div id="report-display-area"></div>
+    </div>
 </div>
 
 <script>
-    let currentConfig = { user: '爸', cat: '539', mode: '歷史模式' };
+    // ==========================================
+    // ====== 登入防護與防右鍵機制 ======
+    // ==========================================
     
-    // 更新快取版本 v10：支援拖牌下推N期與標籤優化
-    let reportsData = JSON.parse(localStorage.getItem('lottoReports_v10')) || []; 
+    // 防右鍵、防 F12 及 各種開發者工具熱鍵
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+        // 阻擋 F12
+        if (e.key === 'F12') e.preventDefault();
+        // 阻擋 Ctrl+Shift+I / J / C
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) e.preventDefault();
+        // 阻擋 Ctrl+U
+        if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) e.preventDefault();
+    });
+
+    // 檢查密碼邏輯
+    function checkPassword() {
+        const pwd = document.getElementById('pwd-input').value;
+        if (pwd === '8586') {
+            localStorage.setItem('lottoAuth_8586', 'true'); // 記憶登入狀態
+            unlockApp();
+        } else {
+            alert('密碼錯誤！請重新輸入。');
+            document.getElementById('pwd-input').value = '';
+        }
+    }
+
+    function unlockApp() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        init(); // 密碼正確才啟動系統
+    }
+
+    // 登入框支援 Enter 鍵
+    document.getElementById('pwd-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation(); // 避免觸發主程式的 Enter
+            checkPassword();
+        }
+    });
+
+    // 網頁載入時檢查是否已經登入過
+    window.onload = function() {
+        if (localStorage.getItem('lottoAuth_8586') === 'true') {
+            unlockApp(); // 已經登入過，直接解鎖
+        } else {
+            document.getElementById('pwd-input').focus(); // 自動對焦輸入框
+        }
+    };
+
+
+    // ==========================================
+    // ====== 系統主程式 (維持原有強大功能) ======
+    // ==========================================
+
+    let currentConfig = { user: '爸', cat: '539', mode: '歷史模式' };
+    let reportsData = JSON.parse(localStorage.getItem('lottoReports_v14')) || []; 
     let dragData = { step: 0, preConds: [], preNums: [] }; 
     let mainSubData = { step: 0, mainConds: [] }; 
 
@@ -175,8 +270,17 @@
         '539': 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv',
         '49': 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/49.csv'
     };
+    
     let globalLottoData = { '539': [], '49': [] };
     let loadedCounts = { '539': 0, '49': 0 };
+    let latestDates = { '539': '', '49': '' };
+
+    function updateLatestDateUI() {
+        const el539 = document.getElementById('date-539');
+        const el49 = document.getElementById('date-49');
+        if (el539) el539.innerText = latestDates['539'] || '無資料';
+        if (el49) el49.innerText = latestDates['49'] || '無資料';
+    }
 
     function init() {
         renderBtns('month-btns', ["01","02","03","04","05","06","07","08","09","10","11","12"]);
@@ -186,9 +290,9 @@
         renderBtns('di-zhi', ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]);
         renderBtns('s-row', Array.from({length: 16}, (_, i) => `S${i}`));
         renderBtns('t-row', Array.from({length: 16}, (_, i) => `T${i}`));
-        updateDynamicUI();
-
-        fetchGithubData();
+        
+        updateDynamicUI(); 
+        fetchGithubData(); 
     }
 
     function fetchGithubData() {
@@ -235,7 +339,18 @@
                                 cleanData.sort((a, b) => a.dateObj - b.dateObj);
                                 globalLottoData[cat] = cleanData;
                                 loadedCounts[cat] = cleanData.length;
+
+                                let latestEntry = cleanData.slice().reverse().find(d => d.nums && d.nums.length > 0);
+                                if (latestEntry) {
+                                    latestDates[cat] = `${latestEntry.year}/${latestEntry.month}/${latestEntry.day}`;
+                                }
+
                                 updateConnectionStatus();
+                                updateLatestDateUI();
+
+                                if (currentConfig.cat.includes(cat)) {
+                                    updateDynamicUI(); 
+                                }
 
                                 if (currentConfig.cat.includes('報表') && currentConfig.cat.includes(cat)) {
                                     renderReports();
@@ -264,22 +379,44 @@
 
     function handleFilterClick(btn) {
         if (currentConfig.mode === '拖牌後期' || currentConfig.mode === '副體') {
-            btn.classList.toggle('active-green'); btn.classList.remove('active-yellow');
+            btn.classList.toggle('active-green'); 
+            btn.classList.remove('active-yellow');
         } else {
-            btn.classList.toggle('active-yellow'); btn.classList.remove('active-green');
+            btn.classList.toggle('active-yellow'); 
+            btn.classList.remove('active-green');
         }
     }
 
     function updateDynamicUI() {
+        const selectedYellows = Array.from(document.querySelectorAll('#year-btns .active-yellow, #num-btns .active-yellow')).map(b => b.innerText);
+        const selectedGreens = Array.from(document.querySelectorAll('#year-btns .active-green, #num-btns .active-green')).map(b => b.innerText);
+
         const yBox = document.getElementById('year-btns');
-        const start = 2020; 
+        const start = (currentConfig.user === "爸") ? 2020 : 2007; 
+        
+        const rawCat = currentConfig.cat.replace('報表', '');
+        const data = globalLottoData[rawCat] || [];
+        let endYear = 2026; 
+        if (data.length > 0) {
+            const maxDataYear = Math.max(...data.map(d => d.year));
+            if (maxDataYear > endYear) endYear = maxDataYear;
+        }
+
         yBox.innerHTML = '';
-        for(let y = start; y <= 2026; y++) yBox.innerHTML += `<button class="btn filter-btn" onclick="handleFilterClick(this)">${y}</button>`;
+        for(let y = start; y <= endYear; y++) {
+            let ys = y.toString();
+            let activeClass = selectedYellows.includes(ys) ? 'active-yellow' : (selectedGreens.includes(ys) ? 'active-green' : '');
+            yBox.innerHTML += `<button class="btn filter-btn ${activeClass}" onclick="handleFilterClick(this)">${y}</button>`;
+        }
         
         const nBox = document.getElementById('num-btns');
         const count = currentConfig.cat.includes('539') ? 39 : 49;
         nBox.innerHTML = '';
-        for(let i=1; i<=count; i++) nBox.innerHTML += `<button class="btn filter-btn" onclick="handleFilterClick(this)">${i.toString().padStart(2, '0')}</button>`;
+        for(let i=1; i<=count; i++) {
+            let ns = i.toString().padStart(2, '0');
+            let activeClass = selectedYellows.includes(ns) ? 'active-yellow' : (selectedGreens.includes(ns) ? 'active-green' : '');
+            nBox.innerHTML += `<button class="btn filter-btn ${activeClass}" onclick="handleFilterClick(this)">${ns}</button>`;
+        }
         
         document.querySelectorAll('.filter-extra').forEach(el => {
             currentConfig.user === '哥' ? el.classList.add('hidden') : el.classList.remove('hidden');
@@ -293,6 +430,7 @@
             group.querySelectorAll('.btn').forEach(b => b.classList.toggle('active-blue', b.innerText === cat));
         });
         if (isReport) { toggleUI('report'); renderReports(); } else { toggleUI('main'); updateDynamicUI(); }
+        document.getElementById('analysis-result-area').innerHTML = '';
     }
 
     function toggleUI(target) {
@@ -315,40 +453,57 @@
 
         updateDynamicUI();
         renderReports(); 
+        document.getElementById('analysis-result-area').innerHTML = '';
     }
 
     function switchMode(el, mode) {
-        // 重置所有 UI 狀態
-        dragData = { step: 0, preConds: [], preNums: [] };
-        mainSubData = { step: 0, mainConds: [] };
-        resetFilters();
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
-        
-        // 隱藏下推N期輸入框
         document.getElementById('push-n-container').classList.add('hidden');
 
         if (mode === '拖牌前期') {
-            dragData.step = 1;
+            dragData = { step: 1, preConds: [], preNums: [] };
+            mainSubData = { step: 0, mainConds: [] };
+            resetFilters();
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
             document.getElementById('btn-drag-pre').classList.add('drag-pre-active');
         } 
         else if (mode === '拖牌後期') {
-            const yellows = document.querySelectorAll('.filter-btn.active-yellow'); // 這裡只是切換按鈕，不會讀取黃色狀態因為 resetFilters 了，這邏輯需調整
-            // 修正：拖牌後期按鈕只在「拖牌前期」選完後由程式控制，不建議直接點擊。
-            // 但為了相容操作，若使用者直接點，視為切換模式。
+            const yellows = document.querySelectorAll('.filter-btn.active-yellow');
+            dragData.preConds = Array.from(yellows).filter(b => b.closest('.row').getAttribute('data-type') !== '號碼')
+                .map(b => ({ text: b.textContent.replace(/[\s\uFEFF\xA0]/g, ''), type: b.closest('.row').getAttribute('data-type') }));
+            dragData.preNums = Array.from(yellows).filter(b => b.closest('.row').getAttribute('data-type') === '號碼')
+                .map(b => b.textContent.replace(/[\s\uFEFF\xA0]/g, ''));
+            dragData.step = 2;
             document.getElementById('btn-drag-post').classList.add('drag-post-active');
         } 
-        else if (mode === '拖牌下推') {
-            document.getElementById('btn-drag-n').classList.add('drag-pre-active');
-            document.getElementById('push-n-container').classList.remove('hidden'); // 顯示輸入框
-        }
         else if (mode === '主體') {
-            mainSubData.step = 1;
+            dragData = { step: 0, preConds: [], preNums: [] };
+            mainSubData = { step: 1, mainConds: [] };
+            resetFilters();
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
             document.getElementById('btn-main-body').classList.add('drag-pre-active');
         }
         else if (mode === '副體') {
+            const yellows = document.querySelectorAll('.filter-btn.active-yellow');
+            mainSubData.mainConds = Array.from(yellows).map(b => ({
+                text: b.textContent.replace(/[\s\uFEFF\xA0]/g, ''), 
+                type: b.closest('.row').getAttribute('data-type')
+            }));
+            mainSubData.step = 2;
             document.getElementById('btn-sub-body').classList.add('drag-post-active');
         }
+        else if (mode === '拖牌下推') {
+            dragData = { step: 0, preConds: [], preNums: [] };
+            mainSubData = { step: 0, mainConds: [] };
+            resetFilters();
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
+            document.getElementById('btn-drag-n').classList.add('drag-pre-active');
+            document.getElementById('push-n-container').classList.remove('hidden');
+        }
         else {
+            dragData = { step: 0, preConds: [], preNums: [] };
+            mainSubData = { step: 0, mainConds: [] };
+            resetFilters();
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
             if(el) el.classList.add('active-yellow');
         }
         currentConfig.mode = mode;
@@ -357,7 +512,6 @@
     function addToReport() {
         const rawCat = currentConfig.cat.replace('報表', '');
 
-        // === 歷史模式 / 當期對碰 / 下期對碰 / 拖牌下推N期 (單條件或多條件批次) ===
         if (currentConfig.mode === '歷史模式' || currentConfig.mode === '當期對碰' || currentConfig.mode === '下期對碰' || currentConfig.mode === '拖牌下推') {
             const yellows = Array.from(document.querySelectorAll('.filter-btn.active-yellow'));
             if (yellows.length === 0) return alert('請至少選擇一個條件再加入報表！');
@@ -372,14 +526,13 @@
 
                 if (condText) {
                     condsByCat[condType] = [condText];
-                    labelParts.push(`${condType}:${condText}`); // 修正：加入前綴
+                    labelParts.push(`${condType}:${condText}`);
                 }
                 if (numText) {
                     condsByCat['號碼'] = [numText];
-                    labelParts.push(`號碼:${numText}`); // 修正：加入前綴
+                    labelParts.push(`號碼:${numText}`); 
                 }
 
-                // 如果是下推N期，標題加上期數
                 let finalLabel = labelParts.join('+');
                 if (currentConfig.mode === '拖牌下推') {
                     finalLabel += ` (下推${pushNVal}期)`;
@@ -391,7 +544,7 @@
                     cat: rawCat, 
                     mode: currentConfig.mode, 
                     value: finalLabel,
-                    pushN: pushNVal, // 儲存 N 期設定
+                    pushN: pushNVal, 
                     query: { type: 'history', conds: condsByCat }
                 });
             };
@@ -418,7 +571,6 @@
             }
             saveAndRefresh();
         } 
-        // === 拖牌邏輯 ===
         else if (currentConfig.mode === '拖牌後期' && dragData.step === 2) {
             const greens = Array.from(document.querySelectorAll('.filter-btn.active-green'));
             if (greens.length === 0) return alert('請選擇後期的條件！');
@@ -447,7 +599,7 @@
                     if (postVal) {
                         let qPre = {}; qPre[type] = preVal;
                         let qPost = {}; qPost[type] = postVal;
-                        results.push({ label: `${preVal} → ${postVal}`, query: { pre: qPre, post: qPost } });
+                        results.push({ label: `${type}:${preVal} → 條件:${postVal}`, query: { pre: qPre, post: qPost } });
                     }
                 });
             });
@@ -457,7 +609,7 @@
                     dragData.preNums.forEach(num => {
                         let newQuery = JSON.parse(JSON.stringify(res.query));
                         newQuery.pre.號碼 = num; 
-                        reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: `${res.label.split(' → ')[0]}+${num} → ${res.label.split(' → ')[1]}`, query: newQuery });
+                        reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: `${res.label.split(' → ')[0]}+號碼:${num} → ${res.label.split(' → ')[1]}`, query: newQuery });
                     });
                 } else {
                     reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: res.label, query: res.query });
@@ -465,7 +617,6 @@
             });
             saveAndRefresh();
         } 
-        // === 主體+副體 邏輯 ===
         else if (currentConfig.mode === '副體' && mainSubData.step === 2) {
             const greens = Array.from(document.querySelectorAll('.filter-btn.active-green'));
             if (mainSubData.mainConds.length !== 1) return alert('主體請選擇「剛好 1 個」條件再切換至副體！');
@@ -478,7 +629,7 @@
             }));
 
             subConds.forEach(sub => {
-                let valueLabel = `主體:${mainCond.text}+副體:${sub.text}`; // 修正：加入前綴
+                let valueLabel = `主體(${mainCond.type}:${mainCond.text}) + 副體(${sub.type}:${sub.text})`; 
                 reportsData.push({
                     id: Date.now() + Math.random(),
                     owner: currentConfig.user,
@@ -496,7 +647,7 @@
     }
 
     function saveAndRefresh() {
-        localStorage.setItem('lottoReports_v10', JSON.stringify(reportsData));
+        localStorage.setItem('lottoReports_v14', JSON.stringify(reportsData));
         document.getElementById('toast-msg').style.opacity = "1";
         resetFilters();
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('drag-pre-active', 'drag-post-active', 'active-yellow'));
@@ -614,6 +765,141 @@
         });
     }
 
+    function getCombinations(arr, k) {
+        let i, j, combs, head, tailcombs;
+        if (k > arr.length || k <= 0) return [];
+        if (k == arr.length) return [arr];
+        if (k == 1) {
+            combs = [];
+            for (i = 0; i < arr.length; i++) combs.push([arr[i]]);
+            return combs;
+        }
+        combs = [];
+        for (i = 0; i < arr.length - k + 1; i++) {
+            head = arr.slice(i, i + 1);
+            tailcombs = getCombinations(arr.slice(i + 1), k - 1);
+            for (j = 0; j < tailcombs.length; j++) {
+                combs.push(head.concat(tailcombs[j]));
+            }
+        }
+        return combs;
+    }
+
+    function analyzeBestCombinations() {
+        const rawCat = currentConfig.cat.replace('報表', '');
+        const lottoData = globalLottoData[rawCat] || [];
+        if (lottoData.length === 0) return alert('尚未載入歷史資料，請稍後再試！');
+
+        let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
+        if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
+        if (activeCondFilter !== '全部') filtered = filtered.filter(r => r.value === activeCondFilter);
+
+        if (filtered.length === 0) return alert('當前畫面沒有報表可以分析！請先加入條件。');
+
+        const max = rawCat === '539' ? 39 : 49;
+        let overallCounts = new Array(max).fill(0);
+
+        filtered.forEach(data => {
+            for(let i = 0; i < lottoData.length; i++) {
+                let targets = [];
+                if (data.mode === "歷史模式") {
+                    if(matchHistoryQuery(lottoData[i], data.query.conds)) targets.push(lottoData[i]);
+                } else if (data.mode === "主體") {
+                    if(matchSingleCond(lottoData[i], data.query.main) && matchSingleCond(lottoData[i], data.query.sub)) targets.push(lottoData[i]);
+                } else if (data.mode === "拖牌" && i < lottoData.length - 1) {
+                    if(matchDragQuery(lottoData[i], data.query.pre) && matchDragQuery(lottoData[i+1], data.query.post)) targets.push(lottoData[i+1]);
+                } else if (data.mode === "拖牌下推") {
+                    if(matchHistoryQuery(lottoData[i], data.query.conds)) {
+                        for(let k=1; k<=(data.pushN || 5); k++) {
+                            if(i+k < lottoData.length) targets.push(lottoData[i+k]);
+                        }
+                    }
+                } else if (data.mode === "當期對碰" || data.mode === "下期對碰") {
+                    if(matchHistoryQuery(lottoData[i], data.query.conds)) {
+                        if(data.mode === "當期對碰") targets.push(lottoData[i]);
+                        else if(i < lottoData.length - 1) targets.push(lottoData[i+1]);
+                    }
+                }
+                
+                targets.forEach(draw => {
+                    draw.nums.forEach(n => {
+                        if(n>=1 && n<=max) overallCounts[n-1]++;
+                    });
+                });
+            }
+        });
+
+        let pool = overallCounts.map((v, i) => ({v, num: i+1}))
+                                .sort((a,b) => b.v - a.v)
+                                .slice(0, 12)
+                                .filter(item => item.v > 0)
+                                .map(item => item.num);
+        
+        if (pool.length < 5) return alert('報表涵蓋的開出數據過少，無法產生有效的 5 星組合！');
+
+        const historySets = lottoData.map(d => new Set(d.nums));
+        const totalDraws = lottoData.length;
+
+        function getBestCombs(kSize) {
+            let combs = getCombinations(pool, kSize);
+            let results = combs.map(comb => {
+                let count = 0;
+                for(let i=0; i<historySets.length; i++) {
+                    let match = true;
+                    for(let j=0; j<comb.length; j++) {
+                        if(!historySets[i].has(comb[j])) { match = false; break; }
+                    }
+                    if(match) count++;
+                }
+                return { comb, count, rate: ((count / totalDraws) * 100).toFixed(2) };
+            });
+            results.sort((a,b) => b.count - a.count);
+            return results.slice(0, 5); 
+        }
+
+        renderAnalysisArea(getBestCombs(2), getBestCombs(3), getBestCombs(4), getBestCombs(5), pool);
+    }
+
+    function renderAnalysisArea(b2, b3, b4, b5, pool) {
+        const area = document.getElementById('analysis-result-area');
+        
+        let buildTable = (data, title) => {
+            let html = `<div style="flex: 1; min-width: 280px; background:#fdfefe; border:2px solid #8e44ad; border-radius:8px; padding:12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <h4 style="margin-top:0; color:#8e44ad; border-bottom:2px dashed #8e44ad; padding-bottom:8px; text-align:center; font-size:16px;">🏆 ${title} 最佳 5 組</h4>
+                <table class="report-table" style="background:#fff;">
+                    <thead><tr><th style="width:55%;">組合號碼</th><th>歷史次數</th><th>歷史勝率</th></tr></thead>
+                    <tbody>`;
+            data.forEach(item => {
+                let badges = item.comb.map(n => `<span class="pair-badge">${n.toString().padStart(2,'0')}</span>`).join('');
+                html += `<tr><td>${badges}</td><td style="color:#c0392b; font-weight:bold; font-size:14px;">${item.count} 次</td><td>${item.rate}%</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+            return html;
+        };
+
+        let poolBadges = pool.map(n => `<span class="pair-badge" style="background:#fbc02d; border-color:#f39c12;">${n.toString().padStart(2,'0')}</span>`).join(' ');
+
+        let html = `
+        <div class="report-section" id="analysis-box" style="border: 2px solid #8e44ad;">
+            <div class="report-banner" style="background:#8e44ad;">
+                <span>💡 最佳組合分析 (取當前報表中最熱門的前 ${pool.length} 碼產生)</span>
+                <button class="btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="document.getElementById('analysis-result-area').innerHTML=''">✖ 關閉分析</button>
+            </div>
+            <div style="padding: 12px 15px; background: #fdf2e9; border-bottom: 1px dashed #d35400; font-size:14px;">
+                <strong style="color:#d35400;">📌 萃取母體 (熱門前 ${pool.length} 碼)：</strong> ${poolBadges}
+            </div>
+            <div style="padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; background:#fafafa;">
+                ${buildTable(b2, '2碼 (2星)')}
+                ${buildTable(b3, '3碼 (3星)')}
+                ${buildTable(b4, '4碼 (4星)')}
+                ${buildTable(b5, '5碼 (5星)')}
+            </div>
+        </div>`;
+
+        area.innerHTML = html;
+        area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     function renderReports() {
         const area = document.getElementById('report-display-area');
         area.innerHTML = '';
@@ -637,21 +923,27 @@
             sec.className = 'report-section';
             sec.id = `report-sec-${data.id}`;
             const max = rawCat === '539' ? 39 : 49;
-            const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
             
+            const startYear = (currentConfig.user === "爸") ? 2020 : 2007;
+            let endYear = 2026;
+            if (lottoData.length > 0) {
+                const maxDataYear = Math.max(...lottoData.map(d => d.year));
+                if (maxDataYear > endYear) endYear = maxDataYear;
+            }
+            const years = [];
+            for (let y = startYear; y <= endYear; y++) years.push(y);
+
             let html = `<div class="report-banner"><span>[${data.mode}] ${data.value}</span><button class="btn delete-btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="deleteReport(${data.id})">刪除</button></div>`;
             
-            // ================= 拖牌下推 N 期邏輯 (整合 Win83 顯示風格) =================
+            // ================= 拖牌下推 N 期邏輯 =================
             if (data.mode === "拖牌下推") {
                 const pushCount = data.pushN || 5;
                 html += `<div class="table-container"><table class="report-table"><thead><tr><th style="width:120px;">下推期數</th>${Array.from({length:max}, (_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
                 
-                // 統計數據容器
                 let periodStats = Array.from({length: pushCount}, () => new Array(max).fill(0));
                 let totalSums = new Array(max).fill(0);
                 let highLightCounts = new Array(max).fill(0);
 
-                // 計算數據
                 for(let i = 0; i < lottoData.length - pushCount; i++) {
                     let draw = lottoData[i];
                     if (matchHistoryQuery(draw, data.query.conds)) {
@@ -667,7 +959,6 @@
                     }
                 }
 
-                // 渲染各期列
                 for(let k=0; k<pushCount; k++) {
                     let rowData = periodStats[k];
                     let sorted = [...rowData].sort((a,b) => b-a);
@@ -683,7 +974,6 @@
                     html += `</tr>`;
                 }
 
-                // 總計與高亮累積
                 html += `<tr class="total-row"><td>總計加總</td>`;
                 let sortedTotal = [...totalSums].sort((a,b) => b-a);
                 let totalThreshold = sortedTotal[4];
@@ -845,8 +1135,9 @@
     function clearReports() { 
         if(confirm("確定要清空所有報表紀錄嗎？")) { 
             reportsData = []; 
-            localStorage.removeItem('lottoReports_v10'); 
+            localStorage.removeItem('lottoReports_v14'); 
             renderReports(); 
+            document.getElementById('analysis-result-area').innerHTML = '';
         } 
     }
 
@@ -892,11 +1183,13 @@
     function resetFilters() { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-yellow', 'active-green')); }
 
     window.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter') { e.preventDefault(); addToReport(); }
-        if(e.key === 'Escape') { resetFilters(); }
+        // 只有在系統解鎖狀態下才允許快捷鍵操作
+        if (document.getElementById('app-content').style.display === 'block') {
+            if(e.key === 'Enter') { e.preventDefault(); addToReport(); }
+            if(e.key === 'Escape') { resetFilters(); }
+        }
     });
 
-    init();
 </script>
 </body>
 </html>
