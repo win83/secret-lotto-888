@@ -68,7 +68,7 @@
         /* 當期/下期對碰組合徽章 */
         .pair-badge { display: inline-block; background: #fff; border: 1px solid #b2bec3; padding: 3px 8px; border-radius: 4px; margin: 3px; font-size: 13px; color: #2d3436; font-weight:bold; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
-        /* ====== 新增：登入防護畫面樣式 ====== */
+        /* ====== 登入防護畫面樣式 ====== */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #2c3e50; display: flex; flex-direction: column;
@@ -76,7 +76,7 @@
             color: white; font-family: "Microsoft JhengHei", sans-serif;
         }
         #login-screen h2 { margin-bottom: 10px; font-size: 28px; letter-spacing: 2px; }
-        #login-screen p { margin-bottom: 25px; color: #bdc3c7; font-size: 15px; }
+        #login-msg { margin-bottom: 25px; color: #bdc3c7; font-size: 16px; font-weight: bold; text-align: center; line-height: 1.5; }
         #login-screen input { 
             padding: 12px; font-size: 20px; border-radius: 6px; border: 2px solid #34495e; 
             text-align: center; margin-bottom: 20px; outline: none; background: #ecf0f1;
@@ -91,7 +91,6 @@
         #login-screen button:hover { background: #219150; transform: translateY(-2px); }
         #login-screen button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.2); }
         
-        /* 隱藏主程式直到登入成功 */
         #app-content { display: none; }
         /* =================================== */
     </style>
@@ -100,9 +99,9 @@
 
 <div id="login-screen">
     <h2>🔒 Lotto System Pro</h2>
-    <p>機密分析系統 ｜ 請輸入通行密碼</p>
+    <div id="login-msg">機密分析系統 ｜ 請輸入通行密碼</div>
     <input type="password" id="pwd-input" placeholder="••••" autocomplete="off">
-    <button onclick="checkPassword()">登入系統</button>
+    <button id="login-btn" onclick="checkPassword()">登入系統</button>
 </div>
 <div id="app-content">
     <div id="main-ui" class="main-container">
@@ -203,59 +202,123 @@
 
 <script>
     // ==========================================
-    // ====== 登入防護與防右鍵機制 ======
+    // ====== 登入防護、防右鍵與 3 次錯鎖 IP 機制 ======
     // ==========================================
     
-    // 防右鍵、防 F12 及 各種開發者工具熱鍵
+    // 防右鍵、防 F12 及各種開發者工具熱鍵
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('keydown', e => {
-        // 阻擋 F12
         if (e.key === 'F12') e.preventDefault();
-        // 阻擋 Ctrl+Shift+I / J / C
         if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) e.preventDefault();
-        // 阻擋 Ctrl+U
         if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) e.preventDefault();
     });
 
-    // 檢查密碼邏輯
-    function checkPassword() {
-        const pwd = document.getElementById('pwd-input').value;
-        if (pwd === '8586') {
-            localStorage.setItem('lottoAuth_8586', 'true'); // 記憶登入狀態
-            unlockApp();
-        } else {
-            alert('密碼錯誤！請重新輸入。');
-            document.getElementById('pwd-input').value = '';
+    // 取得外部 IP (呼叫免費 API)
+    async function getUserIP() {
+        try {
+            let response = await fetch('https://api.ipify.org?format=json');
+            let data = await response.json();
+            return data.ip;
+        } catch (e) {
+            return '未知IP (網路限制)';
         }
     }
 
+    // 檢查封鎖狀態
+    function checkBanStatus() {
+        let banUntil = localStorage.getItem('lotto_ban_until');
+        if (banUntil) {
+            if (Date.now() < parseInt(banUntil)) {
+                let ip = localStorage.getItem('lotto_banned_ip') || '未知';
+                showBannedScreen(banUntil, ip);
+                return true;
+            } else {
+                // 封鎖時間已過，解除封鎖
+                localStorage.removeItem('lotto_ban_until');
+                localStorage.removeItem('lotto_banned_ip');
+                localStorage.removeItem('lotto_failed_attempts');
+            }
+        }
+        return false;
+    }
+
+    // 顯示封鎖畫面
+    function showBannedScreen(banUntil, ip) {
+        let date = new Date(parseInt(banUntil)).toLocaleString('zh-TW');
+        document.getElementById('pwd-input').style.display = 'none';
+        document.getElementById('login-btn').style.display = 'none';
+        document.getElementById('login-msg').innerHTML = `<span style="color:#e74c3c; font-size: 18px;">⛔ 系統拒絕存取！</span><br>您的 IP (${ip}) 已被封鎖。<br>解鎖時間：${date}`;
+    }
+
+    // 驗證密碼邏輯
+    async function checkPassword() {
+        if (checkBanStatus()) return;
+
+        const pwdInput = document.getElementById('pwd-input');
+        const pwd = pwdInput.value;
+        const msgEl = document.getElementById('login-msg');
+
+        if (pwd === '8586') {
+            localStorage.setItem('lottoAuth_8586', 'true');
+            localStorage.removeItem('lotto_failed_attempts');
+            unlockApp();
+        } else {
+            let attempts = parseInt(localStorage.getItem('lotto_failed_attempts') || '0');
+            attempts++;
+            localStorage.setItem('lotto_failed_attempts', attempts);
+
+            if (attempts >= 3) {
+                // 鎖定 UI 避免重複點擊
+                pwdInput.disabled = true;
+                msgEl.innerHTML = '<span style="color:#e74c3c;">偵測到異常存取，正在鎖定來源...</span>';
+                
+                // 取得 IP 並設定封鎖 3 天 (3天 * 24時 * 60分 * 60秒 * 1000毫秒)
+                let ip = await getUserIP();
+                let banTime = Date.now() + (1 * 24 * 60 * 60 * 1000); 
+                
+                localStorage.setItem('lotto_ban_until', banTime);
+                localStorage.setItem('lotto_banned_ip', ip);
+                
+                showBannedScreen(banTime, ip);
+            } else {
+                let left = 3 - attempts;
+                msgEl.innerHTML = `<span style="color:#f39c12;">密碼錯誤！您還有 ${left} 次嘗試機會。</span>`;
+                pwdInput.value = '';
+            }
+        }
+    }
+
+    // 解鎖應用程式
     function unlockApp() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
-        init(); // 密碼正確才啟動系統
+        init(); // 密碼正確才正式啟動系統資料
     }
 
-    // 登入框支援 Enter 鍵
+    // 支援 Enter 鍵登入
     document.getElementById('pwd-input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            e.stopPropagation(); // 避免觸發主程式的 Enter
+            e.stopPropagation();
             checkPassword();
         }
     });
 
-    // 網頁載入時檢查是否已經登入過
+    // 網頁載入時檢查狀態
     window.onload = function() {
         if (localStorage.getItem('lottoAuth_8586') === 'true') {
             unlockApp(); // 已經登入過，直接解鎖
         } else {
-            document.getElementById('pwd-input').focus(); // 自動對焦輸入框
+            let isBanned = checkBanStatus();
+            if (!isBanned) {
+                document.getElementById('pwd-input').focus();
+            }
         }
     };
 
 
     // ==========================================
-    // ====== 系統主程式 (維持原有強大功能) ======
+    // ====== 系統主程式演算法 (完全保留不變) ======
     // ==========================================
 
     let currentConfig = { user: '爸', cat: '539', mode: '歷史模式' };
@@ -935,7 +998,6 @@
 
             let html = `<div class="report-banner"><span>[${data.mode}] ${data.value}</span><button class="btn delete-btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="deleteReport(${data.id})">刪除</button></div>`;
             
-            // ================= 拖牌下推 N 期邏輯 =================
             if (data.mode === "拖牌下推") {
                 const pushCount = data.pushN || 5;
                 html += `<div class="table-container"><table class="report-table"><thead><tr><th style="width:120px;">下推期數</th>${Array.from({length:max}, (_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
@@ -985,7 +1047,6 @@
                 for(let i=0; i<max; i++) html += `<td>${highLightCounts[i] || ''}</td>`;
                 html += `</tr></tbody></table></div>`;
             }
-            // ================= 當期與下期對碰邏輯 =================
             else if (data.mode === "當期對碰" || data.mode === "下期對碰") {
                 html += `<div class="quick-filter-area" data-export-ignore="true">
                             <span style="font-weight:bold; font-size:13px; margin-right:5px;">🎯 快速找號：</span>
@@ -1051,7 +1112,6 @@
                 });
                 html += `</tbody></table></div>`;
             } 
-            // ================= 歷史、拖牌、主副體 邏輯 =================
             else {
                 html += `<div class="table-container"><table class="report-table"><thead><tr><th style="width:120px;">年度</th>${Array.from({length:max}, (_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
                 
@@ -1183,7 +1243,6 @@
     function resetFilters() { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-yellow', 'active-green')); }
 
     window.addEventListener('keydown', (e) => {
-        // 只有在系統解鎖狀態下才允許快捷鍵操作
         if (document.getElementById('app-content').style.display === 'block') {
             if(e.key === 'Enter') { e.preventDefault(); addToReport(); }
             if(e.key === 'Escape') { resetFilters(); }
