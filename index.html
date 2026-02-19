@@ -361,6 +361,23 @@
         
         updateDynamicUI(); 
         fetchGithubData(); 
+		loadFromCache(); // 1. 先從本地快取載入
+    }
+
+	// 從 LocalStorage 載入上次成功的資料
+    function loadFromCache() {
+        ['539', '49'].forEach(cat => {
+            let cached = localStorage.getItem(`lotto_cache_${cat}`);
+            if (cached) {
+                try {
+                    let parsed = JSON.parse(cached);
+                    globalLottoData[cat] = parsed.data;
+                    latestDates[cat] = parsed.date;
+                    updateConnectionStatus(false, true); // 標示為快取模式
+                } catch(e) { console.error("Cache load error", e); }
+            }
+        });
+        updateLatestDateUI();
     }
 
     function fetchGithubData() {
