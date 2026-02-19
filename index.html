@@ -361,23 +361,6 @@
         
         updateDynamicUI(); 
         fetchGithubData(); 
-		loadFromCache(); // 1. 先從本地快取載入
-    }
-
-	// 從 LocalStorage 載入上次成功的資料
-    function loadFromCache() {
-        ['539', '49'].forEach(cat => {
-            let cached = localStorage.getItem(`lotto_cache_${cat}`);
-            if (cached) {
-                try {
-                    let parsed = JSON.parse(cached);
-                    globalLottoData[cat] = parsed.data;
-                    latestDates[cat] = parsed.date;
-                    updateConnectionStatus(false, true); // 標示為快取模式
-                } catch(e) { console.error("Cache load error", e); }
-            }
-        });
-        updateLatestDateUI();
     }
 
     function fetchGithubData() {
@@ -447,17 +430,15 @@
         });
     }
 
-	function updateConnectionStatus(isError, isCache = false) {
-			const el = document.getElementById('conn-status');
-			if (!el) return;
-			if (isError) {
-				el.innerHTML = `⚠️ 離線模式 (載入快取數據)`; el.style.color = '#e67e22';
-			} else if (isCache) {
-				el.innerHTML = `⏳ 讀取暫存中...`; el.style.color = '#7f8c8d';
-			} else {
-				el.innerHTML = `🟢 已連線 (資料同步完成)`; el.style.color = '#27ae60';
-			}
-		}
+    function updateConnectionStatus(isError = false) {
+        const el = document.getElementById('conn-status');
+        if (!el) return;
+        if (isError) {
+            el.innerHTML = `🔴 GitHub 連線異常`; el.style.color = '#e74c3c';
+        } else {
+            el.innerHTML = `🟢 已連線且編碼正常 (539: ${loadedCounts['539']}筆, 49: ${loadedCounts['49']}筆)`; el.style.color = '#27ae60';
+        }
+    }
 
     function renderBtns(id, list) {
         const el = document.getElementById(id);
