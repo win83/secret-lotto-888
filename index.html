@@ -38,6 +38,10 @@
         .btn.drag-pre-active { background: var(--active-yellow) !important; color: #000; font-weight: bold; border-color: #f9a825; }
         .btn.drag-post-active { background: var(--active-green) !important; color: white; font-weight: bold; border-color: #27ae60; }
 
+        /* 新增全選按鈕樣式 */
+        .select-all-btn { background: #f1f2f6; border: 1px solid #ced4da; color: #2f3542; font-weight: bold; padding: 8px 10px; }
+        .select-all-btn:hover { background: #dfe4ea; }
+
         #toast-msg { margin-left: 15px; color: #27ae60; font-weight: bold; opacity: 0; transition: opacity 0.3s; }
 
         /* 報表顯示樣式 */
@@ -92,7 +96,6 @@
         #login-screen button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.2); }
         
         #app-content { display: none; }
-        /* =================================== */
     </style>
 </head>
 <body>
@@ -150,19 +153,19 @@
         </div>
 
         <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-            <div class="row" data-type="年份"><div class="label">年份</div><div class="btn-group" id="year-btns"></div></div>
-            <div class="row" data-type="月份"><div class="label">月份</div><div class="btn-group" id="month-btns"></div></div>
-            <div class="row" data-type="日期"><div class="label">日期</div><div class="btn-group" id="day-btns"></div></div>
-            <div class="row" data-type="星期"><div class="label">星期</div><div class="btn-group" id="week-btns"></div></div>
-            <div class="row filter-extra" data-type="天干"><div class="label">天干</div><div class="btn-group" id="tian-gan"></div></div>
-            <div class="row filter-extra" data-type="地支"><div class="label">地支</div><div class="btn-group" id="di-zhi"></div></div>
-            <div class="row filter-extra" data-type="節氣"><div class="label">節氣/術語</div>
+            <div class="row" data-type="年份"><div class="label">年份</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="year-btns"></div></div>
+            <div class="row" data-type="月份"><div class="label">月份</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="month-btns"></div></div>
+            <div class="row" data-type="日期"><div class="label">日期</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="day-btns"></div></div>
+            <div class="row" data-type="星期"><div class="label">星期</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="week-btns"></div></div>
+            <div class="row filter-extra" data-type="天干"><div class="label">天干</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="tian-gan"></div></div>
+            <div class="row filter-extra" data-type="地支"><div class="label">地支</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="di-zhi"></div></div>
+            <div class="row filter-extra" data-type="節氣"><div class="label">節氣/術語</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button>
                 <div class="btn-group" style="flex-direction: column; align-items: flex-start;">
                     <div id="s-row" class="btn-group" style="margin-bottom: 5px;"></div>
                     <div id="t-row" class="btn-group"></div>
                 </div>
             </div>
-            <div class="row" data-type="號碼"><div class="label">號碼</div><div class="btn-group" id="num-btns"></div></div>
+            <div class="row" data-type="號碼"><div class="label">號碼</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="num-btns"></div></div>
         </div>
     </div>
 
@@ -179,6 +182,7 @@
                     <button class="btn" style="background: #d32f2f; color: white;" onclick="clearReports()">清空報表</button>
                     <button class="btn" style="background: #27ae60; color: white; font-weight:bold; margin-left: 10px;" onclick="exportToExcel()">📊 匯出Excel</button>
                     <button class="btn" style="background: #8e44ad; color: white; font-weight:bold; margin-left: 10px;" onclick="analyzeBestCombinations()">💡 分析報表號碼</button>
+                    <button class="btn" style="background: #e67e22; color: white; font-weight:bold; margin-left: 10px;" onclick="analyzeOverlaps()">🔍 期數交叉分析</button>
                 </div>
             </div>
         </div>
@@ -195,6 +199,7 @@
             </div>
         </div>
         <div id="dynamic-filter-bar"></div>
+        <div id="overlap-analysis-area" style="margin-bottom: 20px;"></div>
         <div id="analysis-result-area" style="margin-bottom: 20px;"></div>
         <div id="report-display-area"></div>
     </div>
@@ -450,12 +455,24 @@
         }
     }
 
+    // 新增：一鍵全選邏輯
+    function toggleSelectRow(btn) {
+        const row = btn.closest('.row');
+        const btns = row.querySelectorAll('.filter-btn');
+        const targetClass = (currentConfig.mode === '拖牌後期' || currentConfig.mode === '副體') ? 'active-green' : 'active-yellow';
+        const allSelected = Array.from(btns).every(b => b.classList.contains(targetClass));
+        btns.forEach(b => {
+            b.classList.remove('active-yellow', 'active-green');
+            if (!allSelected) b.classList.add(targetClass);
+        });
+    }
+
     function updateDynamicUI() {
         const selectedYellows = Array.from(document.querySelectorAll('#year-btns .active-yellow, #num-btns .active-yellow')).map(b => b.innerText);
         const selectedGreens = Array.from(document.querySelectorAll('#year-btns .active-green, #num-btns .active-green')).map(b => b.innerText);
 
         const yBox = document.getElementById('year-btns');
-        const start = (currentConfig.user === "爸") ? 2020 : 2007; 
+        const start = (currentConfig.user === "爸") ? 2020 : 2007;
         
         const rawCat = currentConfig.cat.replace('報表', '');
         const data = globalLottoData[rawCat] || [];
@@ -494,6 +511,7 @@
         });
         if (isReport) { toggleUI('report'); renderReports(); } else { toggleUI('main'); updateDynamicUI(); }
         document.getElementById('analysis-result-area').innerHTML = '';
+        document.getElementById('overlap-analysis-area').innerHTML = '';
     }
 
     function toggleUI(target) {
@@ -517,6 +535,7 @@
         updateDynamicUI();
         renderReports(); 
         document.getElementById('analysis-result-area').innerHTML = '';
+        document.getElementById('overlap-analysis-area').innerHTML = '';
     }
 
     function switchMode(el, mode) {
@@ -846,6 +865,88 @@
             }
         }
         return combs;
+    }
+
+    // 新增：期數交叉分析邏輯
+    function analyzeOverlaps() {
+        const rawCat = currentConfig.cat.replace('報表', '');
+        const lottoData = globalLottoData[rawCat] || [];
+        if (lottoData.length === 0) return alert('尚未載入資料');
+
+        let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
+        if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
+        if (filtered.length < 2) return alert('請至少加入兩個報表條件進行交叉分析');
+
+        let reportResults = filtered.map(report => {
+            let dates = new Set();
+            for(let i=0; i<lottoData.length; i++) {
+                let isMatch = false;
+                if (report.mode === "歷史模式") isMatch = matchHistoryQuery(lottoData[i], report.query.conds);
+                else if (report.mode === "主體") isMatch = matchSingleCond(lottoData[i], report.query.main) && matchSingleCond(lottoData[i], report.query.sub);
+                else if (report.mode === "拖牌" && i < lottoData.length - 1) isMatch = matchDragQuery(lottoData[i], report.query.pre) && matchDragQuery(lottoData[i+1], report.query.post);
+                
+                if(isMatch) {
+                    let target = (report.mode === "拖牌") ? lottoData[i+1] : lottoData[i];
+                    dates.add(`${target.year}-${target.month}-${target.day}`);
+                }
+            }
+            return { label: report.value, dates: dates };
+        });
+
+        let allDates = new Set();
+        reportResults.forEach(r => r.dates.forEach(d => allDates.add(d)));
+        
+        let overlapDates = [];
+        allDates.forEach(date => {
+            if (reportResults.every(r => r.dates.has(date))) overlapDates.push(date);
+        });
+
+        let uniqueDetails = reportResults.map(r => {
+            let unique = [];
+            r.dates.forEach(d => {
+                let isUnique = reportResults.every(other => (other === r || !other.dates.has(d)));
+                if(isUnique) unique.push(d);
+            });
+            return { label: r.label, count: unique.length };
+        });
+
+        renderOverlapUI(overlapDates, uniqueDetails, lottoData, rawCat);
+    }
+
+    function renderOverlapUI(overlapDates, uniqueDetails, lottoData, rawCat) {
+        const area = document.getElementById('overlap-analysis-area');
+        const max = rawCat === '539' ? 39 : 49;
+        let counts = new Array(max).fill(0);
+
+        lottoData.filter(d => overlapDates.includes(`${d.year}-${d.month}-${d.day}`))
+                 .forEach(d => d.nums.forEach(n => counts[n-1]++));
+
+        let hotNums = counts.map((v, i) => ({v, n: i+1})).sort((a,b) => b.v - a.v).slice(0, 10).filter(x => x.v > 0);
+
+        let html = `
+        <div class="report-section" style="border: 2px solid #e67e22;">
+            <div class="report-banner" style="background:#e67e22;">
+                <span>🔍 報表期數交叉分析</span>
+                <button class="btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="document.getElementById('overlap-analysis-area').innerHTML=''">✖ 關閉</button>
+            </div>
+            <div style="padding:15px; background:#fffaf0;">
+                <div style="margin-bottom:15px;">
+                    <strong style="color:#d35400;">📍 重疊期數 (所有條件皆符合)：</strong> 
+                    <span style="font-size:18px; color:#c0392b;">${overlapDates.length}</span> 期
+                    <div style="margin-top:5px;">
+                        ${hotNums.map(x => `<span class="pair-badge" style="background:#fbc02d;">${x.n.toString().padStart(2,'0')} (${x.v}次)</span>`).join('')}
+                    </div>
+                </div>
+                <div style="border-top:1px dashed #ccc; padding-top:10px;">
+                    <strong style="color:#2980b9;">📍 各報表獨有期數 (不重疊)：</strong>
+                    <ul style="margin:5px 0; font-size:13px;">
+                        ${uniqueDetails.map(u => `<li>${u.label}: 獨有 ${u.count} 期</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        </div>`;
+        area.innerHTML = html;
+        area.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function analyzeBestCombinations() {
@@ -1198,6 +1299,7 @@
             localStorage.removeItem('lottoReports_v14'); 
             renderReports(); 
             document.getElementById('analysis-result-area').innerHTML = '';
+            document.getElementById('overlap-analysis-area').innerHTML = '';
         } 
     }
 
