@@ -2,391 +2,290 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>樂透分析系統 v15.1 - 總和聯動強化版</title>
+    <title>戰場監控 Pro - 報表佈局最終修正版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; padding: 10px; margin: 0; }
-        .control-panel { margin-bottom: 10px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .lotto-table { border-collapse: collapse; background: #fff; margin-bottom: 15px; width: 100%; table-layout: fixed; border: 2px solid #333; }
-        .lotto-table th, .lotto-table td { border: 1px solid #ccc; padding: 6px; text-align: center; font-size: 14px; }
-        .current-row { background-color: #ffff00 !important; font-weight: bold; } 
+        :root { --defense: #2c3e50; --win: #d93025; --bg: #f8f9fa; --ready: #fff9c4; }
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 2px; background: var(--bg); font-size: 11px; overflow-x: hidden; }
+        .container { width: 100%; background: white; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); position: relative; }
         
-        #stickyStats { position: sticky; top: 0; z-index: 100; background: #f0f2f5; padding-bottom: 10px; }
-        .global-group { background: white; border: 3px solid #1565c0; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .btn-group { padding: 5px; background: #eee; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #ddd; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+        .btn-game { padding: 4px 10px; border: none; border-radius: 3px; color: white; cursor: pointer; font-weight: bold; }
+        .btn-mode { padding: 4px 12px; border: 1px solid #999; border-radius: 3px; background: white; cursor: pointer; font-weight: bold; }
+        .btn-mode.active { background: #007bff; color: white; border-color: #0056b3; }
+        .btn-report { background: #673ab7; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         
-        .report-group { background: white; margin-bottom: 25px; border-radius: 8px; border: 1px solid #d1d9e0; overflow-x: auto; position: relative; }
-        .report-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 1600px; }
-        .report-table th, .report-table td { border: 1px solid #dee2e6; padding: 5px 0; font-size: 13px; text-align: center; }
-        .report-table thead th { background: #37474f; color: white; height: 35px; }
-        .report-table th:first-child, .report-table td:first-child { width: 400px; text-align: left; padding-left: 15px; background: #f8f9fa; position: sticky; left: 0; z-index: 2; border-right: 2px solid #37474f; }
+        .table-wrapper { width: 100%; overflow: auto; max-height: 88vh; scroll-behavior: smooth; background: white; position: relative; }
+        table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1200px; position: relative; }
+        th, td { border: 1px solid #ddd; text-align: center; padding: 4px 0; position: relative; }
         
-        .divider-row td { border-bottom: 2px solid #000 !important; }
+        .sticky-col { width: 85px; background: #eceff1; font-weight: bold; position: sticky; left: 0; z-index: 40; border-right: 2px solid #bbb; cursor: pointer; }
+        .sticky-header { position: sticky; top: 0; z-index: 50; }
+        .second-header { position: sticky; top: 25px; z-index: 50; }
 
-        .btn { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; margin-right: 8px; }
-        .btn-blue { background: #1a73e8; color: white; }
-        .btn-red { background: #d93025; color: white; }
-        .btn-del-left { background: #ff5252; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 3px 10px; font-size: 12px; margin-top: 8px; display: inline-block; font-weight: bold; }
-        .btn-del-left:hover { background: #d32f2f; }
-        
-        .active-mode { background: #188038 !important; color: white; }
-        .sum-col { background-color: #e3f2fd; font-weight: bold; color: #1565c0; } /* 總和列樣式 */
+        .ready-line { background: var(--ready) !important; color: #0d47a1; height: 25px; font-weight: 900; cursor: pointer; }
+        .pos-line { background: var(--defense) !important; color: white; height: 20px; font-size: 9px; }
 
-        .top-cell { background-color: #fff176 !important; font-weight: bold; } 
-        .sum-top-cell { background-color: #bbdefb !important; font-weight: bold; } 
-        .high-count-top-cell { background-color: #ffccbc !important; font-weight: bold; } 
-        .footer-row { font-weight: bold; background: #fafafa; }
-        .date-text { color: #c62828; font-size: 11px; margin-left: 5px; }
-        .path-label { color: #d32f2f; font-weight: bold; font-size: 15px; display: block; margin-bottom: 4px; }
-        .mode-text { color: #666; font-size: 12px; }
-        .clickable { cursor: pointer; font-weight: bold; color: #1a73e8; }
-        .selected { background-color: #ff5722 !important; color: white !important; }
+        .backtest-line { background: #ffebee !important; border-bottom: 3px solid #d32f2f !important; }
+        .backtest-line .sticky-col { background: #d32f2f !important; color: white !important; }
+        .ignored-row { opacity: 0.3; background: #f5f5f5 !important; pointer-events: none; }
+        .col-active { background: rgba(227, 242, 253, 0.8) !important; border-left: 2.5px solid #007bff !important; border-right: 2.5px solid #007bff !important; }
+        
+        .focus-num-group td { border-top: none !important; border-bottom: none !important; }
+        .focus-row-win td { border-top: 3.5px solid #ff0000 !important; }
+        .focus-row-rate td { border-bottom: 3.5px solid #ff0000 !important; }
+        .focus-num-group td:first-child { border-left: 3.5px solid #ff0000 !important; }
+        .focus-num-group td:last-child { border-right: 3.5px solid #ff0000 !important; }
+
+        .row-win { background: #fff5f5; color: var(--win); font-weight: bold; font-size: 13px; }
+        .row-fail { color: #999; background: white; font-size: 10px; }
+        .row-rate { background: #e8f5e9; color: #2e7d32; font-weight: bold; border-bottom: 2px solid #ccc; font-size: 11px; }
+
+        #pathCanvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 45; width: 100%; height: 100%; }
+        .soldier-win { background-color: #ff0000 !important; color: #ffffff !important; font-weight: bold; }
+        .row-soldier { height: 28px; font-size: 12px; cursor: pointer; }
+        .path-active { outline: 3.5px solid #007bff !important; outline-offset: -3px; font-weight: bold; }
+
+        /* --- 報表佈局修正：確保不重疊 --- */
+        #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 2000; flex-direction: column; }
+        #reportHeader { padding: 8px 15px; background: #673ab7; color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        
+        #reportContent { flex: 1; overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
+        
+        /* 推薦標籤區 */
+        .top5-container { 
+            display: flex; gap: 8px; padding: 12px; background: #f3e5f5; border-radius: 8px; 
+            align-items: center; border: 1px solid #ce93d8; margin-bottom: 15px; flex-shrink: 0; flex-wrap: wrap;
+        }
+        .top5-badge { background: #d93025; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; }
+
+        /* 表格滾動區 */
+        .report-table-wrapper { flex: 1; overflow: auto; width: 100%; border: 1px solid #ddd; }
+        .report-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1300px; }
+        .report-table th { background: #f1f1f1; border: 1px solid #ccc; position: sticky; top: 0; z-index: 20; }
+        .report-table td { border: 1px solid #ddd; height: 40px; text-align: center; }
+        
+        .row-top5 { background: #ffebee !important; color: #d32f2f; font-weight: bold; }
+        .sum-row { background: #fff9c4 !important; font-weight: bold; position: sticky; bottom: 40px; z-index: 20; }
+        .sum-top5 { background: #d32f2f !important; color: white !important; font-weight: 900; }
+        .highlight-count-row { background: #e8f5e9 !important; font-weight: bold; color: #2e7d32; position: sticky; bottom: 0; z-index: 20; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<div class="control-panel">
-    <button id="btn539" class="btn" onclick="switchMode('539')">今彩 539</button>
-    <button id="btn49" class="btn" onclick="switchMode('49')">大樂透 49</button>
-    預覽期數：<input type="number" id="periodLimit" value="6" style="width: 45px;">
-    下推 N 期：<input type="number" id="pushN" value="5" style="width: 45px;">
-    <label><input type="radio" name="searchType" value="any" checked> 不分球位</label>
-    <label><input type="radio" name="searchType" value="fixed"> 依點選球位</label>
-</div>
+<div class="container">
+    <div class="btn-group">
+        <button class="btn-game" onclick="init('539', 39)" style="background:#27ae60;">539</button>
+        <button class="btn-game" onclick="init('49', 49)" style="background:#c0392b;">49</button>
+        <div style="margin-left: 10px; display: flex; gap: 2px;">
+            <button id="btnMonitor" class="btn-mode active" onclick="switchMode('monitor')">監控模式</button>
+            <button id="btnSoldier" class="btn-mode" onclick="switchMode('soldier')">士兵位置圖</button>
+        </div>
+        <button class="btn-report" onclick="toggleReport(true)">配對報表</button>
+    </div>
 
-<table class="lotto-table" id="mainTable"></table>
-
-<div style="margin: 10px 0; padding: 15px; background: #fff; border-radius: 8px; border-left: 5px solid #1a73e8;">
-    <strong>目前選取：</strong> <code id="conditionText">請點選球號或總和...</code>
-    <div style="margin-top: 12px;">
-        <button class="btn btn-blue" onclick="executeAnalysis()">生成明細報表 (Enter)</button>
-        <button class="btn btn-red" onclick="clearReport()">清除全部</button>
+    <div class="table-wrapper" id="scrollArea">
+        <svg id="pathCanvas"></svg>
+        <table id="matrixTable">
+            <thead id="mHead"></thead>
+            <tbody id="mBodyMonitor"></tbody>
+            <tbody id="mBodySoldier" class="hidden"></tbody>
+        </table>
     </div>
 </div>
 
-<div id="stickyStats">
-    <div id="globalSummaryContainer" class="global-group">
-        <div style="padding: 10px; text-align: center; color: #999;">尚未生成報表</div>
+<div id="reportModal">
+    <div id="reportHeader">
+        <strong>深度分析報表 (佈局優化)</strong>
+        <div style="display:flex; align-items:center;">
+            <button style="background:#f44336; color:white; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-weight:bold; margin-right:10px;" onclick="g_currentPairsData=[];renderReportTable();">清空報表</button>
+            <button onclick="toggleReport(false)" style="background:white; border:none; padding:5px 15px; cursor:pointer; border-radius:3px; font-weight:bold;">關閉</button>
+        </div>
     </div>
+    <div id="reportContent"></div>
 </div>
-
-<div id="reportContainer"></div>
 
 <script>
-const CONFIG = {
-    '539': { maxNum: 39, colEnd: 11, lottoDays: [1,2,3,4,5,6], url: 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/539.csv' },
-    '49': { maxNum: 49, colEnd: 12, lottoDays: [2,5], url: 'https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/49.csv' }
-};
+    let g_max = 39, g_matrix = {}, g_curOrder = [], g_type = '539', g_raw_data = [];
+    let g_mode = 'monitor', g_selectedPos = [], g_history = [], g_focusNum = null, g_focusPos = [], g_activePaths = new Map(), g_currentPairsData = [];
+    let g_backtestIdx = -1;
 
-let currentMode = '539', fullProcessedData = [], selectedConditions = [], reportData = [], calcStack = [];
+    window.onload = () => {
+        init('539', 39);
+        window.addEventListener('keydown', (e) => { 
+            if(e.key === 'Enter' && g_mode === 'soldier' && g_selectedPos.length >= 2) { 
+                generatePairsData(); g_selectedPos = []; g_activePaths.clear(); renderSoldierMode();
+            } 
+        });
+    };
 
-window.onload = () => switchMode('539');
-
-function switchMode(mode) {
-    currentMode = mode;
-    document.getElementById('btn539').className = mode === '539' ? 'btn active-mode' : 'btn';
-    document.getElementById('btn49').className = mode === '49' ? 'btn active-mode' : 'btn';
-    Papa.parse(CONFIG[mode].url, {
-        download: true, header: false,
-        complete: function(results) { processCSVData(results.data); renderMainTable(); }
-    });
-}
-
-function processCSVData(rows) {
-    let cleanData = [];
-    rows.forEach(row => {
-        let idVal = parseInt(row[0]);
-        if (isNaN(idVal)) return;
-        let balls = [];
-        let rowSum = 0;
-        for (let i = 2; i < CONFIG[currentMode].colEnd; i++) {
-            let b = parseInt(row[i]);
-            if (!isNaN(b)) {
-                balls.push(b.toString().padStart(2, '0'));
-                rowSum += b;
-            }
-        }
-        if (balls.length >= 5) {
-            cleanData.push({ id: idVal.toString(), date: row[1] || "", balls: balls, sum: rowSum.toString() });
-        }
-    });
-    fullProcessedData = cleanData.sort((a,b) => parseInt(a.id) - parseInt(b.id));
-}
-
-function getNextLottoDate(baseDate, offsetCount) {
-    if (!baseDate) return "";
-    let date = new Date(baseDate);
-    let validDays = CONFIG[currentMode].lottoDays;
-    let found = 0;
-    while (found < offsetCount) {
-        date.setDate(date.getDate() + 1);
-        if (validDays.includes(date.getDay())) found++;
+    function init(type, max) {
+        g_type = type; g_max = max; g_backtestIdx = -1; g_selectedPos = []; g_focusNum = null; g_focusPos = []; g_currentPairsData = []; g_activePaths.clear();
+        Papa.parse(`https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/${type}-all.csv`, {
+            download: true, header: true, skipEmptyLines: true,
+            complete: (res) => { if(res.data) { g_raw_data = res.data; processData(res.data, max); } }
+        });
     }
-    return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
-}
 
-function renderMainTable() {
-    let limit = parseInt(document.getElementById('periodLimit').value) || 6;
-    const table = document.getElementById('mainTable');
-    const lastDate = fullProcessedData[fullProcessedData.length - 1].date;
-    const nextDate = getNextLottoDate(lastDate, 1);
-    
-    let header = `<thead><tr><th>距離</th><th>期別</th><th>日期</th>`;
-    for(let i=1; i<=(currentMode==='49'?6:5); i++) header += `<th>球${i}</th>`;
-    header += `<th class="sum-col">總和</th></tr></thead>`;
-    table.innerHTML = header;
-
-    let tbody = document.createElement('tbody');
-    const displayData = [...fullProcessedData.slice(-(limit-1)), { id: "預測", date: nextDate, balls: Array(currentMode==='49'?6:5).fill(""), sum: "" }];
-    
-    displayData.forEach((data, idx) => {
-        const dist = displayData.length - idx;
-        let tr = document.createElement('tr');
-        if (dist === 1) tr.className = 'current-row';
-        tr.innerHTML = `<td>第${dist}期</td><td>${data.id}</td><td>${data.date}</td>`;
-        
-        // 球號
-        for(let i=0; i<(currentMode==='49'?6:5); i++) {
-            let val = data.balls[i] || "";
-            let td = document.createElement('td');
-            td.innerText = val;
-            if (dist > 1 && val) {
-                td.className = 'clickable';
-                td.onclick = () => toggleCondition(dist, val, i, td, false);
-            }
-            tr.appendChild(td);
-        }
-        
-        // 總和
-        let sumTd = document.createElement('td');
-        sumTd.innerText = data.sum || "";
-        sumTd.className = 'sum-col';
-        if (dist > 1 && data.sum) {
-            sumTd.classList.add('clickable');
-            sumTd.onclick = () => toggleCondition(dist, data.sum, 99, sumTd, true); // 99 代表總和位
-        }
-        tr.appendChild(sumTd);
-        tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-}
-
-function toggleCondition(dist, val, pos, el, isSum) {
-    const idx = selectedConditions.findIndex(c => c.dist === dist && c.val === val && c.isSum === isSum);
-    if (idx > -1) { 
-        selectedConditions.splice(idx, 1); 
-        el.classList.remove('selected'); 
-    } else { 
-        selectedConditions.push({ dist, val, pos, isSum }); 
-        el.classList.add('selected'); 
+    function processData(data, max) {
+        g_curOrder = Array.from({length: max}, (_, i) => i + 1);
+        let tempOrder = Array.from({length: max}, (_, i) => i + 1);
+        const bIdx = (max === 39) ? [2,3,4,5,6] : [2,3,4,5,6,7];
+        const keys = Object.keys(data[0]);
+        g_history = [];
+        data.forEach(row => {
+            let balls = bIdx.map(idx => parseInt(row[keys[idx]])).filter(v => !isNaN(v));
+            if(balls.length < 5) return;
+            g_history.push({ sn: row[keys[0]], order: [...tempOrder], balls: balls });
+            let winB = tempOrder.filter(n => balls.includes(n));
+            tempOrder = [...winB, ...tempOrder.filter(n => !balls.includes(n))];
+        });
+        g_curOrder = tempOrder;
+        updateMatrix(); renderHeader(); renderMonitorMode(); renderSoldierMode();
     }
-    updateConditionText();
-}
 
-function executeAnalysis() {
-    const searchType = document.querySelector('input[name="searchType"]:checked').value;
-    const searchTypeText = searchType === 'fixed' ? '依點選球位' : '不分球位';
-    const pushN = parseInt(document.getElementById('pushN').value) || 5;
-    const maxNum = CONFIG[currentMode].maxNum;
-    const targets = [...calcStack, ...selectedConditions.map(c => ({...c, op: null}))];
-    if (targets.length === 0) return;
+    function updateMatrix() {
+        g_matrix = {}; for(let b=1; b<=g_max; b++) { g_matrix[b] = {}; for(let p=0; p<g_max; p++) g_matrix[b][p] = { win: 0, fail: 0 }; }
+        let targetHistory = g_backtestIdx === -1 ? g_history : g_history.slice(0, g_backtestIdx + 1);
+        targetHistory.forEach(item => { item.order.forEach((n, i) => { if(item.balls.includes(n)) g_matrix[n][i].win++; else g_matrix[n][i].fail++; }); });
+    }
 
-    let multiStats = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
-    let matchCount = 0;
-    const isArithmetic = calcStack.length > 0;
-    let targetStr = "";
-    let finalPath = "";
+    function renderHeader() {
+        let displayOrder = g_backtestIdx === -1 ? g_curOrder : g_history[g_backtestIdx].order;
+        let headHtml = `<tr class="sticky-header ready-line"><th class="sticky-col">推演點</th>${displayOrder.map((n, idx) => {
+            let isBlue = (g_mode === 'monitor' && g_focusPos.includes(idx));
+            let isActive = (g_mode === 'soldier' && g_selectedPos.some(s => s.ballNum === n && s.rowIdx === (g_backtestIdx === -1 ? g_history.length : g_backtestIdx) && s.posIdx === idx));
+            return `<th class="${isBlue ? 'col-active' : ''} ${isActive ? 'path-active' : ''}" onclick="handleReadyClick(${n}, ${idx})">${n}</th>`;
+        }).join('')}</tr>
+                        <tr class="second-header pos-line"><th class="sticky-col">位置</th>${Array.from({length:g_max},(_,i)=>`<th class="${(g_mode === 'monitor' && g_focusPos.includes(i)) ? 'col-active' : ''}">P${i+1}</th>`).join('')}</tr>`;
+        document.getElementById('mHead').innerHTML = headHtml;
+    }
 
-    if (isArithmetic) {
-        let targetNum = parseInt(targets[0].val);
-        let formulaStr = `D${targets[0].dist}(${targets[0].isSum?'總':''}${targets[0].val})`;
-        for(let j=0; j<targets.length-1; j++) {
-            let vNext = parseInt(targets[j+1].val);
-            let op = targets[j].op;
-            if(op === '+') targetNum += vNext; else targetNum -= vNext;
-            formulaStr += ` ${op} D${targets[j+1].dist}(${targets[j+1].isSum?'總':''}${targets[j+1].val})`;
+    function handleReadyClick(ballNum, posIdx) {
+        if (g_mode === 'monitor') {
+            if (g_focusNum === ballNum && g_focusPos.includes(posIdx)) { g_focusNum = null; g_focusPos = []; } 
+            else { g_focusNum = ballNum; g_focusPos = [posIdx]; }
+            renderMonitorMode(); renderHeader();
+            if (g_focusNum) setTimeout(() => {
+                const target = document.getElementById(`row-win-${ballNum}`);
+                const wrapper = document.getElementById('scrollArea');
+                if (target && wrapper) wrapper.scrollTo({ top: target.offsetTop - 75, behavior: 'smooth' });
+            }, 30);
+        } else { toggleSelection(ballNum, g_backtestIdx === -1 ? g_history.length : g_backtestIdx, posIdx); }
+    }
+
+    function renderMonitorMode() {
+        let bHtml = ""; for(let b=1; b<=g_max; b++) {
+            let isFocus = g_focusNum === b;
+            let groupClass = isFocus ? 'focus-num-group' : '';
+            bHtml += `<tr id="row-win-${b}" class="row-win ${groupClass} ${isFocus ? 'focus-row-win' : ''}"><td class="sticky-col" onclick="g_focusNum=${b};renderMonitorMode()">#${b<10?'0'+b:b} 贏</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].win || ''}</td>`).join('')}</tr>
+                      <tr class="row-fail ${groupClass}"><td class="sticky-col">輸</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].fail || ''}</td>`).join('')}</tr>
+                      <tr class="row-rate ${groupClass} ${isFocus ? 'focus-row-rate' : ''}"><td class="sticky-col">率</td>${Array.from({length:g_max},(_,p)=> { let t=g_matrix[b][p].win+g_matrix[b][p].fail; return `<td class="${g_focusPos.includes(p)?'col-active':''}">${t>0?Math.round((g_matrix[b][p].win/t)*100):''}</td>`; }).join('')}</tr>`;
         }
-        // 算術結果如果是針對一般球號則取模，若是總和則不取模(或自定義)
-        // 此處維持針對球號的取模邏輯
-        let modResult = targetNum;
-        while(modResult > maxNum) modResult -= maxNum;
-        while(modResult < 1) modResult += maxNum;
-        targetStr = modResult.toString().padStart(2, '0');
-        finalPath = `${formulaStr} = [ ${targetStr} ]`;
+        document.getElementById('mBodyMonitor').innerHTML = bHtml;
+    }
 
-        for (let i = 20; i < fullProcessedData.length - pushN; i++) {
-            let structOk = true, histCalcVal = 0;
-            for(let j=0; j<targets.length; j++) {
-                let idx = i - (targets[j].dist - 1);
-                if(idx < 0) { structOk = false; break; }
-                let row = fullProcessedData[idx];
-                let val;
-                if(targets[j].isSum) {
-                    val = parseInt(row.sum);
-                } else {
-                    val = (searchType === 'fixed') ? parseInt(row.balls[targets[j].pos]) : (row.balls.includes(targets[j].val) ? parseInt(targets[j].val) : NaN);
+    function renderSoldierMode() {
+        const nLimit = 15;
+        let bHtml = ""; let displayList = g_history.slice(-nLimit);
+        displayList.forEach((item, revIdx) => {
+            let realIdx = g_history.length - nLimit + revIdx;
+            let isTestLine = g_backtestIdx === realIdx;
+            let isIgnored = g_backtestIdx !== -1 && realIdx > g_backtestIdx;
+            bHtml += `<tr class="row-soldier ${isTestLine ? 'backtest-line' : ''} ${isIgnored ? 'ignored-row' : ''}">
+                      <td class="sticky-col" onclick="g_backtestIdx=(g_backtestIdx===${realIdx})?-1:${realIdx};updateMatrix();renderHeader();renderMonitorMode();renderSoldierMode();setTimeout(drawPaths, 30);">${item.sn}${isTestLine ? '📌' : ''}</td>`;
+            item.order.forEach((n, pIdx) => {
+                let isActive = g_selectedPos.some(s => s.ballNum === n && s.rowIdx === realIdx && s.posIdx === pIdx);
+                bHtml += `<td class="${item.balls.includes(n) ? 'soldier-win' : ''} ${isActive ? 'path-active' : ''}" onclick="toggleSelection(${n}, ${realIdx}, ${pIdx})" data-ball="${n}">${n}</td>`;
+            });
+            bHtml += "</tr>";
+        });
+        document.getElementById('mBodySoldier').innerHTML = bHtml;
+        setTimeout(drawPaths, 80);
+    }
+
+    function toggleSelection(ballNum, rowIdx, posIdx) {
+        const idx = g_selectedPos.findIndex(s => s.ballNum === ballNum && s.rowIdx === rowIdx && s.posIdx === posIdx);
+        if (idx > -1) { g_selectedPos.splice(idx, 1); g_activePaths.delete(ballNum); } 
+        else {
+            g_selectedPos.push({ballNum, rowIdx, posIdx});
+            const colors = ['#FF0000', '#007bff', '#28a745', '#6f42c1', '#fd7e14'];
+            g_activePaths.set(ballNum, colors[g_activePaths.size % colors.length]);
+        }
+        renderSoldierMode(); renderHeader();
+    }
+
+    function drawPaths() {
+        const svg = document.getElementById('pathCanvas'); svg.innerHTML = '';
+        if (g_mode !== 'soldier') return;
+        const table = document.getElementById('matrixTable');
+        svg.setAttribute('width', table.offsetWidth); svg.setAttribute('height', table.offsetHeight);
+        g_activePaths.forEach((color, ballNum) => {
+            const dots = Array.from(document.querySelectorAll(`td[data-ball="${ballNum}"]`)).filter(td => !td.parentElement.classList.contains('ignored-row'));
+            if (dots.length < 2) return;
+            let pathD = ""; dots.forEach((dot, i) => {
+                const x = dot.offsetLeft + dot.offsetWidth / 2; const y = dot.offsetTop + dot.offsetHeight / 2;
+                pathD += (i === 0 ? "M" : "L") + x + "," + y;
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", x); circle.setAttribute("cy", y); circle.setAttribute("r", "3.5"); circle.setAttribute("fill", color); svg.appendChild(circle);
+            });
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", pathD); path.setAttribute("stroke", color); path.setAttribute("stroke-width", "2.5"); path.setAttribute("fill", "none"); path.setAttribute("stroke-opacity", "0.8"); svg.appendChild(path);
+        });
+    }
+
+    function generatePairsData() {
+        let limit = g_backtestIdx === -1 ? g_history.length - 1 : g_backtestIdx;
+        for (let i = 0; i < g_selectedPos.length; i++) {
+            for (let j = i + 1; j < g_selectedPos.length; j++) {
+                let s1 = g_selectedPos[i], s2 = g_selectedPos[j];
+                let distR = Math.abs(s1.rowIdx - s2.rowIdx);
+                let counts = Array(g_max + 1).fill(0), matchCount = 0;
+                for (let k = 0; k <= limit - distR - 1; k++) {
+                    if (g_history[k].balls.includes(g_history[k].order[s1.posIdx]) && 
+                        g_history[k + distR].balls.includes(g_history[k + distR].order[s2.posIdx])) {
+                        matchCount++; if(g_history[k + distR + 1]) g_history[k + distR + 1].balls.forEach(b => counts[b]++);
+                    }
                 }
-                if(isNaN(val)) { structOk = false; break; }
-                if(j === 0) histCalcVal = val; else { if(targets[j-1].op==='+') histCalcVal += val; else histCalcVal -= val; }
-            }
-            if(structOk) {
-                let checkVal = histCalcVal;
-                while(checkVal > maxNum) checkVal -= maxNum;
-                while(checkVal < 1) checkVal += maxNum;
-                if(checkVal === parseInt(targetStr) && fullProcessedData[i].balls.includes(targetStr)) {
-                    matchCount++;
-                    for (let k = 0; k < pushN; k++) { fullProcessedData[i+k].balls.forEach(b => multiStats[k][parseInt(b)]++); }
-                }
-            }
-        }
-    } else {
-        // 聯動模式
-        finalPath = targets.map(t => `D${t.dist}(${t.isSum?'總':''}${t.val})`).join(' ');
-        for (let i = 20; i < fullProcessedData.length - pushN; i++) {
-            let allOk = true;
-            for(let t of targets) {
-                let idx = i - (t.dist - 1);
-                if(idx < 0) { allOk = false; break; }
-                let row = fullProcessedData[idx];
-                if(t.isSum) {
-                    if(row.sum !== t.val) { allOk = false; break; }
-                } else {
-                    if(searchType === 'fixed') { if(row.balls[t.pos] !== t.val) { allOk = false; break; } }
-                    else { if(!row.balls.includes(t.val)) { allOk = false; break; } }
-                }
-            }
-            if(allOk) {
-                matchCount++;
-                for (let k = 0; k < pushN; k++) { fullProcessedData[i+k].balls.forEach(b => multiStats[k][parseInt(b)]++); }
+                g_currentPairsData.push({ label: `${s1.ballNum}(P${s1.posIdx+1}) ↔ ${s2.ballNum}(P${s2.posIdx+1}) [跨${distR}期]`, count: matchCount, data: counts });
             }
         }
     }
 
-    reportData.push({ 
-        id: Date.now(),
-        mode: isArithmetic ? `算術` : `聯動`, 
-        sType: searchTypeText,
-        path: finalPath, 
-        stats: multiStats, 
-        matches: matchCount,
-        baseDate: fullProcessedData[fullProcessedData.length-1].date
-    });
-    renderReport(); resetCalc();
-}
-
-function getTop5Indices(arr) {
-    return arr.map((v, i) => ({v, i})).slice(1).sort((a,b) => b.v - a.v).slice(0, 5).filter(x => x.v > 0).map(x => x.i);
-}
-
-function renderReport() {
-    const maxNum = CONFIG[currentMode].maxNum;
-    const pushN = parseInt(document.getElementById('pushN').value) || 5;
-    let container = document.getElementById('reportContainer');
-    container.innerHTML = "";
-    let globalSums = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
-    let globalHighs = Array.from({length: pushN}, () => new Array(maxNum + 1).fill(0));
-
-    reportData.forEach((row, rid) => {
-        let groupDiv = document.createElement('div');
-        groupDiv.className = 'report-group';
-        let reportSums = new Array(maxNum + 1).fill(0);
-        let highCounts = new Array(maxNum + 1).fill(0);
-        
-        let html = `<table class="report-table"><thead><tr><th><span class="path-label">${row.path}</span> <span class="mode-text">模式：${row.mode} [${row.sType}] (命中 ${row.matches} 次)</span><br><button class="btn-del-left" onclick="deleteSingleReport(${row.id})">刪除此報表</button></th>`;
-        for(let i=1; i<=maxNum; i++) html += `<th>${i}</th>`;
-        html += `</tr></thead><tbody>`;
-        
-        for(let k=0; k < pushN; k++) {
-            let top5 = getTop5Indices(row.stats[k]);
-            top5.forEach(num => { highCounts[num]++; globalHighs[k][num]++; });
-            let dStr = getNextLottoDate(row.baseDate, k + 1);
-            let isLastPeriod = (k === pushN - 1);
-            
-            html += `<tr class="${isLastPeriod?'divider-row':''}"><td>下推 ${k} 期 <span class="date-text">(${dStr})</span></td>`;
-            for(let i=1; i<=maxNum; i++) {
-                let val = row.stats[k][i];
-                reportSums[i] += val;
-                globalSums[k][i] += val;
-                html += `<td class="${top5.includes(i)?'top-cell':''}">${val || ''}</td>`;
+    function renderReportTable() {
+        let totals = Array(g_max + 1).fill(0); let highlightCounts = Array(g_max + 1).fill(0); let tableRows = "";
+        g_currentPairsData.forEach((p, idx) => {
+            let rowSorted = []; for(let i=1; i<=g_max; i++) if(p.data[i]>0) rowSorted.push({num:i, val:p.data[i]});
+            rowSorted.sort((a,b)=>b.val-a.val); let rTop5 = rowSorted.slice(0, 5).map(it=>it.num);
+            tableRows += `<tr><td style="position:sticky;left:0;background:#eee;z-index:10;"><span style="color:red;cursor:pointer" onclick="g_currentPairsData.splice(${idx},1);renderReportTable();">X</span> ${p.label}</td>`;
+            for(let i=1; i<=g_max; i++) {
+                let isTop = rTop5.includes(i); if(isTop) highlightCounts[i]++;
+                tableRows += `<td class="${isTop ? 'row-top5' : ''}">${p.data[i] || ''}</td>`; totals[i] += p.data[i];
             }
-            html += `</tr>`;
-        }
-        let sumTop5 = getTop5Indices(reportSums);
-        html += `<tr class="footer-row"><td>報表總計 (藍底 TOP5)</td>`;
-        for(let i=1; i<=maxNum; i++) html += `<td class="${sumTop5.includes(i)?'sum-top-cell':''}">${reportSums[i] || ''}</td>`;
-        html += `</tr>`;
-        let highTop5 = getTop5Indices(highCounts);
-        html += `<tr class="footer-row"><td>高亮次數 (橘底 TOP5)</td>`;
-        for(let i=1; i<=maxNum; i++) html += `<td class="${highTop5.includes(i)?'high-count-top-cell':''}">${highCounts[i] || ''}</td>`;
-        html += `</tr></tbody></table>`;
-        groupDiv.innerHTML = html;
-        container.appendChild(groupDiv);
-    });
-    renderGlobalStats(globalSums, globalHighs);
-}
-
-function renderGlobalStats(sums, highs) {
-    const maxNum = CONFIG[currentMode].maxNum;
-    const container = document.getElementById('globalSummaryContainer');
-    if (reportData.length === 0) { container.innerHTML = `<div style="padding: 10px; text-align: center;">尚未生成報表</div>`; return; }
-    let finalTotalSums = new Array(maxNum + 1).fill(0);
-    let finalHighCounts = new Array(maxNum + 1).fill(0);
-    let html = `<table class="report-table"><thead><tr><th style="background:#1565c0; color:white;">總體報表極簡統計</th>`;
-    for(let i=1; i<=maxNum; i++) html += `<th style="background:#1565c0; color:white;">${i}</th>`;
-    html += `</tr></thead><tbody>`;
-    
-    for(let k=0; k < sums.length; k++) {
-        let top5 = getTop5Indices(sums[k]);
-        let isLastPeriod = (k === sums.length - 1);
-        html += `<tr class="${isLastPeriod?'divider-row':''}"><td>下推 ${k} 期：所有報表總次數 (黃底 TOP5)</td>`;
-        for(let i=1; i<=maxNum; i++) {
-            let val = sums[k][i];
-            finalTotalSums[i] += val;
-            html += `<td class="${top5.includes(i)?'top-cell':''}">${val || ''}</td>`;
-        }
-        html += `</tr>`;
-        for(let i=1; i<=maxNum; i++) finalHighCounts[i] += highs[k][i];
+            tableRows += `</tr>`;
+        });
+        let sumSorted = []; for(let i=1; i<=g_max; i++) if(totals[i]>0) sumSorted.push({num:i, val:totals[i]});
+        sumSorted.sort((a,b)=>b.val-a.val); let sTop5 = sumSorted.slice(0, 5).map(it=>it.num);
+        let top5Html = `<div class="top5-container"><span class="top5-title">🔥 推薦 TOP 5:</span> ${sumSorted.slice(0,5).map(it=>`<span class="top5-badge">${it.num}(${it.val})</span>`).join('')}</div>`;
+        let html = top5Html + `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th style="width:140px;position:sticky;left:0;z-index:30;background:#ddd;">路徑</th>${Array.from({length:g_max},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>${tableRows}`;
+        html += `<tr class="sum-row"><td style="position:sticky;left:0;z-index:30;">總計推演</td>`;
+        for(let i=1; i<=g_max; i++) html += `<td class="${sTop5.includes(i)?'sum-top5':''}">${totals[i]}</td>`;
+        html += `</tr><tr class="highlight-count-row"><td style="position:sticky;left:0;z-index:30;">高亮次數</td>`;
+        for(let i=1; i<=g_max; i++) html += `<td>${highlightCounts[i]||''}</td>`;
+        html += `</tr></tbody></table></div>`;
+        document.getElementById('reportContent').innerHTML = html;
     }
-    let finalSumTop5 = getTop5Indices(finalTotalSums);
-    html += `<tr class="footer-row"><td>所有期數：總計加總 (藍底 TOP5)</td>`;
-    for(let i=1; i<=maxNum; i++) html += `<td class="${finalSumTop5.includes(i)?'sum-top-cell':''}">${finalTotalSums[i] || ''}</td>`;
-    html += `</tr>`;
-    let finalHighTop5 = getTop5Indices(finalHighCounts);
-    html += `<tr class="footer-row"><td>所有期數：高亮累積 (橘底 TOP5)</td>`;
-    for(let i=1; i<=maxNum; i++) html += `<td class="${finalHighTop5.includes(i)?'high-count-top-cell':''}">${finalHighCounts[i] || ''}</td>`;
-    html += `</tr></tbody></table>`;
-    container.innerHTML = html;
-}
 
-function deleteSingleReport(id) {
-    reportData = reportData.filter(r => r.id !== id);
-    renderReport();
-}
-
-function clearReport() { reportData = []; renderReport(); resetCalc(); }
-
-function resetCalc() { 
-    calcStack = []; 
-    selectedConditions = []; 
-    updateConditionText(); 
-    document.querySelectorAll('.selected').forEach(e=>e.classList.remove('selected')); 
-}
-
-function updateConditionText() {
-    let text = calcStack.map(s => `D${s.dist}(${s.isSum?'總':''}${s.val}) ${s.op||''}`).join(' ');
-    text += selectedConditions.map(c => `D${c.dist}(${c.isSum?'總':''}${c.val})`).join(' ');
-    document.getElementById('conditionText').innerText = text || '請點選球號或總和...';
-}
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') executeAnalysis();
-    else if (e.key === '+' || e.key === '-') {
-        if (selectedConditions.length > 0) {
-            calcStack.push({ ...selectedConditions[0], op: e.key });
-            selectedConditions = [];
-            updateConditionText();
-        }
+    function toggleReport(show) { if(show) renderReportTable(); document.getElementById('reportModal').style.display = show ? 'flex' : 'none'; }
+    function switchMode(mode) {
+        g_mode = mode; if (mode === 'soldier') { g_focusNum = null; g_focusPos = []; }
+        document.getElementById('mBodyMonitor').classList.toggle('hidden', mode !== 'monitor');
+        document.getElementById('mBodySoldier').classList.toggle('hidden', mode !== 'soldier');
+        document.getElementById('pathCanvas').classList.toggle('hidden', mode !== 'soldier');
+        renderHeader(); if(mode === 'monitor') renderMonitorMode(); if(mode === 'soldier') { renderSoldierMode(); setTimeout(drawPaths, 150); }
     }
-});
+    window.onresize = drawPaths;
 </script>
 </body>
 </html>
