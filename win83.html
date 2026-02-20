@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>戰場監控 Pro - 報表佈局最終修正版</title>
+    <title>戰場監控 Pro - 加入報表按鈕版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         :root { --defense: #2c3e50; --win: #d93025; --bg: #f8f9fa; --ready: #fff9c4; }
@@ -13,6 +13,11 @@
         .btn-game { padding: 4px 10px; border: none; border-radius: 3px; color: white; cursor: pointer; font-weight: bold; }
         .btn-mode { padding: 4px 12px; border: 1px solid #999; border-radius: 3px; background: white; cursor: pointer; font-weight: bold; }
         .btn-mode.active { background: #007bff; color: white; border-color: #0056b3; }
+        
+        /* 新增加入報表按鈕樣式 */
+        .btn-add { background: #009688; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
+        .btn-add:hover { background: #00796b; }
+        
         .btn-report { background: #673ab7; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         
         .table-wrapper { width: 100%; overflow: auto; max-height: 88vh; scroll-behavior: smooth; background: white; position: relative; }
@@ -46,20 +51,13 @@
         .row-soldier { height: 28px; font-size: 12px; cursor: pointer; }
         .path-active { outline: 3.5px solid #007bff !important; outline-offset: -3px; font-weight: bold; }
 
-        /* --- 報表佈局修正：確保不重疊 --- */
+        /* 報表佈局 (與 TOP 5 分離不重疊) */
         #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 2000; flex-direction: column; }
         #reportHeader { padding: 8px 15px; background: #673ab7; color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        
         #reportContent { flex: 1; overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
         
-        /* 推薦標籤區 */
-        .top5-container { 
-            display: flex; gap: 8px; padding: 12px; background: #f3e5f5; border-radius: 8px; 
-            align-items: center; border: 1px solid #ce93d8; margin-bottom: 15px; flex-shrink: 0; flex-wrap: wrap;
-        }
+        .top5-container { display: flex; gap: 8px; padding: 12px; background: #f3e5f5; border-radius: 8px; align-items: center; border: 1px solid #ce93d8; margin-bottom: 15px; flex-shrink: 0; flex-wrap: wrap; }
         .top5-badge { background: #d93025; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; }
-
-        /* 表格滾動區 */
         .report-table-wrapper { flex: 1; overflow: auto; width: 100%; border: 1px solid #ddd; }
         .report-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1300px; }
         .report-table th { background: #f1f1f1; border: 1px solid #ccc; position: sticky; top: 0; z-index: 20; }
@@ -81,6 +79,7 @@
         <div style="margin-left: 10px; display: flex; gap: 2px;">
             <button id="btnMonitor" class="btn-mode active" onclick="switchMode('monitor')">監控模式</button>
             <button id="btnSoldier" class="btn-mode" onclick="switchMode('soldier')">士兵位置圖</button>
+            <button id="btnAddReport" class="btn-add" onclick="handleAddReport()" style="visibility:hidden;">加入報表</button>
         </div>
         <button class="btn-report" onclick="toggleReport(true)">配對報表</button>
     </div>
@@ -97,7 +96,7 @@
 
 <div id="reportModal">
     <div id="reportHeader">
-        <strong>深度分析報表 (佈局優化)</strong>
+        <strong>分析統計報表</strong>
         <div style="display:flex; align-items:center;">
             <button style="background:#f44336; color:white; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-weight:bold; margin-right:10px;" onclick="g_currentPairsData=[];renderReportTable();">清空報表</button>
             <button onclick="toggleReport(false)" style="background:white; border:none; padding:5px 15px; cursor:pointer; border-radius:3px; font-weight:bold;">關閉</button>
@@ -114,11 +113,20 @@
     window.onload = () => {
         init('539', 39);
         window.addEventListener('keydown', (e) => { 
-            if(e.key === 'Enter' && g_mode === 'soldier' && g_selectedPos.length >= 2) { 
-                generatePairsData(); g_selectedPos = []; g_activePaths.clear(); renderSoldierMode();
-            } 
+            if(e.key === 'Enter') handleAddReport(); 
         });
     };
+
+    function handleAddReport() {
+        if (g_mode === 'soldier' && g_selectedPos.length >= 2) {
+            generatePairsData();
+            g_selectedPos = []; g_activePaths.clear(); 
+            renderSoldierMode();
+            
+        } else if (g_mode === 'soldier') {
+            alert("請先選取至少 2 個位置");
+        }
+    }
 
     function init(type, max) {
         g_type = type; g_max = max; g_backtestIdx = -1; g_selectedPos = []; g_focusNum = null; g_focusPos = []; g_currentPairsData = []; g_activePaths.clear();
@@ -178,10 +186,9 @@
     function renderMonitorMode() {
         let bHtml = ""; for(let b=1; b<=g_max; b++) {
             let isFocus = g_focusNum === b;
-            let groupClass = isFocus ? 'focus-num-group' : '';
-            bHtml += `<tr id="row-win-${b}" class="row-win ${groupClass} ${isFocus ? 'focus-row-win' : ''}"><td class="sticky-col" onclick="g_focusNum=${b};renderMonitorMode()">#${b<10?'0'+b:b} 贏</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].win || ''}</td>`).join('')}</tr>
-                      <tr class="row-fail ${groupClass}"><td class="sticky-col">輸</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].fail || ''}</td>`).join('')}</tr>
-                      <tr class="row-rate ${groupClass} ${isFocus ? 'focus-row-rate' : ''}"><td class="sticky-col">率</td>${Array.from({length:g_max},(_,p)=> { let t=g_matrix[b][p].win+g_matrix[b][p].fail; return `<td class="${g_focusPos.includes(p)?'col-active':''}">${t>0?Math.round((g_matrix[b][p].win/t)*100):''}</td>`; }).join('')}</tr>`;
+            bHtml += `<tr id="row-win-${b}" class="row-win ${isFocus?'focus-num-group focus-row-win':''}"><td class="sticky-col" onclick="g_focusNum=${b};renderMonitorMode()">#${b<10?'0'+b:b} 贏</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].win || ''}</td>`).join('')}</tr>
+                      <tr class="row-fail ${isFocus?'focus-num-group':''}"><td class="sticky-col">輸</td>${Array.from({length:g_max},(_,p)=>`<td class="${g_focusPos.includes(p)?'col-active':''}">${g_matrix[b][p].fail || ''}</td>`).join('')}</tr>
+                      <tr class="row-rate ${isFocus?'focus-num-group focus-row-rate':''}"><td class="sticky-col">率</td>${Array.from({length:g_max},(_,p)=> { let t=g_matrix[b][p].win+g_matrix[b][p].fail; return `<td class="${g_focusPos.includes(p)?'col-active':''}">${t>0?Math.round((g_matrix[b][p].win/t)*100):''}</td>`; }).join('')}</tr>`;
         }
         document.getElementById('mBodyMonitor').innerHTML = bHtml;
     }
@@ -254,13 +261,13 @@
     }
 
     function renderReportTable() {
-        let totals = Array(g_max + 1).fill(0); let highlightCounts = Array(g_max + 1).fill(0); let tableRows = "";
+        let totals = Array(g_max + 1).fill(0); let hCounts = Array(g_max + 1).fill(0); let tableRows = "";
         g_currentPairsData.forEach((p, idx) => {
             let rowSorted = []; for(let i=1; i<=g_max; i++) if(p.data[i]>0) rowSorted.push({num:i, val:p.data[i]});
             rowSorted.sort((a,b)=>b.val-a.val); let rTop5 = rowSorted.slice(0, 5).map(it=>it.num);
             tableRows += `<tr><td style="position:sticky;left:0;background:#eee;z-index:10;"><span style="color:red;cursor:pointer" onclick="g_currentPairsData.splice(${idx},1);renderReportTable();">X</span> ${p.label}</td>`;
             for(let i=1; i<=g_max; i++) {
-                let isTop = rTop5.includes(i); if(isTop) highlightCounts[i]++;
+                let isTop = rTop5.includes(i); if(isTop) hCounts[i]++;
                 tableRows += `<td class="${isTop ? 'row-top5' : ''}">${p.data[i] || ''}</td>`; totals[i] += p.data[i];
             }
             tableRows += `</tr>`;
@@ -272,14 +279,16 @@
         html += `<tr class="sum-row"><td style="position:sticky;left:0;z-index:30;">總計推演</td>`;
         for(let i=1; i<=g_max; i++) html += `<td class="${sTop5.includes(i)?'sum-top5':''}">${totals[i]}</td>`;
         html += `</tr><tr class="highlight-count-row"><td style="position:sticky;left:0;z-index:30;">高亮次數</td>`;
-        for(let i=1; i<=g_max; i++) html += `<td>${highlightCounts[i]||''}</td>`;
+        for(let i=1; i<=g_max; i++) html += `<td>${hCounts[i]||''}</td>`;
         html += `</tr></tbody></table></div>`;
         document.getElementById('reportContent').innerHTML = html;
     }
 
     function toggleReport(show) { if(show) renderReportTable(); document.getElementById('reportModal').style.display = show ? 'flex' : 'none'; }
+    
     function switchMode(mode) {
         g_mode = mode; if (mode === 'soldier') { g_focusNum = null; g_focusPos = []; }
+        document.getElementById('btnAddReport').style.visibility = (mode === 'soldier') ? 'visible' : 'hidden';
         document.getElementById('mBodyMonitor').classList.toggle('hidden', mode !== 'monitor');
         document.getElementById('mBodySoldier').classList.toggle('hidden', mode !== 'soldier');
         document.getElementById('pathCanvas').classList.toggle('hidden', mode !== 'soldier');
