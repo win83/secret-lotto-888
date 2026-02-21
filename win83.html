@@ -13,6 +13,7 @@
         .btn-game { padding: 4px 10px; border: none; border-radius: 3px; color: white; cursor: pointer; font-weight: bold; }
         .btn-mode { padding: 4px 12px; border: 1px solid #999; border-radius: 3px; background: white; cursor: pointer; font-weight: bold; }
         .btn-mode.active { background: #007bff; color: white; border-color: #0056b3; }
+        .btn-add-report { background: #28a745; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         .btn-report { background: #673ab7; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         
         .table-wrapper { width: 100%; overflow: auto; max-height: 88vh; scroll-behavior: smooth; background: white; position: relative; }
@@ -73,9 +74,10 @@
     <div class="btn-group">
         <button class="btn-game" onclick="init('539', 39)" style="background:#27ae60;">539</button>
         <button class="btn-game" onclick="init('49', 49)" style="background:#c0392b;">49</button>
-        <div style="margin-left: 10px; display: flex; gap: 2px;">
+        <div style="margin-left: 10px; display: flex; gap: 5px;">
             <button id="btnMonitor" class="btn-mode active" onclick="switchMode('monitor')">監控模式</button>
-            <button id="btnSoldier" class="btn-mode" onclick="switchMode('soldier')">位置圖</button>
+            <button id="btnSoldier" class="btn-mode" onclick="switchMode('soldier')">士兵位置圖</button>
+            <button id="btnAddReport" class="btn-add-report hidden" onclick="handleAddReport()">加入報表</button>
         </div>
         <button class="btn-report" onclick="toggleReport(true)">配對報表</button>
     </div>
@@ -110,7 +112,7 @@
         init('539', 39);
         window.addEventListener('keydown', (e) => { 
             if(e.key === 'Enter' && g_mode === 'soldier' && g_selectedPos.length >= 2) { 
-                generatePairsData(); g_selectedPos = []; g_activePaths.clear(); renderSoldierMode();
+                handleAddReport();
             } 
         });
     };
@@ -121,6 +123,18 @@
             download: true, header: true, skipEmptyLines: true,
             complete: (res) => { if(res.data) { g_raw_data = res.data; processData(res.data, max); } }
         });
+    }
+
+    // 處理加入報表邏輯
+    function handleAddReport() {
+        if(g_selectedPos.length < 2) {
+            alert("請先在士兵位置圖選取至少兩個號碼位置");
+            return;
+        }
+        generatePairsData(); 
+        g_selectedPos = []; 
+        g_activePaths.clear(); 
+        renderSoldierMode();
     }
 
     function processData(data, max) {
@@ -359,15 +373,27 @@
     }
 
     function toggleReport(show) { if(show) renderReportTable(); document.getElementById('reportModal').style.display = show ? 'flex' : 'none'; }
+    
     function switchMode(mode) {
-        g_mode = mode; if (mode === 'soldier') { g_focusNum = null; g_focusPos = []; }
+        g_mode = mode; 
+        if (mode === 'soldier') { g_focusNum = null; g_focusPos = []; }
+        
+        // 控制加入報表按鈕的顯示
+        document.getElementById('btnAddReport').classList.toggle('hidden', mode !== 'soldier');
+        
         document.getElementById('mBodyMonitor').classList.toggle('hidden', mode !== 'monitor');
         document.getElementById('mBodySoldier').classList.toggle('hidden', mode !== 'soldier');
         document.getElementById('pathCanvas').classList.toggle('hidden', mode !== 'soldier');
-        renderHeader(); if(mode === 'monitor') renderMonitorMode(); if(mode === 'soldier') { renderSoldierMode(); setTimeout(drawPaths, 150); }
+        
+        // 切換按鈕狀態
+        document.getElementById('btnMonitor').classList.toggle('active', mode === 'monitor');
+        document.getElementById('btnSoldier').classList.toggle('active', mode === 'soldier');
+
+        renderHeader(); 
+        if(mode === 'monitor') renderMonitorMode(); 
+        if(mode === 'soldier') { renderSoldierMode(); setTimeout(drawPaths, 150); }
     }
     window.onresize = drawPaths;
 </script>
 </body>
 </html>
-
