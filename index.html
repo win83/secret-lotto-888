@@ -38,7 +38,7 @@
         .btn.drag-pre-active { background: var(--active-yellow) !important; color: #000; font-weight: bold; border-color: #f9a825; }
         .btn.drag-post-active { background: var(--active-green) !important; color: white; font-weight: bold; border-color: #27ae60; }
 
-        /* 新增全選按鈕樣式 */
+        /* 全選按鈕樣式 */
         .select-all-btn { background: #f1f2f6; border: 1px solid #ced4da; color: #2f3542; font-weight: bold; padding: 8px 10px; }
         .select-all-btn:hover { background: #dfe4ea; }
 
@@ -72,7 +72,7 @@
         /* 當期/下期對碰組合徽章 */
         .pair-badge { display: inline-block; background: #fff; border: 1px solid #b2bec3; padding: 3px 8px; border-radius: 4px; margin: 3px; font-size: 13px; color: #2d3436; font-weight:bold; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
-        /* ====== 登入防護畫面樣式 ====== */
+        /* 登入防護畫面樣式 */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #2c3e50; display: flex; flex-direction: column;
@@ -98,6 +98,7 @@
         #app-content { display: none; }
     </style>
 </head>
+
 <body>
 
 <div id="login-screen">
@@ -130,6 +131,14 @@
             </div>
         </div>
 
+<div id="map-container" class="main-container hidden" style="height: 80vh; padding: 0; overflow: hidden;">
+    <div style="background: #3498db; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: bold; margin-left: 10px;">🗺️ 位置圖內嵌模式</span>
+        <button class="btn" style="background: #fff; color: #333; margin-right: 10px;" onclick="toggleMap()">關閉圖表</button>
+    </div>
+    <iframe id="map-frame" src="" style="width: 100%; height: calc(100% - 45px); border: none;"></iframe>
+</div>
+
         <div class="row" style="background: #fffdf2; padding: 10px; border: 1px solid #ffe082; border-radius: 8px; margin-top: 10px;">
             <div class="label">統計模式</div>
             <div class="btn-group" id="mode-btns-group">
@@ -148,6 +157,7 @@
                 <button class="btn mode-btn" id="btn-sub-body" onclick="switchMode(this, '副體')">副體</button>
                 <button class="btn active-green" style="margin-left: 20px; font-weight:bold;" onclick="addToReport()">🚀 加入報表 (ENTER)</button>
                 <button class="btn" onclick="resetFilters()">清空篩選 (ESC)</button>
+				<button class="btn" style="background: #3498db; color: white; font-weight:bold; margin-left: 10px;" onclick="toggleMap()">🗺️ 位置圖</button>
                 <span id="toast-msg">✅ 已成功加入報表</span>
             </div>
         </div>
@@ -168,8 +178,8 @@
             <div class="row" data-type="號碼"><div class="label">號碼</div><button class="btn select-all-btn" onclick="toggleSelectRow(this)">全選</button><div class="btn-group" id="num-btns"></div></div>
         </div>
     </div>
-
-    <div id="report-ui" class="main-container hidden" style="max-width: 1650px;">
+	
+	<div id="report-ui" class="main-container hidden" style="max-width: 1650px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <div style="display: flex; gap: 10px; align-items: center;">
                 <div class="label" style="background:#000; color:#fff; min-width:120px;">報表管理系統</div>
@@ -273,11 +283,9 @@
             localStorage.setItem('lotto_failed_attempts', attempts);
 
             if (attempts >= 3) {
-                // 鎖定 UI 避免重複點擊
                 pwdInput.disabled = true;
                 msgEl.innerHTML = '<span style="color:#e74c3c;">偵測到異常存取，正在鎖定來源...</span>';
                 
-                // 取得 IP 並設定封鎖 3 天 (3天 * 24時 * 60分 * 60秒 * 1000毫秒)
                 let ip = await getUserIP();
                 let banTime = Date.now() + (1 * 24 * 60 * 60 * 1000); 
                 
@@ -297,7 +305,7 @@
     function unlockApp() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-content').style.display = 'block';
-        init(); // 密碼正確才正式啟動系統資料
+        init(); 
     }
 
     // 支援 Enter 鍵登入
@@ -309,10 +317,9 @@
         }
     });
 
-    // 網頁載入時檢查狀態
     window.onload = function() {
         if (localStorage.getItem('lottoAuth_8586') === 'true') {
-            unlockApp(); // 已經登入過，直接解鎖
+            unlockApp(); 
         } else {
             let isBanned = checkBanStatus();
             if (!isBanned) {
@@ -320,9 +327,8 @@
             }
         }
     };
-
-
-    // ==========================================
+	
+	// ==========================================
     // ====== 系統主程式演算法 (完全保留不變) ======
     // ==========================================
 
@@ -444,8 +450,8 @@
         const el = document.getElementById(id);
         if(el) el.innerHTML = list.map(item => `<button class="btn filter-btn" onclick="handleFilterClick(this)">${item}</button>`).join('');
     }
-
-    function handleFilterClick(btn) {
+	
+	function handleFilterClick(btn) {
         if (currentConfig.mode === '拖牌後期' || currentConfig.mode === '副體') {
             btn.classList.toggle('active-green'); 
             btn.classList.remove('active-yellow');
@@ -455,7 +461,6 @@
         }
     }
 
-    // 新增：一鍵全選邏輯
     function toggleSelectRow(btn) {
         const row = btn.closest('.row');
         const btns = row.querySelectorAll('.filter-btn');
@@ -470,10 +475,8 @@
     function updateDynamicUI() {
         const selectedYellows = Array.from(document.querySelectorAll('#year-btns .active-yellow, #num-btns .active-yellow')).map(b => b.innerText);
         const selectedGreens = Array.from(document.querySelectorAll('#year-btns .active-green, #num-btns .active-green')).map(b => b.innerText);
-
         const yBox = document.getElementById('year-btns');
         const start = (currentConfig.user === "爸") ? 2020 : 2007;
-        
         const rawCat = currentConfig.cat.replace('報表', '');
         const data = globalLottoData[rawCat] || [];
         let endYear = 2026; 
@@ -481,14 +484,12 @@
             const maxDataYear = Math.max(...data.map(d => d.year));
             if (maxDataYear > endYear) endYear = maxDataYear;
         }
-
         yBox.innerHTML = '';
         for(let y = start; y <= endYear; y++) {
             let ys = y.toString();
             let activeClass = selectedYellows.includes(ys) ? 'active-yellow' : (selectedGreens.includes(ys) ? 'active-green' : '');
             yBox.innerHTML += `<button class="btn filter-btn ${activeClass}" onclick="handleFilterClick(this)">${y}</button>`;
         }
-        
         const nBox = document.getElementById('num-btns');
         const count = currentConfig.cat.includes('539') ? 39 : 49;
         nBox.innerHTML = '';
@@ -497,7 +498,6 @@
             let activeClass = selectedYellows.includes(ns) ? 'active-yellow' : (selectedGreens.includes(ns) ? 'active-green' : '');
             nBox.innerHTML += `<button class="btn filter-btn ${activeClass}" onclick="handleFilterClick(this)">${ns}</button>`;
         }
-        
         document.querySelectorAll('.filter-extra').forEach(el => {
             currentConfig.user === '哥' ? el.classList.add('hidden') : el.classList.remove('hidden');
         });
@@ -524,23 +524,18 @@
         el.classList.add('active-blue');
         currentConfig.user = user;
         document.getElementById('report-user-label').innerText = `[當前操作者：${user}]`;
-        
         resetFilters();
         dragData = { step: 0, preConds: [], preNums: [] };
         mainSubData = { step: 0, mainConds: [] };
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active-yellow', 'drag-pre-active', 'drag-post-active'));
         document.getElementById('btn-history').classList.add('active-yellow');
         currentConfig.mode = '歷史模式';
-
         updateDynamicUI();
         renderReports(); 
-        document.getElementById('analysis-result-area').innerHTML = '';
-        document.getElementById('overlap-analysis-area').innerHTML = '';
     }
 
     function switchMode(el, mode) {
         document.getElementById('push-n-container').classList.add('hidden');
-
         if (mode === '拖牌前期') {
             dragData = { step: 1, preConds: [], preNums: [] };
             mainSubData = { step: 0, mainConds: [] };
@@ -593,142 +588,74 @@
 
     function addToReport() {
         const rawCat = currentConfig.cat.replace('報表', '');
-
         if (currentConfig.mode === '歷史模式' || currentConfig.mode === '當期對碰' || currentConfig.mode === '下期對碰' || currentConfig.mode === '拖牌下推') {
             const yellows = Array.from(document.querySelectorAll('.filter-btn.active-yellow'));
-            if (yellows.length === 0) return alert('請至少選擇一個條件再加入報表！');
-
+            if (yellows.length === 0) return alert('請至少選擇一個條件！');
             const condBtns = yellows.filter(b => b.closest('.row').getAttribute('data-type') !== '號碼');
             const numBtns = yellows.filter(b => b.closest('.row').getAttribute('data-type') === '號碼');
             const pushNVal = parseInt(document.getElementById('pushN').value) || 5;
-
             const generateSingleReport = (condText, condType, numText) => {
-                let condsByCat = {};
-                let labelParts = [];
-
-                if (condText) {
-                    condsByCat[condType] = [condText];
-                    labelParts.push(`${condType}:${condText}`);
-                }
-                if (numText) {
-                    condsByCat['號碼'] = [numText];
-                    labelParts.push(`號碼:${numText}`); 
-                }
-
+                let condsByCat = {}; let labelParts = [];
+                if (condText) { condsByCat[condType] = [condText]; labelParts.push(`${condType}:${condText}`); }
+                if (numText) { condsByCat['號碼'] = [numText]; labelParts.push(`號碼:${numText}`); }
                 let finalLabel = labelParts.join('+');
-                if (currentConfig.mode === '拖牌下推') {
-                    finalLabel += ` (下推${pushNVal}期)`;
-                }
-
+                if (currentConfig.mode === '拖牌下推') finalLabel += ` (下推${pushNVal}期)`;
                 reportsData.push({
-                    id: Date.now() + Math.random(),
-                    owner: currentConfig.user,
-                    cat: rawCat, 
-                    mode: currentConfig.mode, 
-                    value: finalLabel,
-                    pushN: pushNVal, 
+                    id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, 
+                    mode: currentConfig.mode, value: finalLabel, pushN: pushNVal, 
                     query: { type: 'history', conds: condsByCat }
                 });
             };
-
             if (condBtns.length > 0) {
                 condBtns.forEach(cb => {
-                    let cType = cb.closest('.row').getAttribute('data-type');
-                    let cText = cb.textContent.replace(/[\s\uFEFF\xA0]/g, '');
-                    
-                    if (numBtns.length > 0) {
-                        numBtns.forEach(nb => {
-                            let nText = nb.textContent.replace(/[\s\uFEFF\xA0]/g, '');
-                            generateSingleReport(cText, cType, nText);
-                        });
-                    } else {
-                        generateSingleReport(cText, cType, null);
-                    }
+                    let cType = cb.closest('.row').getAttribute('data-type'), cText = cb.textContent.replace(/[\s\uFEFF\xA0]/g, '');
+                    if (numBtns.length > 0) numBtns.forEach(nb => generateSingleReport(cText, cType, nb.textContent.replace(/[\s\uFEFF\xA0]/g, '')));
+                    else generateSingleReport(cText, cType, null);
                 });
-            } else {
-                numBtns.forEach(nb => {
-                    let nText = nb.textContent.replace(/[\s\uFEFF\xA0]/g, '');
-                    generateSingleReport(null, null, nText);
-                });
-            }
+            } else numBtns.forEach(nb => generateSingleReport(null, null, nb.textContent.replace(/[\s\uFEFF\xA0]/g, '')));
             saveAndRefresh();
         } 
         else if (currentConfig.mode === '拖牌後期' && dragData.step === 2) {
             const greens = Array.from(document.querySelectorAll('.filter-btn.active-green'));
             if (greens.length === 0) return alert('請選擇後期的條件！');
-
             const postConds = greens.map(b => ({ text: b.textContent.replace(/[\s\uFEFF\xA0]/g, ''), type: b.closest('.row').getAttribute('data-type') }));
             const preByCat = { 星期: [], 日期: [], 天干: [], 地支: [], 節氣: [] };
             dragData.preConds.forEach(c => { if (preByCat[c.type]) preByCat[c.type].push(c.text); });
             const postByCat = { 星期: [], 日期: [], 天干: [], 地支: [], 節氣: [] };
             postConds.forEach(c => { if (postByCat[c.type]) postByCat[c.type].push(c.text); });
-
             let results = [];
             if (preByCat.天干.length > 0 && preByCat.地支.length > 0) {
                 preByCat.天干.forEach((gan, idx) => {
-                    const zhi = preByCat.地支[idx] || preByCat.地支[0]; 
-                    const postGan = postByCat.天干[idx] || postByCat.天干[0] || "";
-                    const postZhi = postByCat.地支[idx] || postByCat.地支[0] || "";
-                    if (postGan || postZhi) {
-                        results.push({ label: `${gan}${zhi} → ${postGan}${postZhi}`, query: { pre: {天干: gan, 地支: zhi}, post: {天干: postGan, 地支: postZhi} } });
-                    }
+                    const zhi = preByCat.地支[idx] || preByCat.地支[0], postGan = postByCat.天干[idx] || postByCat.天干[0] || "", postZhi = postByCat.地支[idx] || postByCat.地支[0] || "";
+                    if (postGan || postZhi) results.push({ label: `${gan}${zhi} → ${postGan}${postZhi}`, query: { pre: {天干: gan, 地支: zhi}, post: {天干: postGan, 地支: postZhi} } });
                 });
             }
-
             ["天干", "地支", "星期", "日期", "節氣"].forEach(type => {
                 preByCat[type].forEach((preVal, idx) => {
                     const postVal = postByCat[type][idx] || postByCat[type][0];
-                    if (postVal) {
-                        let qPre = {}; qPre[type] = preVal;
-                        let qPost = {}; qPost[type] = postVal;
-                        results.push({ label: `${type}:${preVal} → 條件:${postVal}`, query: { pre: qPre, post: qPost } });
-                    }
+                    if (postVal) results.push({ label: `${type}:${preVal} → 條件:${postVal}`, query: { pre: {[type]: preVal}, post: {[type]: postVal} } });
                 });
             });
-
             results.forEach(res => {
-                if (dragData.preNums.length > 0) {
-                    dragData.preNums.forEach(num => {
-                        let newQuery = JSON.parse(JSON.stringify(res.query));
-                        newQuery.pre.號碼 = num; 
-                        reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: `${res.label.split(' → ')[0]}+號碼:${num} → ${res.label.split(' → ')[1]}`, query: newQuery });
-                    });
-                } else {
-                    reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: res.label, query: res.query });
-                }
+                if (dragData.preNums.length > 0) dragData.preNums.forEach(num => reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: `${res.label.split(' → ')[0]}+號碼:${num} → ${res.label.split(' → ')[1]}`, query: {...res.query, pre: {...res.query.pre, 號碼: num}} }));
+                else reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "拖牌", value: res.label, query: res.query });
             });
             saveAndRefresh();
         } 
         else if (currentConfig.mode === '副體' && mainSubData.step === 2) {
             const greens = Array.from(document.querySelectorAll('.filter-btn.active-green'));
-            if (mainSubData.mainConds.length !== 1) return alert('主體請選擇「剛好 1 個」條件再切換至副體！');
-            if (greens.length === 0) return alert('請至少選擇 1 個以上的副體條件！');
-
+            if (mainSubData.mainConds.length !== 1) return alert('主體請選擇剛好 1 個條件！');
+            if (greens.length === 0) return alert('請至少選擇 1 個副體條件！');
             const mainCond = mainSubData.mainConds[0];
-            const subConds = greens.map(b => ({
-                text: b.textContent.replace(/[\s\uFEFF\xA0]/g, ''),
-                type: b.closest('.row').getAttribute('data-type')
-            }));
-
-            subConds.forEach(sub => {
-                let valueLabel = `主體(${mainCond.type}:${mainCond.text}) + 副體(${sub.type}:${sub.text})`; 
-                reportsData.push({
-                    id: Date.now() + Math.random(),
-                    owner: currentConfig.user,
-                    cat: rawCat, 
-                    mode: "主體", 
-                    value: valueLabel,
-                    query: { type: 'main_sub', main: mainCond, sub: sub }
-                });
+            greens.forEach(b => {
+                const sub = { text: b.textContent.replace(/[\s\uFEFF\xA0]/g, ''), type: b.closest('.row').getAttribute('data-type') };
+                reportsData.push({ id: Date.now() + Math.random(), owner: currentConfig.user, cat: rawCat, mode: "主體", value: `主體(${mainCond.type}:${mainCond.text}) + 副體(${sub.type}:${sub.text})`, query: { type: 'main_sub', main: mainCond, sub: sub } });
             });
             saveAndRefresh();
         } 
-        else {
-            alert('請確認條件已選取，若為拖牌/副體模式，請依序完成兩階段！');
-        }
-    }
-
-    function saveAndRefresh() {
+    } // <--- 注意這裡：函數正確結束
+	
+	function saveAndRefresh() {
         localStorage.setItem('lottoReports_v14', JSON.stringify(reportsData));
         document.getElementById('toast-msg').style.opacity = "1";
         resetFilters();
@@ -744,15 +671,9 @@
 
     function matchSingleCond(draw, cond) {
         if (!cond) return true;
-        if (cond.type === '年份') return draw.year.toString() === cond.text;
-        if (cond.type === '月份') return draw.month === cond.text;
-        if (cond.type === '日期') return draw.day === cond.text;
-        if (cond.type === '星期') return draw.weekday === cond.text;
-        if (cond.type === '天干') return draw.tian === cond.text;
-        if (cond.type === '地支') return draw.zhi === cond.text;
-        if (cond.type === '節氣') return draw.term === cond.text;
+        const typeMap = { '年份': draw.year.toString(), '月份': draw.month, '日期': draw.day, '星期': draw.weekday, '天干': draw.tian, '地支': draw.zhi, '節氣': draw.term };
         if (cond.type === '號碼') return draw.nums.includes(parseInt(cond.text, 10));
-        return false;
+        return typeMap[cond.type] === cond.text;
     }
 
     function matchDragQuery(draw, queryCat) {
@@ -769,588 +690,197 @@
     function matchHistoryQuery(draw, condsByCat) {
         if (!condsByCat || Object.keys(condsByCat).length === 0) return true;
         for (let type in condsByCat) {
-            let validVals = condsByCat[type];
-            if (validVals.length === 0) continue;
-
-            if (type === '年份' && !validVals.includes(draw.year.toString())) return false;
-            if (type === '月份' && !validVals.includes(draw.month)) return false;
-            if (type === '日期' && !validVals.includes(draw.day)) return false;
-            if (type === '星期' && !validVals.includes(draw.weekday)) return false;
-            if (type === '天干' && !validVals.includes(draw.tian)) return false;
-            if (type === '地支' && !validVals.includes(draw.zhi)) return false;
-            if (type === '節氣' && !validVals.includes(draw.term)) return false;
-            if (type === '號碼') {
-                let hasNum = validVals.some(v => draw.nums.includes(parseInt(v, 10)));
-                if (!hasNum) return false;
+            let validVals = condsByCat[type]; if (validVals.length === 0) continue;
+            if (type === '號碼') { if (!validVals.some(v => draw.nums.includes(parseInt(v, 10)))) return false; }
+            else {
+                const drawVal = { '年份': draw.year.toString(), '月份': draw.month, '日期': draw.day, '星期': draw.weekday, '天干': draw.tian, '地支': draw.zhi, '節氣': draw.term }[type];
+                if (!validVals.includes(drawVal)) return false;
             }
         }
         return true;
     }
 
     function updateConditionFilterBar() {
-        const area = document.getElementById('dynamic-filter-bar');
-        if(!area) return;
-        
+        const area = document.getElementById('dynamic-filter-bar'); if(!area) return;
         const rawCat = currentConfig.cat.replace('報表', '');
         let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
-        if (activeModeFilter !== '全部') {
-            filtered = filtered.filter(r => r.mode === activeModeFilter);
-        }
-
+        if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
         const conditions = [...new Set(filtered.map(r => r.value))];
-        if (conditions.length === 0) {
-            area.innerHTML = '<span style="color:#7f8c8d; font-size:13px; margin: auto;">此模式下目前無對應的條件標籤</span>';
-            return;
-        }
-
+        if (conditions.length === 0) { area.innerHTML = '<span style="color:#7f8c8d; font-size:13px; margin: auto;">無標籤</span>'; return; }
         let html = `<button class="btn ${activeCondFilter === '全部' ? 'active-yellow' : ''}" onclick="setCondFilter('全部')">全部條件</button>`;
-        conditions.forEach(cond => {
-            const isActive = activeCondFilter === cond ? 'active-yellow' : '';
-            html += `<button class="btn ${isActive}" onclick="setCondFilter('${cond}')">${cond}</button>`;
-        });
+        conditions.forEach(cond => html += `<button class="btn ${activeCondFilter === cond ? 'active-yellow' : ''}" onclick="setCondFilter('${cond}')">${cond}</button>`);
         area.innerHTML = html;
     }
 
-    function setCondFilter(cond) {
-        activeCondFilter = cond;
-        renderReports();
-    }
+    function setCondFilter(cond) { activeCondFilter = cond; renderReports(); }
 
+    // ====== 修正後的對碰篩選函數 ======
     function filterPairDisplay(reportId, numStr, btnEl) {
         const section = document.getElementById(`report-sec-${reportId}`);
         if(!section) return;
 
-        const allBtns = section.querySelectorAll('.quick-btn');
-        allBtns.forEach(b => b.classList.remove('active-blue'));
+        section.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active-blue'));
         btnEl.classList.add('active-blue');
 
         const rows = section.querySelectorAll('.freq-row');
         rows.forEach(row => {
-            let badges = row.querySelectorAll('.pair-badge');
-            let visibleCount = 0;
+            const badges = row.querySelectorAll('.pair-badge');
+            let hasMatch = false;
+
             badges.forEach(badge => {
+                const n1 = badge.getAttribute('data-n1');
+                const n2 = badge.getAttribute('data-n2');
+
                 if (numStr === 'ALL') {
                     badge.style.display = 'inline-block';
-                    visibleCount++;
+                    hasMatch = true;
+                } else if (n1 === numStr || n2 === numStr) {
+                    badge.style.display = 'inline-block';
+                    hasMatch = true;
                 } else {
-                    let n1 = badge.getAttribute('data-n1');
-                    let n2 = badge.getAttribute('data-n2');
-                    if (n1 === numStr || n2 === numStr) {
-                        badge.style.display = 'inline-block';
-                        visibleCount++;
-                    } else {
-                        badge.style.display = 'none';
-                    }
+                    badge.style.display = 'none';
                 }
             });
-            row.style.display = visibleCount > 0 ? '' : 'none';
+            row.style.display = hasMatch ? '' : 'none';
         });
+
+        const tableContainer = section.querySelector('.table-container');
+        if (tableContainer) {
+            tableContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
 
     function getCombinations(arr, k) {
-        let i, j, combs, head, tailcombs;
-        if (k > arr.length || k <= 0) return [];
-        if (k == arr.length) return [arr];
-        if (k == 1) {
-            combs = [];
-            for (i = 0; i < arr.length; i++) combs.push([arr[i]]);
-            return combs;
-        }
-        combs = [];
-        for (i = 0; i < arr.length - k + 1; i++) {
-            head = arr.slice(i, i + 1);
-            tailcombs = getCombinations(arr.slice(i + 1), k - 1);
-            for (j = 0; j < tailcombs.length; j++) {
-                combs.push(head.concat(tailcombs[j]));
-            }
-        }
+        if (k > arr.length || k <= 0) return []; if (k == arr.length) return [arr]; if (k == 1) return arr.map(i => [i]);
+        let combs = []; for (let i = 0; i < arr.length - k + 1; i++) getCombinations(arr.slice(i + 1), k - 1).forEach(tc => combs.push([arr[i], ...tc]));
         return combs;
     }
 
-    // 新增：期數交叉分析邏輯
     function analyzeOverlaps() {
-        const rawCat = currentConfig.cat.replace('報表', '');
-        const lottoData = globalLottoData[rawCat] || [];
-        if (lottoData.length === 0) return alert('尚未載入資料');
-
+        const rawCat = currentConfig.cat.replace('報表', ''), lottoData = globalLottoData[rawCat] || []; if (lottoData.length === 0) return alert('無資料');
         let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
         if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
-        if (filtered.length < 2) return alert('請至少加入兩個報表條件進行交叉分析');
-
+        if (filtered.length < 2) return alert('請至少加入兩個條件');
         let reportResults = filtered.map(report => {
-            let dates = new Set();
-            for(let i=0; i<lottoData.length; i++) {
-                let isMatch = false;
-                if (report.mode === "歷史模式") isMatch = matchHistoryQuery(lottoData[i], report.query.conds);
-                else if (report.mode === "主體") isMatch = matchSingleCond(lottoData[i], report.query.main) && matchSingleCond(lottoData[i], report.query.sub);
-                else if (report.mode === "拖牌" && i < lottoData.length - 1) isMatch = matchDragQuery(lottoData[i], report.query.pre) && matchDragQuery(lottoData[i+1], report.query.post);
-                
-                if(isMatch) {
-                    let target = (report.mode === "拖牌") ? lottoData[i+1] : lottoData[i];
-                    dates.add(`${target.year}-${target.month}-${target.day}`);
-                }
+            let dates = new Set(); for(let i=0; i<lottoData.length; i++) {
+                let match = (report.mode === "歷史模式") ? matchHistoryQuery(lottoData[i], report.query.conds) : (report.mode === "主體") ? (matchSingleCond(lottoData[i], report.query.main) && matchSingleCond(lottoData[i], report.query.sub)) : (report.mode === "拖牌" && i < lottoData.length - 1 && matchDragQuery(lottoData[i], report.query.pre) && matchDragQuery(lottoData[i+1], report.query.post));
+                if(match) { let t = (report.mode === "拖牌") ? lottoData[i+1] : lottoData[i]; dates.add(`${t.year}-${t.month}-${t.day}`); }
             }
-            return { label: report.value, dates: dates };
+            return { label: report.value, dates };
         });
-
-        let allDates = new Set();
-        reportResults.forEach(r => r.dates.forEach(d => allDates.add(d)));
-        
-        let overlapDates = [];
-        allDates.forEach(date => {
-            if (reportResults.every(r => r.dates.has(date))) overlapDates.push(date);
-        });
-
-        let uniqueDetails = reportResults.map(r => {
-            let unique = [];
-            r.dates.forEach(d => {
-                let isUnique = reportResults.every(other => (other === r || !other.dates.has(d)));
-                if(isUnique) unique.push(d);
-            });
-            return { label: r.label, count: unique.length };
-        });
-
-        renderOverlapUI(overlapDates, uniqueDetails, lottoData, rawCat);
+        let allDates = new Set(); reportResults.forEach(r => r.dates.forEach(d => allDates.add(d)));
+        let overlaps = []; allDates.forEach(d => { if (reportResults.every(r => r.dates.has(d))) overlaps.push(d); });
+        let unique = reportResults.map(r => { let c = 0; r.dates.forEach(d => { if(reportResults.every(o => o === r || !o.dates.has(d))) c++; }); return { label: r.label, count: c }; });
+        renderOverlapUI(overlaps, unique, lottoData, rawCat);
     }
 
-    function renderOverlapUI(overlapDates, uniqueDetails, lottoData, rawCat) {
-        const area = document.getElementById('overlap-analysis-area');
-        const max = rawCat === '539' ? 39 : 49;
-        let counts = new Array(max).fill(0);
-
-        lottoData.filter(d => overlapDates.includes(`${d.year}-${d.month}-${d.day}`))
-                 .forEach(d => d.nums.forEach(n => counts[n-1]++));
-
-        let hotNums = counts.map((v, i) => ({v, n: i+1})).sort((a,b) => b.v - a.v).slice(0, 10).filter(x => x.v > 0);
-
-        let html = `
-        <div class="report-section" style="border: 2px solid #e67e22;">
-            <div class="report-banner" style="background:#e67e22;">
-                <span>🔍 報表期數交叉分析</span>
-                <button class="btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="document.getElementById('overlap-analysis-area').innerHTML=''">✖ 關閉</button>
-            </div>
-            <div style="padding:15px; background:#fffaf0;">
-                <div style="margin-bottom:15px;">
-                    <strong style="color:#d35400;">📍 重疊期數 (所有條件皆符合)：</strong> 
-                    <span style="font-size:18px; color:#c0392b;">${overlapDates.length}</span> 期
-                    <div style="margin-top:5px;">
-                        ${hotNums.map(x => `<span class="pair-badge" style="background:#fbc02d;">${x.n.toString().padStart(2,'0')} (${x.v}次)</span>`).join('')}
-                    </div>
-                </div>
-                <div style="border-top:1px dashed #ccc; padding-top:10px;">
-                    <strong style="color:#2980b9;">📍 各報表獨有期數 (不重疊)：</strong>
-                    <ul style="margin:5px 0; font-size:13px;">
-                        ${uniqueDetails.map(u => `<li>${u.label}: 獨有 ${u.count} 期</li>`).join('')}
-                    </ul>
-                </div>
-            </div>
-        </div>`;
-        area.innerHTML = html;
-        area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    function renderOverlapUI(overlaps, unique, lottoData, rawCat) {
+        const area = document.getElementById('overlap-analysis-area'), max = rawCat === '539' ? 39 : 49;
+        let counts = new Array(max).fill(0); lottoData.filter(d => overlaps.includes(`${d.year}-${d.month}-${d.day}`)).forEach(d => d.nums.forEach(n => counts[n-1]++));
+        let hot = counts.map((v, i) => ({v, n: i+1})).sort((a,b) => b.v - a.v).slice(0, 10).filter(x => x.v > 0);
+        area.innerHTML = `<div class="report-section" style="border: 2px solid #e67e22;"><div class="report-banner" style="background:#e67e22;"><span>🔍 交叉分析</span><button class="btn" onclick="this.closest('.report-section').remove()">✖</button></div>
+        <div style="padding:15px; background:#fffaf0;"><strong>📍 重疊期數：${overlaps.length}</strong> <div>${hot.map(x => `<span class="pair-badge" style="background:#fbc02d;">${x.n}(${x.v})</span>`).join('')}</div>
+        <div style="border-top:1px dashed #ccc; padding-top:10px;"><strong>📍 獨有期數：</strong>${unique.map(u => `<li>${u.label}: ${u.count}</li>`).join('')}</div></div></div>`;
     }
 
     function analyzeBestCombinations() {
-        const rawCat = currentConfig.cat.replace('報表', '');
-        const lottoData = globalLottoData[rawCat] || [];
-        if (lottoData.length === 0) return alert('尚未載入歷史資料，請稍後再試！');
-
+        const rawCat = currentConfig.cat.replace('報表', ''), lottoData = globalLottoData[rawCat] || [];
         let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
         if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
         if (activeCondFilter !== '全部') filtered = filtered.filter(r => r.value === activeCondFilter);
-
-        if (filtered.length === 0) return alert('當前畫面沒有報表可以分析！請先加入條件。');
-
-        const max = rawCat === '539' ? 39 : 49;
-        let overallCounts = new Array(max).fill(0);
-
-        filtered.forEach(data => {
-            for(let i = 0; i < lottoData.length; i++) {
-                let targets = [];
-                if (data.mode === "歷史模式") {
-                    if(matchHistoryQuery(lottoData[i], data.query.conds)) targets.push(lottoData[i]);
-                } else if (data.mode === "主體") {
-                    if(matchSingleCond(lottoData[i], data.query.main) && matchSingleCond(lottoData[i], data.query.sub)) targets.push(lottoData[i]);
-                } else if (data.mode === "拖牌" && i < lottoData.length - 1) {
-                    if(matchDragQuery(lottoData[i], data.query.pre) && matchDragQuery(lottoData[i+1], data.query.post)) targets.push(lottoData[i+1]);
-                } else if (data.mode === "拖牌下推") {
-                    if(matchHistoryQuery(lottoData[i], data.query.conds)) {
-                        for(let k=1; k<=(data.pushN || 5); k++) {
-                            if(i+k < lottoData.length) targets.push(lottoData[i+k]);
-                        }
-                    }
-                } else if (data.mode === "當期對碰" || data.mode === "下期對碰") {
-                    if(matchHistoryQuery(lottoData[i], data.query.conds)) {
-                        if(data.mode === "當期對碰") targets.push(lottoData[i]);
-                        else if(i < lottoData.length - 1) targets.push(lottoData[i+1]);
-                    }
-                }
-                
-                targets.forEach(draw => {
-                    draw.nums.forEach(n => {
-                        if(n>=1 && n<=max) overallCounts[n-1]++;
-                    });
-                });
-            }
-        });
-
-        let pool = overallCounts.map((v, i) => ({v, num: i+1}))
-                                .sort((a,b) => b.v - a.v)
-                                .slice(0, 12)
-                                .filter(item => item.v > 0)
-                                .map(item => item.num);
-        
-        if (pool.length < 5) return alert('報表涵蓋的開出數據過少，無法產生有效的 5 星組合！');
-
-        const historySets = lottoData.map(d => new Set(d.nums));
-        const totalDraws = lottoData.length;
-
-        function getBestCombs(kSize) {
-            let combs = getCombinations(pool, kSize);
-            let results = combs.map(comb => {
-                let count = 0;
-                for(let i=0; i<historySets.length; i++) {
-                    let match = true;
-                    for(let j=0; j<comb.length; j++) {
-                        if(!historySets[i].has(comb[j])) { match = false; break; }
-                    }
-                    if(match) count++;
-                }
-                return { comb, count, rate: ((count / totalDraws) * 100).toFixed(2) };
-            });
-            results.sort((a,b) => b.count - a.count);
-            return results.slice(0, 5); 
-        }
-
-        renderAnalysisArea(getBestCombs(2), getBestCombs(3), getBestCombs(4), getBestCombs(5), pool);
+        const max = rawCat === '539' ? 39 : 49; let counts = new Array(max).fill(0);
+        filtered.forEach(data => lottoData.forEach((d, i) => {
+            let targets = []; if (data.mode === "歷史模式" && matchHistoryQuery(d, data.query.conds)) targets.push(d);
+            else if (data.mode === "主體" && matchSingleCond(d, data.query.main) && matchSingleCond(d, data.query.sub)) targets.push(d);
+            else if (data.mode === "拖牌" && i < lottoData.length - 1 && matchDragQuery(d, data.query.pre) && matchDragQuery(lottoData[i+1], data.query.post)) targets.push(lottoData[i+1]);
+            else if (data.mode === "拖牌下推" && matchHistoryQuery(d, data.query.conds)) for(let k=1; k<=(data.pushN || 5); k++) if(lottoData[i+k]) targets.push(lottoData[i+k]);
+            targets.forEach(t => t.nums.forEach(n => { if(n>=1 && n<=max) counts[n-1]++; }));
+        }));
+        let pool = counts.map((v, i) => ({v, n: i+1})).sort((a,b) => b.v - a.v).slice(0, 12).filter(it => it.v > 0).map(it => it.n);
+        if (pool.length < 5) return alert('數據不足');
+        const sets = lottoData.map(d => new Set(d.nums));
+        const getCombs = (k) => getCombinations(pool, k).map(comb => ({ comb, count: sets.reduce((acc, s) => acc + (comb.every(n => s.has(n)) ? 1 : 0), 0) })).sort((a,b) => b.count - a.count).slice(0, 5);
+        renderAnalysisArea(getCombs(2), getCombs(3), getCombs(4), getCombs(5), pool);
     }
 
     function renderAnalysisArea(b2, b3, b4, b5, pool) {
         const area = document.getElementById('analysis-result-area');
-        
-        let buildTable = (data, title) => {
-            let html = `<div style="flex: 1; min-width: 280px; background:#fdfefe; border:2px solid #8e44ad; border-radius:8px; padding:12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                <h4 style="margin-top:0; color:#8e44ad; border-bottom:2px dashed #8e44ad; padding-bottom:8px; text-align:center; font-size:16px;">🏆 ${title} 最佳 5 組</h4>
-                <table class="report-table" style="background:#fff;">
-                    <thead><tr><th style="width:55%;">組合號碼</th><th>歷史次數</th><th>歷史勝率</th></tr></thead>
-                    <tbody>`;
-            data.forEach(item => {
-                let badges = item.comb.map(n => `<span class="pair-badge">${n.toString().padStart(2,'0')}</span>`).join('');
-                html += `<tr><td>${badges}</td><td style="color:#c0392b; font-weight:bold; font-size:14px;">${item.count} 次</td><td>${item.rate}%</td></tr>`;
-            });
-            html += `</tbody></table></div>`;
-            return html;
-        };
-
-        let poolBadges = pool.map(n => `<span class="pair-badge" style="background:#fbc02d; border-color:#f39c12;">${n.toString().padStart(2,'0')}</span>`).join(' ');
-
-        let html = `
-        <div class="report-section" id="analysis-box" style="border: 2px solid #8e44ad;">
-            <div class="report-banner" style="background:#8e44ad;">
-                <span>💡 最佳組合分析 (取當前報表中最熱門的前 ${pool.length} 碼產生)</span>
-                <button class="btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="document.getElementById('analysis-result-area').innerHTML=''">✖ 關閉分析</button>
-            </div>
-            <div style="padding: 12px 15px; background: #fdf2e9; border-bottom: 1px dashed #d35400; font-size:14px;">
-                <strong style="color:#d35400;">📌 萃取母體 (熱門前 ${pool.length} 碼)：</strong> ${poolBadges}
-            </div>
-            <div style="padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; background:#fafafa;">
-                ${buildTable(b2, '2碼 (2星)')}
-                ${buildTable(b3, '3碼 (3星)')}
-                ${buildTable(b4, '4碼 (4星)')}
-                ${buildTable(b5, '5碼 (5星)')}
-            </div>
-        </div>`;
-
-        area.innerHTML = html;
-        area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const build = (data, title) => `<div style="flex:1; min-width:280px; border:2px solid #8e44ad; padding:12px;"><h4>🏆 ${title}</h4><table class="report-table"><tbody>${data.map(it => `<tr><td>${it.comb.map(n => `<span class="pair-badge">${n.toString().padStart(2,'0')}</span>`).join('')}</td><td>${it.count}次</td></tr>`).join('')}</tbody></table></div>`;
+        area.innerHTML = `<div class="report-section" style="border: 2px solid #8e44ad;"><div class="report-banner" style="background:#8e44ad;"><span>💡 最佳組合</span><button class="btn" onclick="this.closest('.report-section').remove()">✖</button></div>
+        <div style="padding:12px;"><strong>📌 母體：</strong> ${pool.join(', ')}</div><div style="display:flex; gap:15px; flex-wrap:wrap;">${build(b2,'2星')}${build(b3,'3星')}${build(b4,'4星')}${build(b5,'5星')}</div></div>`;
     }
 
     function renderReports() {
-        const area = document.getElementById('report-display-area');
-        area.innerHTML = '';
-        
-        updateConditionFilterBar();
-
-        const rawCat = currentConfig.cat.replace('報表', '');
-        const lottoData = globalLottoData[rawCat] || [];
-        
-        if (lottoData.length === 0) {
-            area.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">資料讀取中... 若長時間無反應請檢查連線狀態或重新整理</div>';
-            return;
-        }
-
+        const area = document.getElementById('report-display-area'); area.innerHTML = ''; updateConditionFilterBar();
+        const rawCat = currentConfig.cat.replace('報表', ''), lottoData = globalLottoData[rawCat] || []; if (lottoData.length === 0) return;
         let filtered = reportsData.filter(r => r.owner === currentConfig.user && r.cat === rawCat);
         if (activeModeFilter !== '全部') filtered = filtered.filter(r => r.mode === activeModeFilter);
         if (activeCondFilter !== '全部') filtered = filtered.filter(r => r.value === activeCondFilter);
         
         filtered.forEach(data => {
-            const sec = document.createElement('div');
-            sec.className = 'report-section';
-            sec.id = `report-sec-${data.id}`;
+            const sec = document.createElement('div'); sec.className = 'report-section'; sec.id = `report-sec-${data.id}`;
             const max = rawCat === '539' ? 39 : 49;
-            
-            const startYear = (currentConfig.user === "爸") ? 2020 : 2007;
-            let endYear = 2026;
-            if (lottoData.length > 0) {
-                const maxDataYear = Math.max(...lottoData.map(d => d.year));
-                if (maxDataYear > endYear) endYear = maxDataYear;
-            }
-            const years = [];
-            for (let y = startYear; y <= endYear; y++) years.push(y);
-
-            let html = `<div class="report-banner"><span>[${data.mode}] ${data.value}</span><button class="btn delete-btn" style="padding:2px 10px; font-size:12px; background:#fff; color:#000;" onclick="deleteReport(${data.id})">刪除</button></div>`;
+            const years = Array.from({length: 2026 - ((currentConfig.user === "爸") ? 2020 : 2007) + 1}, (_, i) => ((currentConfig.user === "爸") ? 2020 : 2007) + i);
+            let html = `<div class="report-banner"><span>[${data.mode}] ${data.value}</span><button class="btn" onclick="deleteReport(${data.id})">刪除</button></div>`;
             
             if (data.mode === "拖牌下推") {
-                const pushCount = data.pushN || 5;
-                html += `<div class="table-container"><table class="report-table"><thead><tr><th style="width:120px;">下推期數</th>${Array.from({length:max}, (_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
-                
-                let periodStats = Array.from({length: pushCount}, () => new Array(max).fill(0));
-                let totalSums = new Array(max).fill(0);
-                let highLightCounts = new Array(max).fill(0);
-
-                for(let i = 0; i < lottoData.length - pushCount; i++) {
-                    let draw = lottoData[i];
-                    if (matchHistoryQuery(draw, data.query.conds)) {
-                        for(let k=1; k<=pushCount; k++) {
-                            let nextDraw = lottoData[i+k];
-                            nextDraw.nums.forEach(n => {
-                                if(n>=1 && n<=max) {
-                                    periodStats[k-1][n-1]++;
-                                    totalSums[n-1]++;
-                                }
-                            });
-                        }
-                    }
-                }
-
-                for(let k=0; k<pushCount; k++) {
-                    let rowData = periodStats[k];
-                    let sorted = [...rowData].sort((a,b) => b-a);
-                    let threshold = sorted[4]; 
-                    
-                    html += `<tr><td>下推 ${k+1} 期</td>`;
-                    for(let i=0; i<max; i++) {
-                        let val = rowData[i];
-                        let isTop = (val >= threshold && val > 0);
-                        if(isTop) highLightCounts[i]++;
-                        html += `<td class="${isTop ? 'top5-cell' : ''}">${val || ''}</td>`;
-                    }
-                    html += `</tr>`;
-                }
-
-                html += `<tr class="total-row"><td>總計加總</td>`;
-                let sortedTotal = [...totalSums].sort((a,b) => b-a);
-                let totalThreshold = sortedTotal[4];
-                for(let i=0; i<max; i++) {
-                    let isTop = (totalSums[i] >= totalThreshold && totalSums[i] > 0);
-                    html += `<td class="${isTop ? 'total-top5' : ''}">${totalSums[i]}</td>`;
-                }
-                html += `</tr><tr class="accum-row"><td>高亮累積</td>`;
-                for(let i=0; i<max; i++) html += `<td>${highLightCounts[i] || ''}</td>`;
-                html += `</tr></tbody></table></div>`;
-            }
-            else if (data.mode === "當期對碰" || data.mode === "下期對碰") {
-                html += `<div class="quick-filter-area" data-export-ignore="true">
-                            <span style="font-weight:bold; font-size:13px; margin-right:5px;">🎯 快速找號：</span>
-                            <button class="btn quick-btn active-blue" onclick="filterPairDisplay(${data.id}, 'ALL', this)">全部</button>`;
-                for(let i=1; i<=max; i++) {
-                    let ns = i.toString().padStart(2,'0');
-                    html += `<button class="btn quick-btn" onclick="filterPairDisplay(${data.id}, '${ns}', this)">${ns}</button>`;
-                }
-                html += `</div>`;
-
-                let pairCounts = {};
-                for(let i=1; i<=max; i++) {
-                    for(let j=i+1; j<=max; j++) {
-                        let p = `${i.toString().padStart(2,'0')}、${j.toString().padStart(2,'0')}`;
-                        pairCounts[p] = 0;
-                    }
-                }
-
-                for(let i = 0; i < lottoData.length; i++) {
-                    let draw = lottoData[i];
-                    if (matchHistoryQuery(draw, data.query.conds)) {
-                        let targetDraw = null;
-                        if (data.mode === "當期對碰") targetDraw = draw;
-                        else if (data.mode === "下期對碰" && i < lottoData.length - 1) targetDraw = lottoData[i+1]; 
-
-                        if (targetDraw) {
-                            let nums = targetDraw.nums.sort((a,b)=>a-b);
-                            for(let a=0; a<nums.length; a++) {
-                                for(let b=a+1; b<nums.length; b++) {
-                                    let n1 = nums[a]; let n2 = nums[b];
-                                    if (n1>=1 && n1<=max && n2>=1 && n2<=max) {
-                                        let p = `${n1.toString().padStart(2,'0')}、${n2.toString().padStart(2,'0')}`;
-                                        if(pairCounts[p] !== undefined) pairCounts[p]++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let freqGroups = {};
-                for (let p in pairCounts) {
-                    let count = pairCounts[p];
-                    if (!freqGroups[count]) freqGroups[count] = [];
-                    freqGroups[count].push(p);
-                }
-                let sortedFreqs = Object.keys(freqGroups).map(Number).sort((a,b)=>b-a);
-
-                html += `<div class="table-container"><table class="report-table">
-                            <thead><tr><th style="width:150px; background:#e0e0e0;">統計結果</th><th style="background:#e0e0e0;">組合列表 (兩碼同開)</th></tr></thead><tbody>`;
-                sortedFreqs.forEach(freq => {
-                    let isZero = (freq === 0);
-                    let label = isZero ? '未出現 (0次)' : `共出現 ${freq} 次`;
-                    let color = isZero ? '#7f8c8d' : '#c0392b';
-                    let pairsHtml = freqGroups[freq].map(pair => {
-                        let parts = pair.split('、');
-                        return `<span class="pair-badge" data-n1="${parts[0]}" data-n2="${parts[1]}">${pair}</span>`;
-                    }).join(' ');
-                    html += `<tr class="freq-row">
-                                <td style="font-weight:bold; color:${color}; font-size:14px;">${label}</td>
-                                <td style="text-align:left; padding:10px;">${pairsHtml}</td>
-                             </tr>`;
-                });
-                html += `</tbody></table></div>`;
+                const pk = data.pushN || 5; let ps = Array.from({length: pk}, () => new Array(max).fill(0)), ts = new Array(max).fill(0), ac = new Array(max).fill(0);
+                lottoData.forEach((d, i) => { if (matchHistoryQuery(d, data.query.conds)) for(let k=1; k<=pk; k++) if(lottoData[i+k]) lottoData[i+k].nums.forEach(n => { if(n>=1 && n<=max) { ps[k-1][n-1]++; ts[n-1]++; } }); });
+                html += `<div class="table-container"><table class="report-table"><thead><tr><th>期數</th>${Array.from({length:max},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
+                ps.forEach((r, k) => { let th = [...r].sort((a,b)=>b-a)[4]; html += `<tr><td>下推 ${k+1}</td>${r.map((v, i) => { if(v>=th && v>0) ac[i]++; return `<td class="${v>=th && v>0?'top5-cell':''}">${v||''}</td>`; }).join('')}</tr>`; });
+                let tth = [...ts].sort((a,b)=>b-a)[4]; html += `<tr class="total-row"><td>總計</td>${ts.map(v => `<td class="${v>=tth && v>0?'total-top5':''}">${v}</td>`).join('')}</tr><tr class="accum-row"><td>累積</td>${ac.map(v => `<td>${v||''}</td>`).join('')}</tr></tbody></table></div>`;
             } 
-            else {
-                html += `<div class="table-container"><table class="report-table"><thead><tr><th style="width:120px;">年度</th>${Array.from({length:max}, (_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
-                
-                let columnTotals = new Array(max).fill(0);
-                let accumTop5 = new Array(max).fill(0);
-                let yearlyStats = {};
-                years.forEach(y => yearlyStats[y] = new Array(max).fill(0));
-
-                for(let i = 0; i < lottoData.length; i++) {
-                    if (data.mode === "歷史模式" || data.mode === "主體") {
-                        let draw = lottoData[i];
-                        let targetYear = draw.year;
-                        if (!years.includes(targetYear)) continue;
-
-                        let isMatch = false;
-                        if (data.mode === "歷史模式") isMatch = matchHistoryQuery(draw, data.query.conds);
-                        else if (data.mode === "主體") isMatch = matchSingleCond(draw, data.query.main) && matchSingleCond(draw, data.query.sub);
-
-                        if (isMatch) {
-                            draw.nums.forEach(n => {
-                                if (n >= 1 && n <= max) { yearlyStats[targetYear][n-1]++; columnTotals[n-1]++; }
-                            });
-                        }
-                    } 
-                    else if (data.mode === "拖牌" && i < lottoData.length - 1) {
-                        let preDraw = lottoData[i];
-                        let postDraw = lottoData[i+1];
-                        let targetYear = postDraw.year;
-                        if (!years.includes(targetYear)) continue;
-
-                        if (matchDragQuery(preDraw, data.query.pre) && matchDragQuery(postDraw, data.query.post)) {
-                            postDraw.nums.forEach(n => {
-                                if (n >= 1 && n <= max) { yearlyStats[targetYear][n-1]++; columnTotals[n-1]++; }
-                            });
-                        }
-                    }
-                }
-
-                years.forEach(y => {
-                    html += `<tr><td>${y}年</td>`;
-                    let rowData = yearlyStats[y];
-                    let sorted = [...rowData].sort((a,b) => b-a);
-                    let threshold = sorted[4]; 
-
-                    for(let i=0; i<max; i++) {
-                        let val = rowData[i];
-                        let isTop = (val >= threshold && val > 0);
-                        if (isTop) accumTop5[i]++; 
-                        html += `<td class="${isTop ? 'top5-cell' : ''}">${val === 0 ? '' : val}</td>`;
-                    }
-                    html += `</tr>`;
-                });
-
-                html += `<tr class="total-row"><td>總計加總</td>`;
-                let sortedTotal = [...columnTotals].sort((a,b) => b-a);
-                let totalThreshold = sortedTotal[4];
-                for(let i=0; i<max; i++) {
-                    let isTop = (columnTotals[i] >= totalThreshold && columnTotals[i] > 0);
-                    html += `<td class="${isTop ? 'total-top5' : ''}">${columnTotals[i] === 0 ? '' : columnTotals[i]}</td>`;
-                }
-                html += `</tr><tr class="accum-row"><td>高亮累積</td>`;
-                for(let i=0; i<max; i++) html += `<td>${accumTop5[i] === 0 ? '' : accumTop5[i]}</td>`;
-                html += `</tr></tbody></table></div>`;
+            else if (data.mode === "當期對碰" || data.mode === "下期對碰") {
+                html += `<div class="quick-filter-area"><strong>🎯 找號：</strong><button class="btn quick-btn active-blue" onclick="filterPairDisplay(${data.id},'ALL',this)">全部</button>${Array.from({length:max},(_,i)=>`<button class="btn quick-btn" onclick="filterPairDisplay(${data.id},'${(i+1).toString().padStart(2,'0')}',this)">${(i+1).toString().padStart(2,'0')}</button>`).join('')}</div>`;
+                let pc = {}; for(let i=1; i<=max; i++) for(let j=i+1; j<=max; j++) pc[`${i.toString().padStart(2,'0')}、${j.toString().padStart(2,'0')}`] = 0;
+                lottoData.forEach((d, i) => { if (matchHistoryQuery(d, data.query.conds)) { let t = data.mode === "當期對碰" ? d : lottoData[i+1]; if(t) { let ns = t.nums.sort((a,b)=>a-b); for(let a=0; a<ns.length; a++) for(let b=a+1; b<ns.length; b++) { let p = `${ns[a].toString().padStart(2,'0')}、${ns[b].toString().padStart(2,'0')}`; if(pc[p]!==undefined) pc[p]++; } } } });
+                let gr = {}; Object.entries(pc).forEach(([p, c]) => { if(!gr[c]) gr[c] = []; gr[c].push(p); });
+                // 這裡修正徽章屬性
+                html += `<div class="table-container"><table class="report-table"><tbody>${Object.keys(gr).map(Number).sort((a,b)=>b-a).map(f => `<tr class="freq-row"><td style="font-weight:bold;">${f} 次</td><td>${gr[f].map(p => { let nums = p.split('、'); return `<span class="pair-badge" data-n1="${nums[0]}" data-n2="${nums[1]}">${p}</span>`; }).join(' ')}</td></tr>`).join('')}</tbody></table></div>`;
+            } else {
+                let ct = new Array(max).fill(0), at = new Array(max).fill(0), ys = {}; years.forEach(y => ys[y] = new Array(max).fill(0));
+                lottoData.forEach((d, i) => { let y = d.year; if (years.includes(y)) { let match = (data.mode === "歷史模式") ? matchHistoryQuery(d, data.query.conds) : (data.mode === "主體") ? (matchSingleCond(d, data.query.main) && matchSingleCond(d, data.query.sub)) : (data.mode === "拖牌" && lottoData[i-1] && matchDragQuery(lottoData[i-1], data.query.pre) && matchDragQuery(d, data.query.post)); if(match) d.nums.forEach(n => { if(n>=1 && n<=max) { ys[y][n-1]++; ct[n-1]++; } }); } });
+                html += `<div class="table-container"><table class="report-table"><thead><tr><th>年度</th>${Array.from({length:max},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
+                years.forEach(y => { let th = [...ys[y]].sort((a,b)=>b-a)[4]; html += `<tr><td>${y}</td>${ys[y].map((v, i) => { if(v>=th && v>0) at[i]++; return `<td class="${v>=th && v>0?'top5-cell':''}">${v||''}</td>`; }).join('')}</tr>`; });
+                let tth = [...ct].sort((a,b)=>b-a)[4]; html += `<tr class="total-row"><td>總計</td>${ct.map(v => `<td class="${v>=tth && v>0?'total-top5':''}">${v||''}</td>`).join('')}</tr><tr class="accum-row"><td>累積</td>${at.map(v => `<td>${v||''}</td>`).join('')}</tr></tbody></table></div>`;
             }
-
-            sec.innerHTML = html; 
-            area.appendChild(sec);
+            sec.innerHTML = html; area.appendChild(sec);
         });
     }
 
-    function filterByMode(mode, btn) {
-        btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active-blue'));
-        btn.classList.add('active-blue');
-        activeModeFilter = mode;
-        activeCondFilter = '全部'; 
-        renderReports();
-    }
-
+    function filterByMode(mode, btn) { btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active-blue')); btn.classList.add('active-blue'); activeModeFilter = mode; activeCondFilter = '全部'; renderReports(); }
     function deleteReport(id) { reportsData = reportsData.filter(r => r.id !== id); saveAndRefresh(); }
-    
-    function clearReports() { 
-        if(confirm("確定要清空所有報表紀錄嗎？")) { 
-            reportsData = []; 
-            localStorage.removeItem('lottoReports_v14'); 
-            renderReports(); 
-            document.getElementById('analysis-result-area').innerHTML = '';
-            document.getElementById('overlap-analysis-area').innerHTML = '';
-        } 
-    }
-
+    function clearReports() { if(confirm("確定清空？")) { reportsData = []; localStorage.removeItem('lottoReports_v14'); renderReports(); } }
     function exportToExcel() {
-        let area = document.getElementById('report-display-area');
-        if (!area || area.innerHTML.trim() === '') return alert('目前沒有報表可以匯出！');
-
-        let cloneArea = area.cloneNode(true);
-        cloneArea.querySelectorAll('.delete-btn').forEach(el => el.remove());
-        cloneArea.querySelectorAll('[data-export-ignore="true"]').forEach(el => el.remove());
-        cloneArea.querySelectorAll('.pair-badge, .freq-row').forEach(el => {
-            if (el.style.display === 'none') el.remove();
-        });
-
-        let excelTemplate = `
-            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-family: "Microsoft JhengHei", sans-serif; }
-                    th, td { border: 1px solid #000; text-align: center; padding: 5px; font-size: 14px; }
-                    th { background-color: #f2f2f2; color: #000000; }
-                    .report-banner { background-color: #e0e0e0; color: #000000; font-weight: bold; font-size: 18px; padding: 10px; text-align: left; border: 1px solid #000000; }
-                    .top5-cell { background-color: #fbc02d; font-weight: bold; color: #000000; }
-                    .total-row td { background-color: #fbc02d; font-weight: bold; border-top: 2px solid #000; color: #000000; }
-                    .accum-row td { background-color: #95e895; font-weight: bold; color: #000000; }
-                    .pair-badge { font-weight: bold; color: #000000; }
-                </style>
-            </head>
-            <body>${cloneArea.innerHTML}</body>
-            </html>
-        `;
-
-        let blob = new Blob([excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8' });
-        let link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `分析報表_${new Date().getTime()}.xls`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        let area = document.getElementById('report-display-area'); if (!area || area.innerHTML.trim()==='') return alert('無資料');
+        let template = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><style>table { border: 1px solid #000; border-collapse: collapse; } td { border: 1px solid #000; text-align: center; } .top5-cell { background: #fbc02d; }</style></head><body>${area.innerHTML}</body></html>`;
+        let blob = new Blob([template], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        let link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `分析_${Date.now()}.xls`; link.click();
     }
-
     function resetFilters() { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-yellow', 'active-green')); }
 
-    window.addEventListener('keydown', (e) => {
-        if (document.getElementById('app-content').style.display === 'block') {
-            if(e.key === 'Enter') { e.preventDefault(); addToReport(); }
-            if(e.key === 'Escape') { resetFilters(); }
-        }
-    });
+function toggleMap() {
+    const mapContainer = document.getElementById('map-container');
+    const mapFrame = document.getElementById('map-frame');
+    const mainUI = document.getElementById('main-ui');
+    const reportUI = document.getElementById('report-ui');
+    const targetUrl = 'https://win83.github.io/secret-lotto-888/win83.html';
 
+    if (mapContainer.classList.contains('hidden')) {
+        // 顯示地圖，隱藏其他 UI (可選)
+        mapContainer.classList.remove('hidden');
+        if (mapFrame.src !== targetUrl) {
+            mapFrame.src = targetUrl; // 只有在第一次開啟或網址不同時載入
+        }
+        // 如果想讓地圖出現時隱藏主介面，可啟用下面這行
+        // mainUI.classList.add('hidden'); 
+    } else {
+        // 隱藏地圖
+        mapContainer.classList.add('hidden');
+        // mainUI.classList.remove('hidden');
+    }
+}
+    window.addEventListener('keydown', (e) => { if (document.getElementById('app-content').style.display === 'block') { if(e.key === 'Enter') { e.preventDefault(); addToReport(); } if(e.key === 'Escape') resetFilters(); } });
 </script>
 </body>
 </html>
