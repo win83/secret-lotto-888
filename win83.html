@@ -45,7 +45,11 @@
         .row-rank { background: #f8f9fb; color: var(--rank); font-size: 9px; }
         .row-rate { background: #e8f5e9; color: #2e7d32; font-weight: bold; border-bottom: 2px solid #ccc; font-size: 11px; }
 
-        .top5-mark { background-color: #ffeb3b !important; color: #000 !important; font-weight: 900; border: 1.5px solid #f44336 !important; }
+		/* 原本的黃色標記保留給贏、輸、距離、率 */
+		.top5-mark { background-color: #ffeb3b !important; color: #000 !important; font-weight: 900; border: 1.5px solid #f44336 !important; }
+
+		/* 新增：贏排名專用的綠底樣式 */
+		.rank-top5-mark { background-color: #2e7d32 !important; color: #ffffff !important; font-weight: 900; border: 1.5px solid #1b5e20 !important; }
 
         #pathCanvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 45; width: 100%; height: 100%; }
         .soldier-win { background-color: #ff0000 !important; color: #ffffff !important; font-weight: bold; }
@@ -252,7 +256,7 @@
                       </tr>
                       <tr class="row-rank ${groupClass}">
                         <td class="sticky-col">贏排名</td>
-                        ${winRanks.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${v <= 5 ? 'top5-mark' : ''}">${v}</td>`).join('')}
+                        ${winRanks.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${v <= 5 ? 'rank-top5-mark' : ''}">${v}</td>`).join('')}
                       </tr>
                       <tr class="row-rank ${groupClass}">
                         <td class="sticky-col">輸排名</td>
