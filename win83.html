@@ -2,77 +2,93 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>戰場監控 Pro - 排名增強版</title>
+    <title>戰場監控 Pro - 全能回測版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         :root { --defense: #2c3e50; --win: #d93025; --bg: #f8f9fa; --ready: #fff9c4; --dist: #607d8b; --rank: #546e7a; }
-        body { font-family: -apple-system, sans-serif; margin: 0; padding: 2px; background: var(--bg); font-size: 11px; overflow-x: hidden; }
-        .container { width: 100%; background: white; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); position: relative; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2px; background: var(--bg); font-size: 10px; overflow-x: hidden; color: #000; }
         
-        .btn-group { padding: 5px; background: #eee; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #ddd; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+        .container { width: 100%; height: 100vh; display: flex; flex-direction: column; background: white; }
+        
+        /* 工具列 */
+        .btn-group { padding: 5px; background: #eee; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #ddd; flex-wrap: wrap; z-index: 9000; }
         .btn-game { padding: 4px 10px; border: none; border-radius: 3px; color: white; cursor: pointer; font-weight: bold; }
-        .btn-mode { padding: 4px 12px; border: 1px solid #999; border-radius: 3px; background: white; cursor: pointer; font-weight: bold; }
+        .btn-mode { padding: 4px 12px; border: 1px solid #999; border-radius: 3px; background: white; cursor: pointer; font-weight: bold; color: #000; transition: all 0.2s; }
         .btn-mode.active { background: #007bff; color: white; border-color: #0056b3; }
-        .btn-add-report { background: #28a745; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         .btn-report { background: #673ab7; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
+        .btn-add-report { background: #28a745; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; }
         
-        .table-wrapper { width: 100%; overflow: auto; max-height: 88vh; scroll-behavior: smooth; background: white; position: relative; }
-        table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1200px; position: relative; }
-        th, td { border: 1px solid #ddd; text-align: center; padding: 4px 0; position: relative; }
+        .draw-tools { display: flex; align-items: center; gap: 5px; background: #f1f1f1; padding: 2px 10px; border-radius: 20px; border: 1px solid #ccc; margin-left: 5px; }
+        .input-n { width: 45px; padding: 2px; font-size: 9px; text-align: center; border: 1px solid #ccc; border-radius: 3px; }
+
+        /* 自適應表格核心 */
+        .table-wrapper { width: 100%; overflow-x: hidden; overflow-y: auto; flex: 1; position: relative; scroll-behavior: smooth; background: #fff; }
+        table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 100%; }
+        th, td { border: 1px solid #ddd; text-align: center; padding: 4px 0; background-color: white; color: #000; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
         
-        .sticky-col { width: 85px; background: #eceff1 !important; font-weight: bold; position: sticky; left: 0; z-index: 2000; border-right: 2px solid #bbb; cursor: pointer; }
-        .recent-header, .sticky-header, .second-header { position: sticky; z-index: 1000; }
-        .recent-header .sticky-col, .sticky-header .sticky-col, .second-header .sticky-col { z-index: 2500; background: #cfd8dc !important; }
-        td { background: white; }
+        /* 固定左側 85px */
+        .sticky-col { 
+            width: 85px; min-width: 85px; 
+            position: sticky; left: 0; 
+            z-index: 2000; 
+            background-color: #eceff1 !important; 
+            border-right: 2px solid #bbb !important; 
+            font-weight: bold;
+        }
 
-        .ready-line { background: var(--ready) !important; color: #0d47a1; height: 25px; font-weight: 900; cursor: pointer; }
-        .pos-line { background: var(--defense) !important; color: white; height: 20px; font-size: 9px; }
-
-        .backtest-line { background: #ffebee !important; border-bottom: 3px solid #d32f2f !important; }
-        .backtest-line .sticky-col { background: #d32f2f !important; color: white !important; }
-        .ignored-row { opacity: 0.3; background: #f5f5f5 !important; pointer-events: none; }
-        .col-active { background: rgba(227, 242, 253, 0.8) !important; border-left: 2.5px solid #007bff !important; border-right: 2.5px solid #007bff !important; }
+        .recent-header { position: sticky; z-index: 4001; }
+        .sticky-header { position: sticky; z-index: 4002; }
+        .second-header { position: sticky; z-index: 4000; }
         
-        .focus-num-group td { border-top: none !important; border-bottom: none !important; }
-        .focus-row-win td { border-top: 3.5px solid #ff0000 !important; }
-        .focus-row-rate td { border-bottom: 3.5px solid #ff0000 !important; }
-        .focus-num-group td:first-child { border-left: 3.5px solid #ff0000 !important; }
-        .focus-num-group td:last-child { border-right: 3.5px solid #ff0000 !important; }
+        .recent-header .sticky-col, 
+        .sticky-header .sticky-col, 
+        .second-header .sticky-col { z-index: 5000; background-color: #cfd8dc !important; }
 
-        .row-win { background: #fff5f5; color: var(--win); font-weight: bold; font-size: 13px; }
-        .row-fail { color: #555; background: white; font-size: 10px; }
-        .row-dist { background: #eceff1; color: var(--dist); font-size: 10px; font-style: italic; }
-        .row-rank { background: #f8f9fb; color: var(--rank); font-size: 9px; }
-        .row-rate { background: #e8f5e9; color: #2e7d32; font-weight: bold; border-bottom: 2px solid #ccc; font-size: 11px; }
+        .ready-line td, .ready-line th { background-color: var(--ready) !important; cursor: pointer; }
+        .second-header th { background-color: var(--defense) !important; color: white; }
 
-		/* 原本的黃色標記保留給贏、輸、距離、率 */
-		.top5-mark { background-color: #ffeb3b !important; color: #000 !important; font-weight: 900; border: 1.5px solid #f44336 !important; }
+        /* 監控模式分組視覺 */
+        .group-row td:first-child { border-left: 4px solid #000 !important; }
+        .group-row td:last-child { border-right: 4px solid #000 !important; }
+        .group-first-row td { border-top: 4px solid #000 !important; }
+        .group-last-row td { border-bottom: 4px solid #000 !important; }
+        
+        .row-win-bg td { background-color: #fff1f0 !important; }
+        .row-loss-bg td { background-color: #f6ffed !important; }
+        .row-dist-bg td { background-color: #f0f4f8 !important; }
 
-		/* 新增：贏排名專用的綠底樣式 */
-		.rank-top5-mark { background-color: #2e7d32 !important; color: #ffffff !important; font-weight: 900; border: 1.5px solid #1b5e20 !important; }
+        .col-active { background-color: #bae7ff !important; border-left: 1px solid #007bff !important; border-right: 1px solid #007bff !important; z-index: 10; }
+        td.top5-mark { background-color: #ffeb3b !important; font-weight: 900; border: 1.5px solid #000 !important; }
+        td.rank-top5-mark { background-color: #52c41a !important; font-weight: 900; border: 1.5px solid #000 !important; }
 
+        /* 走勢圖 */
+        .chart-row td { height: 140px; padding: 0 !important; position: relative; }
+        .chart-container-wrapper { width: 100%; height: 100%; background: #fff; position: relative; overflow: hidden; display: block; margin-left: 2px; }
+        .chart-v-highlight { position: absolute; top: 0; width: calc(100% / var(--total-cols)); height: 100%; background: rgba(0, 123, 255, 0.15); border-left: 1px solid #007bff; border-right: 1px solid #007bff; z-index: 1; pointer-events: none; box-sizing: border-box; }
+        .chart-legend { position: absolute; top: 5px; left: 10px; background: rgba(255,255,255,0.85); padding: 2px 5px; border: 1px solid #ddd; border-radius: 4px; font-size: 8px; display: flex; gap: 8px; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+        /* 士兵位置圖路徑 */
         #pathCanvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 45; width: 100%; height: 100%; }
-        .soldier-win { background-color: #ff0000 !important; color: #ffffff !important; font-weight: bold; }
-        .row-soldier { height: 28px; font-size: 12px; cursor: pointer; }
-        .path-active { outline: 3.5px solid #007bff !important; outline-offset: -3px; font-weight: bold; }
+        .soldier-win { background-color: #ff0000 !important; color: white !important; font-weight: bold; }
+        .row-soldier { height: 26px; cursor: pointer; }
+        .path-active { outline: 3px solid #007bff !important; outline-offset: -3px; background-color: #e6f7ff !important; }
+        
+        .ignored-row { opacity: 0.35; }
+        .backtest-line { background-color: #fff9c4 !important; }
 
-        #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 2000; flex-direction: column; }
-        #reportHeader { padding: 8px 15px; background: #673ab7; color: white; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        #reportContent { flex: 1; overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
-        .top5-container { display: flex; gap: 8px; padding: 12px; background: #f3e5f5; border-radius: 8px; align-items: center; border: 1px solid #ce93d8; margin-bottom: 15px; flex-shrink: 0; flex-wrap: wrap; }
-        .top5-badge { background: #d93025; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; }
-        .report-table-wrapper { flex: 1; overflow: auto; width: 100%; border: 1px solid #ddd; }
-        .report-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1300px; }
-        .report-table th { background: #f1f1f1; border: 1px solid #ccc; position: sticky; top: 0; z-index: 20; }
-        .report-table td { border: 1px solid #ddd; height: 40px; text-align: center; }
-        .row-top5 { background: #ffebee !important; color: #d32f2f; font-weight: bold; }
-        .sum-row { background: #fff9c4 !important; font-weight: bold; position: sticky; bottom: 40px; z-index: 20; }
-        .sum-top5 { background: #d32f2f !important; color: white !important; font-weight: 900; }
-        .highlight-count-row { background: #e8f5e9 !important; font-weight: bold; color: #2e7d32; position: sticky; bottom: 0; z-index: 20; }
+        /* 報表介面 */
+        #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 9999; flex-direction: column; }
+        #reportHeader { padding: 10px 15px; background: #673ab7; color: white; display: flex; justify-content: space-between; align-items: center; }
+        #reportContent { flex: 1; overflow: auto; padding: 15px; }
+        .report-entry-card { border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 15px; background: #fafafa; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+        .report-table th, .report-table td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+        .report-table th { background: #f0f0f0; }
+        .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; margin-right: 5px; color: white; font-weight: bold; }
         .hidden { display: none !important; }
     </style>
 </head>
-<body>
+<body style="--total-cols: 39;">
 
 <div class="container">
     <div class="btn-group">
@@ -81,13 +97,20 @@
         <div style="margin-left: 10px; display: flex; gap: 5px;">
             <button id="btnMonitor" class="btn-mode active" onclick="switchMode('monitor')">監控模式</button>
             <button id="btnSoldier" class="btn-mode" onclick="switchMode('soldier')">士兵位置圖</button>
-            <button id="btnAddReport" class="btn-add-report hidden" onclick="handleAddReport()">加入報表</button>
         </div>
-        <button class="btn-report" onclick="toggleReport(true)">配對報表</button>
+        
+        <div id="drawToolbar" class="draw-tools hidden">
+            <span style="font-size: 9px; color: #666; font-weight: bold;">回看:</span>
+            <input type="number" id="nLimitInput" class="input-n" value="50" min="1" max="500" onchange="g_nLimit = parseInt(this.value); renderSoldierMode(); renderHeader();">
+            <span style="font-size: 9px; color: #555; margin-left:10px;">點選號碼產生路徑</span>
+            <button class="btn-add-report" onclick="handleAddReport()" style="margin-left:10px;">加入報表 (Enter)</button>
+        </div>
+
+        <button class="btn-report" onclick="toggleReport(true)">分析報表</button>
     </div>
 
     <div class="table-wrapper" id="scrollArea">
-        <svg id="pathCanvas"></svg>
+        <svg id="pathCanvas" class="hidden"></svg>
         <table id="matrixTable">
             <thead id="mHead"></thead>
             <tbody id="mBodyMonitor"></tbody>
@@ -98,51 +121,44 @@
 
 <div id="reportModal">
     <div id="reportHeader">
-        <strong>深度分析報表 (佈局優化)</strong>
-        <div style="display:flex; align-items:center;">
-            <button style="background:#f44336; color:white; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-weight:bold; margin-right:10px;" onclick="g_currentPairsData=[];renderReportTable();">清空報表</button>
-            <button onclick="toggleReport(false)" style="background:white; border:none; padding:5px 15px; cursor:pointer; border-radius:3px; font-weight:bold;">關閉</button>
+        <strong style="font-size:14px;">士兵位置距離配對分析報表</strong>
+        <div style="display:flex; gap:8px;">
+            <button onclick="g_analysisEntries=[]; renderReportTable();" style="background:#f44336; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">全部刪除</button>
+            <button onclick="toggleReport(false)" style="background:white; border:none; padding:5px 15px; cursor:pointer; border-radius:4px; font-weight:bold;">關閉視窗</button>
         </div>
     </div>
-    <div id="reportContent"></div>
+    <div id="reportContent">
+        <div id="reportEmpty" style="text-align:center; padding:40px; color:#999;">
+            <h3>尚未擷取任何特徵群組</h3>
+            <p>請在「士兵位置圖」模式下，點選號碼連線後按 ENTER 或按鈕加入。</p>
+        </div>
+        <div id="entriesArea"></div>
+    </div>
 </div>
 
 <script>
     let g_max = 39, g_matrix = {}, g_curOrder = [], g_type = '539', g_raw_data = [];
-    let g_mode = 'monitor', g_selectedPos = [], g_history = [], g_focusNum = null, g_focusPos = [], g_activePaths = new Map(), g_currentPairsData = [];
-    let g_backtestIdx = -1;
+    let g_mode = 'monitor', g_history = [], g_focusNum = null, g_focusPos = [], g_activePaths = new Map();
+    let g_backtestIdx = -1, g_nLimit = 50, g_analysisEntries = [];
 
     window.onload = () => {
         init('539', 39);
         window.addEventListener('keydown', (e) => { 
-            if(e.key === 'Enter' && g_mode === 'soldier' && g_selectedPos.length >= 2) { 
-                handleAddReport();
-            } 
+            if (e.key === 'Enter' && g_mode === 'soldier') handleAddReport();
         });
     };
 
     function init(type, max) {
-        g_type = type; g_max = max; g_backtestIdx = -1; g_selectedPos = []; g_focusNum = null; g_focusPos = []; g_currentPairsData = []; g_activePaths.clear();
+        g_type = type; g_max = max; g_backtestIdx = -1; g_activePaths.clear(); g_analysisEntries = [];
+        g_matrix = {}; 
+        document.body.style.setProperty('--total-cols', max);
         Papa.parse(`https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/${type}-all.csv`, {
             download: true, header: true, skipEmptyLines: true,
             complete: (res) => { if(res.data) { g_raw_data = res.data; processData(res.data, max); } }
         });
     }
 
-    // 處理加入報表邏輯
-    function handleAddReport() {
-        if(g_selectedPos.length < 2) {
-            alert("請先在士兵位置圖選取至少兩個號碼位置");
-            return;
-        }
-        generatePairsData(); 
-        g_selectedPos = []; 
-        g_activePaths.clear(); 
-        renderSoldierMode();
-    }
-
     function processData(data, max) {
-        g_curOrder = Array.from({length: max}, (_, i) => i + 1);
         let tempOrder = Array.from({length: max}, (_, i) => i + 1);
         const bIdx = (max === 39) ? [2,3,4,5,6] : [2,3,4,5,6,7];
         const keys = Object.keys(data[0]);
@@ -165,239 +181,322 @@
     }
 
     function renderHeader() {
+        if (!g_history || g_history.length === 0) return;
         let displayOrder = g_backtestIdx === -1 ? g_curOrder : g_history[g_backtestIdx].order;
-        let headHtml = "";
-        let rowH = 28; 
-        
+        let headHtml = ""; let stickyTop = 0;
         if (g_mode === 'monitor') {
             let recent = g_history.slice(-5);
             recent.forEach((item, rIdx) => {
-                headHtml += `<tr class="recent-header row-soldier" style="top: ${rIdx * rowH}px;">
-                                <td class="sticky-col" style="background:#e0e0e0;">${item.sn}</td>
+                headHtml += `<tr class="recent-header row-soldier" style="top: ${rIdx * 25}px;">
+                                <td class="sticky-col">${item.sn}</td>
                                 ${item.order.map((n, pIdx) => `<td class="${item.balls.includes(n) ? 'soldier-win' : ''}">${n}</td>`).join('')}
                              </tr>`;
             });
-            let baseTop = recent.length * rowH;
-            headHtml += `<tr class="sticky-header ready-line" style="top: ${baseTop}px;"><th class="sticky-col">推演點</th>${displayOrder.map((n, idx) => `<th onclick="handleReadyClick(${n}, ${idx})">${n}</th>`).join('')}</tr>
-                         <tr class="second-header pos-line" style="top: ${baseTop + 25}px;"><th class="sticky-col">位置</th>${Array.from({length:g_max},(_,i)=>`<th>P${i+1}</th>`).join('')}</tr>`;
-        } else {
-            headHtml += `<tr class="sticky-header ready-line" style="top:0;"><th class="sticky-col">推演點</th>${displayOrder.map((n, idx) => {
-                let isActive = g_selectedPos.some(s => s.ballNum === n && s.rowIdx === (g_backtestIdx === -1 ? g_history.length : g_backtestIdx) && s.posIdx === idx);
-                return `<th class="${isActive ? 'path-active' : ''}" onclick="handleReadyClick(${n}, ${idx})">${n}</th>`;
-            }).join('')}</tr>
-            <tr class="second-header pos-line" style="top:25px;"><th class="sticky-col">位置</th>${Array.from({length:g_max},(_,i)=>`<th>P${i+1}</th>`).join('')}</tr>`;
+            stickyTop = recent.length * 25;
         }
+        headHtml += `<tr class="sticky-header ready-line" style="top: ${stickyTop}px;">
+                        <th class="sticky-col" onclick="setBacktest(-1)">推演點${g_backtestIdx===-1?'':'🔄'}</th>
+                        ${displayOrder.map((n, idx) => `<th onclick="handleHeaderClick(${n}, ${idx})" data-ball="${n}">${n}</th>`).join('')}
+                     </tr>
+                     <tr class="second-header" style="top: ${stickyTop + 25}px;">
+                        <th class="sticky-col">位置</th>
+                        ${Array.from({length:g_max},(_,i)=>`<th>P${i+1}</th>`).join('')}
+                     </tr>`;
         document.getElementById('mHead').innerHTML = headHtml;
     }
 
-    function handleReadyClick(ballNum, posIdx) {
+    function handleHeaderClick(ballNum, posIdx) {
         if (g_mode === 'monitor') {
-            if (g_focusNum === ballNum && g_focusPos.includes(posIdx)) { g_focusNum = null; g_focusPos = []; } 
+            const isSameNum = g_focusNum === ballNum;
+            if (isSameNum && g_focusPos.includes(posIdx)) { g_focusNum = null; g_focusPos = []; } 
             else { g_focusNum = ballNum; g_focusPos = [posIdx]; }
             renderMonitorMode(); renderHeader();
-            if (g_focusNum) setTimeout(() => {
-                const target = document.getElementById(`row-win-${ballNum}`);
-                const wrapper = document.getElementById('scrollArea');
-                if (target && wrapper) wrapper.scrollTo({ top: target.offsetTop - 200, behavior: 'smooth' });
-            }, 30);
-        } else { toggleSelection(ballNum, g_backtestIdx === -1 ? g_history.length : g_backtestIdx, posIdx); }
-    }
-
-    function getRowTop5(rowArray) {
-        return rowArray
-            .map((val, idx) => ({ val, idx }))
-            .sort((a, b) => b.val - a.val)
-            .slice(0, 5)
-            .map(item => item.idx);
-    }
-
-    function getRowRanks(rowArray) {
-        let sorted = [...rowArray].sort((a, b) => b - a);
-        return rowArray.map(v => sorted.indexOf(v) + 1);
+            if (g_focusNum !== null) {
+                setTimeout(() => {
+                    const target = document.getElementById(`row-win-${ballNum}`);
+                    const wrapper = document.getElementById('scrollArea');
+                    const thead = document.querySelector('#matrixTable thead');
+                    if (target && wrapper && thead) {
+                        const targetTop = target.offsetTop - thead.offsetHeight - 5;
+                        wrapper.scrollTo({ top: targetTop, behavior: 'smooth' });
+                    }
+                }, 100);
+            }
+        } else toggleBallPath(parseInt(ballNum));
     }
 
     function renderMonitorMode() {
+        if (!g_matrix || Object.keys(g_matrix).length === 0) return;
         let bHtml = ""; 
         for(let b=1; b<=g_max; b++) {
-            let isFocus = g_focusNum === b;
-            let groupClass = isFocus ? 'focus-num-group' : '';
-            
+            if (!g_matrix[b]) continue;
             let winData = [], failData = [], distData = [], rateData = [];
             for(let p=0; p<g_max; p++) {
-                let w = g_matrix[b][p].win || 0;
-                let f = g_matrix[b][p].fail || 0;
-                let t = w + f;
-                winData.push(w);
-                failData.push(f);
-                distData.push(f - w);
-                rateData.push(t > 0 ? Math.round((w / t) * 100) : 0);
+                let w = g_matrix[b][p].win || 0, f = g_matrix[b][p].fail || 0;
+                winData.push(w); failData.push(f); distData.push(f - w);
+                rateData.push((w+f) > 0 ? Math.round((w / (w+f)) * 100) : 0);
             }
+            const winT5 = getRowTop5(winData), winR = getRowRanks(winData), failBottom5 = getRowBottom5(failData);
+            const failR = getRowRanks(failData), distBottom5 = getRowBottom5(distData), distRAsc = getRowRanksAsc(distData), rateT5 = getRowTop5(rateData);
+            const activeCol = (p) => g_focusPos.includes(p) ? 'col-active' : '';
 
-            const winTop5 = getRowTop5(winData);
-            const failTop5 = getRowTop5(failData);
-            const distTop5 = getRowTop5(distData);
-            const rateTop5 = getRowTop5(rateData);
-
-            const winRanks = getRowRanks(winData);
-            const failRanks = getRowRanks(failData);
-            const distRanks = getRowRanks(distData);
-
-            bHtml += `<tr id="row-win-${b}" class="row-win ${groupClass} ${isFocus ? 'focus-row-win' : ''}">
-                        <td class="sticky-col" onclick="g_focusNum=${b};renderMonitorMode()">#${b<10?'0'+b:b} 贏</td>
-                        ${winData.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${winTop5.includes(p)?'top5-mark':''}">${v || ''}</td>`).join('')}
+            bHtml += `<tr id="row-win-${b}" class="row-win row-win-bg group-first-row group-row">
+                        <td class="sticky-col" onclick="g_focusNum=${b};renderMonitorMode()">#${b<10?'0'+b:b} 贏多</td>
+                        ${winData.map((v, p) => `<td class="${activeCol(p)} ${winT5.includes(p)?'top5-mark':''}">${v||''}</td>`).join('')}
                       </tr>
-                      <tr class="row-fail ${groupClass}">
-                        <td class="sticky-col">輸</td>
-                        ${failData.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${failTop5.includes(p)?'top5-mark':''}">${v || ''}</td>`).join('')}
+                      <tr class="group-row row-win-bg">
+                        <td class="sticky-col">贏排名1~39</td>
+                        ${winR.map((v, p) => `<td class="${activeCol(p)} ${v<=5?'rank-top5-mark':''}">${v}</td>`).join('')}
                       </tr>
-                      <tr class="row-dist ${groupClass}">
-                        <td class="sticky-col">距離</td>
-                        ${distData.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${distTop5.includes(p)?'top5-mark':''}">${v}</td>`).join('')}
+                      <tr class="group-row row-loss-bg">
+                        <td class="sticky-col">輸少</td>
+                        ${failData.map((v, p) => `<td class="${activeCol(p)} ${failBottom5.includes(p)?'top5-mark':''}">${v||''}</td>`).join('')}
                       </tr>
-                      <tr class="row-rank ${groupClass}">
-                        <td class="sticky-col">贏排名</td>
-                        ${winRanks.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${v <= 5 ? 'rank-top5-mark' : ''}">${v}</td>`).join('')}
+                      <tr class="group-row row-loss-bg">
+                        <td class="sticky-col">輸排名39~1</td>
+                        ${failR.map((v, p) => `<td class="${activeCol(p)} ${v >= (g_max - 4) ? 'rank-top5-mark' : ''}">${v}</td>`).join('')}
                       </tr>
-                      <tr class="row-rank ${groupClass}">
-                        <td class="sticky-col">輸排名</td>
-                        ${failRanks.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${v <= 5 ? 'top5-mark' : ''}">${v}</td>`).join('')}
+                      <tr class="group-row row-dist-bg">
+                        <td class="sticky-col">距離少-》多</td>
+                        ${distData.map((v, p) => `<td class="${activeCol(p)} ${distBottom5.includes(p)?'top5-mark':''}">${v}</td>`).join('')}
                       </tr>
-                      <tr class="row-rank ${groupClass}">
-                        <td class="sticky-col">距排名</td>
-                        ${distRanks.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${v <= 5 ? 'top5-mark' : ''}">${v}</td>`).join('')}
+                      <tr class="group-row row-dist-bg">
+                        <td class="sticky-col">距離排名少-》多</td>
+                        ${distRAsc.map((v, p) => `<td class="${activeCol(p)} ${v<=5?'rank-top5-mark':''}">${v}</td>`).join('')}
                       </tr>
-                      <tr class="row-rate ${groupClass} ${isFocus ? 'focus-row-rate' : ''}">
-                        <td class="sticky-col">率</td>
-                        ${rateData.map((v, p) => `<td class="${g_focusPos.includes(p)?'col-active':''} ${rateTop5.includes(p)?'top5-mark':''}">${v || ''}</td>`).join('')}
+                      <tr class="group-row">
+                        <td class="sticky-col">勝率高</td>
+                        ${rateData.map((v, p) => `<td class="${activeCol(p)} ${rateT5.includes(p)?'top5-mark':''}">${v||''}</td>`).join('')}
+                      </tr>
+                      <tr class="chart-row group-last-row group-row">
+                        <td class="sticky-col" style="font-size:9px;">走勢圖</td>
+                        <td colspan="${g_max}" style="padding:0 !important; text-align:left; vertical-align:top;">
+                            <div class="chart-container-wrapper">
+                                <div class="chart-legend">
+                                    <span style="color:#f44336">━ 贏 (最多)</span>
+                                    <span style="color:#52c41a">━ 輸 (最少)</span>
+                                </div>
+                                ${g_focusPos.map(p => `<div class="chart-v-highlight" style="left: calc(100% * ${p} / ${g_max});"></div>`).join('')}
+                                ${generateTrendChart(winData, failData, winT5, failBottom5)}
+                            </div>
+                        </td>
                       </tr>`;
         }
         document.getElementById('mBodyMonitor').innerHTML = bHtml;
     }
 
     function renderSoldierMode() {
-        const nLimit = 20; 
-        let bHtml = ""; let displayList = g_history.slice(-nLimit);
-        let displayOrder = g_backtestIdx === -1 ? g_curOrder : g_history[g_backtestIdx].order;
+        if (!g_history || g_history.length === 0) return;
+        let bHtml = ""; let displayList = g_history.slice(-g_nLimit);
         displayList.forEach((item, revIdx) => {
-            let realIdx = g_history.length - nLimit + revIdx;
-            let isTestLine = g_backtestIdx === realIdx;
-            let isIgnored = g_backtestIdx !== -1 && realIdx > g_backtestIdx;
+            let realIdx = g_history.length - displayList.length + revIdx, isTestLine = g_backtestIdx === realIdx, isIgnored = g_backtestIdx !== -1 && realIdx > g_backtestIdx;
             bHtml += `<tr class="row-soldier ${isTestLine ? 'backtest-line' : ''} ${isIgnored ? 'ignored-row' : ''}">
-                      <td class="sticky-col" onclick="g_backtestIdx=(g_backtestIdx===${realIdx})?-1:${realIdx};updateMatrix();renderHeader();renderMonitorMode();renderSoldierMode();setTimeout(drawPaths, 30);">${item.sn}${isTestLine ? '📌' : ''}</td>`;
-            item.order.forEach((n, pIdx) => {
-                let isActive = g_selectedPos.some(s => s.ballNum === n && s.rowIdx === realIdx && s.posIdx === pIdx);
-                bHtml += `<td class="${item.balls.includes(n) ? 'soldier-win' : ''} ${isActive ? 'path-active' : ''}" onclick="toggleSelection(${n}, ${realIdx}, ${pIdx})" data-ball="${n}">${n}</td>`;
-            });
-            bHtml += "</tr>";
+                        <td class="sticky-col" onclick="setBacktest(${realIdx})">${item.sn}${isTestLine ? '📌' : ''}</td>
+                        ${item.order.map((n, pIdx) => `
+                            <td class="${item.balls.includes(n) ? 'soldier-win' : ''} ${g_activePaths.has(parseInt(n))?'path-active':''}" 
+                                onclick="toggleBallPath(parseInt(${n}))" data-ball="${n}">${n}</td>`).join('')}
+                      </tr>`;
         });
-        
+        let displayOrder = g_backtestIdx === -1 ? g_curOrder : g_history[g_backtestIdx].order;
         bHtml += `<tr class="ready-line">
-                    <td class="sticky-col">推演點</td>
-                    ${displayOrder.map((n, idx) => {
-                        let isActive = (g_selectedPos.some(s => s.ballNum === n && s.rowIdx === (g_backtestIdx === -1 ? g_history.length : g_backtestIdx) && s.posIdx === idx));
-                        return `<td class="${isActive ? 'path-active' : ''}" onclick="handleReadyClick(${n}, ${idx})">${n}</td>`;
-                    }).join('')}
+                    <td class="sticky-col" onclick="setBacktest(-1)">推演點${g_backtestIdx===-1?'':'🔄'}</td>
+                    ${displayOrder.map((n, idx) => `<td class="${g_activePaths.has(parseInt(n))?'path-active':''}" onclick="toggleBallPath(parseInt(${n}))" data-ball="${n}">${n}</td>`).join('')}
                   </tr>`;
-
         document.getElementById('mBodySoldier').innerHTML = bHtml;
         setTimeout(drawPaths, 80);
     }
 
-    function toggleSelection(ballNum, rowIdx, posIdx) {
-        const idx = g_selectedPos.findIndex(s => s.ballNum === ballNum && s.rowIdx === rowIdx && s.posIdx === posIdx);
-        if (idx > -1) { g_selectedPos.splice(idx, 1); g_activePaths.delete(ballNum); } 
+    function toggleBallPath(ballNum) {
+        if (g_activePaths.has(ballNum)) g_activePaths.delete(ballNum);
         else {
-            g_selectedPos.push({ballNum, rowIdx, posIdx});
-            const colors = ['#FF0000', '#007bff', '#28a745', '#6f42c1', '#fd7e14'];
+            const colors = ['#007bff', '#e91e63', '#28a745', '#ff9800', '#9c27b0', '#795548', '#00bcd4', '#673ab7'];
             g_activePaths.set(ballNum, colors[g_activePaths.size % colors.length]);
         }
         renderSoldierMode(); renderHeader();
     }
 
     function drawPaths() {
-        const svg = document.getElementById('pathCanvas'); svg.innerHTML = '';
-        if (g_mode !== 'soldier') return;
+        const svg = document.getElementById('pathCanvas');
+        if (g_mode !== 'soldier' || !g_history || g_history.length === 0) { svg.innerHTML = ''; svg.classList.add('hidden'); return; }
+        svg.classList.remove('hidden');
         const table = document.getElementById('matrixTable');
-        if(!table) return;
-        svg.setAttribute('width', table.offsetWidth); svg.setAttribute('height', table.offsetHeight);
+        svg.setAttribute('width', table.scrollWidth); svg.setAttribute('height', table.scrollHeight); svg.innerHTML = '';
+        const scrollArea = document.getElementById('scrollArea'), sRect = scrollArea.getBoundingClientRect();
+        
         g_activePaths.forEach((color, ballNum) => {
-            const dots = Array.from(document.querySelectorAll(`td[data-ball="${ballNum}"]`)).filter(td => !td.parentElement.classList.contains('ignored-row'));
+            const dots = Array.from(document.querySelectorAll(`#mBodySoldier [data-ball="${ballNum}"]`)).filter(el => !el.parentElement.classList.contains('ignored-row'));
             if (dots.length < 2) return;
-            let pathD = ""; dots.forEach((dot, i) => {
-                const x = dot.offsetLeft + dot.offsetWidth / 2; const y = dot.offsetTop + dot.offsetHeight / 2;
-                pathD += (i === 0 ? "M" : "L") + x + "," + y;
-                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute("cx", x); circle.setAttribute("cy", y); circle.setAttribute("r", "3.5"); circle.setAttribute("fill", color); svg.appendChild(circle);
+            dots.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+            let d = "";
+            dots.forEach((dot, i) => {
+                const r = dot.getBoundingClientRect();
+                const x = r.left - sRect.left + scrollArea.scrollLeft + r.width/2;
+                const y = r.top - sRect.top + scrollArea.scrollTop + r.height/2;
+                d += (i===0?"M":"L") + x + "," + y;
+                const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", "3.5"); c.setAttribute("fill", color); svg.appendChild(c);
             });
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", pathD); path.setAttribute("stroke", color); path.setAttribute("stroke-width", "2.5"); path.setAttribute("fill", "none"); path.setAttribute("stroke-opacity", "0.8"); svg.appendChild(path);
+            const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            p.setAttribute("d", d); p.setAttribute("stroke", color); p.setAttribute("stroke-width", "2.5"); p.setAttribute("fill", "none"); p.setAttribute("stroke-opacity", "0.7"); svg.appendChild(p);
         });
     }
 
-    function generatePairsData() {
-        let limit = g_backtestIdx === -1 ? g_history.length - 1 : g_backtestIdx;
-        for (let i = 0; i < g_selectedPos.length; i++) {
-            for (let j = i + 1; j < g_selectedPos.length; j++) {
-                let s1 = g_selectedPos[i], s2 = g_selectedPos[j];
-                let distR = Math.abs(s1.rowIdx - s2.rowIdx);
-                let counts = Array(g_max + 1).fill(0), matchCount = 0;
-                for (let k = 0; k <= limit - distR - 1; k++) {
-                    if (g_history[k].balls.includes(g_history[k].order[s1.posIdx]) && 
-                        g_history[k + distR].balls.includes(g_history[k + distR].order[s2.posIdx])) {
-                        matchCount++; if(g_history[k + distR + 1]) g_history[k + distR + 1].balls.forEach(b => counts[b]++);
-                    }
-                }
-                g_currentPairsData.push({ label: `${s1.ballNum}(P${s1.posIdx+1}) ↔ ${s2.ballNum}(P${s2.posIdx+1}) [跨${distR}期]`, count: matchCount, data: counts });
+    function generateTrendChart(winData, failData, winTops, failBottoms) {
+        if (!winData || winData.length === 0) return '';
+        const w = 1000, h = 130; 
+        const maxVal = Math.max(...winData, ...failData, 1), minVal = Math.min(...winData, ...failData);
+        const range = (maxVal - minVal) || 1;
+        const getY = (v) => h - 30 - ((v - minVal) / range) * (h - 60);
+        const getX = (i) => (i + 0.5) * (w / g_max);
+        let svg = `<svg width="100%" height="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;">`;
+        let winP = `M ${getX(0)} ${getY(winData[0])}`;
+        for(let i=1; i<g_max; i++) winP += ` L ${getX(i)} ${getY(winData[i])}`;
+        svg += `<path d="${winP}" fill="none" stroke="#f44336" stroke-width="2" />`;
+        let failP = `M ${getX(0)} ${getY(failData[0])}`;
+        for(let i=1; i<g_max; i++) failP += ` L ${getX(i)} ${getY(failData[i])}`;
+        svg += `<path d="${failP}" fill="none" stroke="#52c41a" stroke-width="2" />`;
+        for(let i=0; i<g_max; i++) {
+            const x = getX(i), yW = getY(winData[i]), yF = getY(failData[i]);
+            svg += `<circle cx="${x}" cy="${yW}" r="3" fill="#f44336" />`;
+            svg += `<circle cx="${x}" cy="${yF}" r="3" fill="#52c41a" />`;
+            if(winTops.includes(i)) svg += `<text x="${x}" y="${yW-10}" font-size="20" text-anchor="middle" fill="#f44336" font-weight="bold" transform="scale(0.5)" transform-origin="${x} ${yW-10}">${winData[i]}</text>`;
+            if(failBottoms.includes(i)) {
+                const offset = (yF > yW - 20) ? 18 : -10;
+                svg += `<text x="${x}" y="${yF+offset}" font-size="20" text-anchor="middle" fill="#52c41a" font-weight="bold" transform="scale(0.5)" transform-origin="${x} ${yF+offset}">${failData[i]}</text>`;
             }
         }
+        svg += `</svg>`; return svg;
+    }
+
+    // --- 分析報表邏輯 ---
+    function handleAddReport() {
+        if (!g_history || g_history.length === 0 || g_activePaths.size === 0) return;
+        
+        // 推演點為第 0 期
+        const readyIdx = g_backtestIdx === -1 ? g_history.length : g_backtestIdx + 1;
+        let selectedData = [];
+        
+        g_activePaths.forEach((color, ballNum) => {
+            // 找出該號碼在士兵圖可視範圍內的最後一個落點
+            const rows = Array.from(document.querySelectorAll(`#mBodySoldier [data-ball="${ballNum}"]`))
+                             .filter(el => !el.parentElement.classList.contains('ignored-row'));
+            if (rows.length > 0) {
+                const lastEl = rows[rows.length - 1];
+                const tr = lastEl.closest('tr');
+                const sn = tr.querySelector('td').innerText.replace('📌', '').trim();
+                const histIdx = g_history.findIndex(h => h.sn === sn);
+                const pos = Array.from(tr.children).indexOf(lastEl) - 1;
+                if (histIdx !== -1) {
+                    selectedData.push({
+                        ball: ballNum,
+                        pos: pos,
+                        dist: readyIdx - histIdx - 1, 
+                        color: color,
+                        histIdx: histIdx
+                    });
+                }
+            }
+        });
+
+        if (selectedData.length === 0) return;
+
+        // 計算相對距離 (Cross-Distance)
+        let crossDistances = [];
+        for (let i = 0; i < selectedData.length; i++) {
+            for (let j = i + 1; j < selectedData.length; j++) {
+                crossDistances.push({
+                    a: selectedData[i].ball,
+                    b: selectedData[j].ball,
+                    diff: Math.abs(selectedData[i].histIdx - selectedData[j].histIdx)
+                });
+            }
+        }
+
+        const entry = {
+            id: Date.now(),
+            features: selectedData,
+            crossDistances: crossDistances,
+            timestamp: new Date().toLocaleTimeString()
+        };
+
+        g_analysisEntries.push(entry);
+        renderReportTable();
+        toggleReport(true);
     }
 
     function renderReportTable() {
-        let totals = Array(g_max + 1).fill(0); let highlightCounts = Array(g_max + 1).fill(0); let tableRows = "";
-        g_currentPairsData.forEach((p, idx) => {
-            let rowSorted = []; for(let i=1; i<=g_max; i++) if(p.data[i]>0) rowSorted.push({num:i, val:p.data[i]});
-            rowSorted.sort((a,b)=>b.val-a.val); let rTop5 = rowSorted.slice(0, 5).map(it=>it.num);
-            tableRows += `<tr><td style="position:sticky;left:0;background:#eee;z-index:10;"><span style="color:red;cursor:pointer" onclick="g_currentPairsData.splice(${idx},1);renderReportTable();">X</span> ${p.label}</td>`;
-            for(let i=1; i<=g_max; i++) {
-                let isTop = rTop5.includes(i); if(isTop) highlightCounts[i]++;
-                tableRows += `<td class="${isTop ? 'row-top5' : ''}">${p.data[i] || ''}</td>`; totals[i] += p.data[i];
-            }
-            tableRows += `</tr>`;
-        });
-        let sumSorted = []; for(let i=1; i<=g_max; i++) if(totals[i]>0) sumSorted.push({num:i, val:totals[i]});
-        sumSorted.sort((a,b)=>b.val-a.val); let sTop5 = sumSorted.slice(0, 5).map(it=>it.num);
-        let top5Html = `<div class="top5-container"><span class="top5-title">🔥 推薦 TOP 5:</span> ${sumSorted.slice(0,5).map(it=>`<span class="top5-badge">${it.num}(${it.val})</span>`).join('')}</div>`;
-        let html = top5Html + `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th style="width:140px;position:sticky;left:0;z-index:30;background:#ddd;">路徑</th>${Array.from({length:g_max},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>${tableRows}`;
-        html += `<tr class="sum-row"><td style="position:sticky;left:0;z-index:30;">總計推演</td>`;
-        for(let i=1; i<=g_max; i++) html += `<td class="${sTop5.includes(i)?'sum-top5':''}">${totals[i]}</td>`;
-        html += `</tr><tr class="highlight-count-row"><td style="position:sticky;left:0;z-index:30;">高亮次數</td>`;
-        for(let i=1; i<=g_max; i++) html += `<td>${highlightCounts[i]||''}</td>`;
-        html += `</tr></tbody></table></div>`;
-        document.getElementById('reportContent').innerHTML = html;
+        const area = document.getElementById('entriesArea');
+        const empty = document.getElementById('reportEmpty');
+        if (g_analysisEntries.length === 0) { area.innerHTML = ""; empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+
+        area.innerHTML = g_analysisEntries.map((entry, idx) => {
+            const matches = findMatchesInHistory(entry);
+            const ballStats = {};
+            matches.forEach(m => m.balls.forEach(b => ballStats[b] = (ballStats[b] || 0) + 1));
+            const topStats = Object.entries(ballStats).sort((a,b) => b[1] - a[1]).slice(0, 10);
+
+            return `
+            <div class="report-entry-card">
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px;">
+                    <strong>特徵群組 #${idx + 1} <small style="color:#999; font-weight:normal;">(${entry.timestamp})</small></strong>
+                    <button onclick="deleteEntry(${entry.id})" style="color:red; border:none; background:none; cursor:pointer; font-weight:bold;">刪除此筆</button>
+                </div>
+                <div style="margin-bottom:10px;">
+                    ${entry.features.map(f => `<span class="tag" style="background:${f.color}">#${f.ball} (P${f.pos+1}, 距0期:${f.dist}期)</span>`).join('')}
+                    ${entry.crossDistances.map(d => `<span style="font-size:9px; color:#666; margin-right:8px;">[#${d.a} 對 #${d.b} 距:${d.diff}]</span>`).join('')}
+                </div>
+                <div style="font-size:11px; margin-bottom:5px;">符合歷史特徵：<b>${matches.length}</b> 期</div>
+                <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    ${topStats.map(([b, count]) => `
+                        <div style="background:#e8eaf6; padding:4px 8px; border-radius:4px; border:1px solid #c5cae9; text-align:center; min-width:35px;">
+                            <b style="color:#3f51b5">${b<10?'0'+b:b}</b><br><small style="color:#777">${count}次</small>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        }).reverse().join('');
     }
 
-    function toggleReport(show) { if(show) renderReportTable(); document.getElementById('reportModal').style.display = show ? 'flex' : 'none'; }
-    
-    function switchMode(mode) {
-        g_mode = mode; 
-        if (mode === 'soldier') { g_focusNum = null; g_focusPos = []; }
-        
-        // 控制加入報表按鈕的顯示
-        document.getElementById('btnAddReport').classList.toggle('hidden', mode !== 'soldier');
-        
+    function findMatchesInHistory(entry) {
+        let results = [];
+        const maxOffset = Math.max(...entry.features.map(f => f.dist));
+        const limit = g_backtestIdx === -1 ? g_history.length : g_backtestIdx + 1;
+        for (let i = maxOffset; i < limit; i++) {
+            let isMatch = true;
+            for (let f of entry.features) {
+                const checkIdx = i - f.dist;
+                if (checkIdx < 0 || g_history[checkIdx].order[f.pos] !== f.ball) { isMatch = false; break; }
+            }
+            if (isMatch) results.push({ sn: g_history[i].sn, balls: g_history[i].balls });
+        }
+        return results;
+    }
+
+    function deleteEntry(id) {
+        g_analysisEntries = g_analysisEntries.filter(e => e.id !== id);
+        renderReportTable();
+    }
+
+    function toggleReport(s) { document.getElementById('reportModal').style.display = s ? 'flex' : 'none'; }
+    function setBacktest(idx) { g_backtestIdx = (g_backtestIdx === idx) ? -1 : idx; updateMatrix(); renderHeader(); if(g_mode === 'monitor') renderMonitorMode(); else renderSoldierMode(); }
+    function switchMode(mode) { 
+        g_mode = mode; document.getElementById('drawToolbar').classList.toggle('hidden', mode !== 'soldier');
         document.getElementById('mBodyMonitor').classList.toggle('hidden', mode !== 'monitor');
         document.getElementById('mBodySoldier').classList.toggle('hidden', mode !== 'soldier');
-        document.getElementById('pathCanvas').classList.toggle('hidden', mode !== 'soldier');
-        
-        // 切換按鈕狀態
+        const svg = document.getElementById('pathCanvas');
+        if(mode === 'soldier') svg.classList.remove('hidden'); else { svg.classList.add('hidden'); svg.innerHTML = ''; }
         document.getElementById('btnMonitor').classList.toggle('active', mode === 'monitor');
         document.getElementById('btnSoldier').classList.toggle('active', mode === 'soldier');
-
-        renderHeader(); 
-        if(mode === 'monitor') renderMonitorMode(); 
-        if(mode === 'soldier') { renderSoldierMode(); setTimeout(drawPaths, 150); }
+        renderHeader(); if(mode === 'monitor') renderMonitorMode(); else renderSoldierMode();
     }
-    window.onresize = drawPaths;
+
+    function getRowTop5(r) { return r.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v).slice(0,5).map(x=>x.i); }
+    function getRowBottom5(r) { return r.map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v).slice(0,5).map(x=>x.i); }
+    function getRowRanks(r) { let s = [...r].sort((a,b)=>b-a); return r.map(v=>s.indexOf(v)+1); }
+    function getRowRanksAsc(r) { let s = [...r].sort((a,b)=>a-b); return r.map(v=>s.indexOf(v)+1); }
+    window.onresize = () => { if (g_history && g_history.length > 0) { drawPaths(); if (g_mode === 'monitor') renderMonitorMode(); } };
 </script>
+
 </body>
 </html>
