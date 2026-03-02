@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>樂透 10x4 矩陣走勢 (多期並列)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* 外層容器：依據設定決定每列幾個矩陣 */
+        .all-matrices-wrapper {
+            display: grid;
+            gap: 30px;
+            padding: 20px;
+        }
+
+        /* 單個矩陣區塊 */
+        .matrix-block {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .matrix-block.selected-block {
+            border-color: #fbbf24;
+            background: rgba(251, 191, 36, 0.1);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+        }
+
+        .matrix-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+
+        /* 矩陣網格樣式：欄位由 JS 動態控制 */
+        .matrix-grid {
+            display: grid;
+            gap: 6px;
+        }
+
+        .matrix-cell {
+            aspect-ratio: 1 / 1;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .matrix-cell:hover {
+            border-color: #64748b;
+            background-color: #334155;
+        }
+
+        .cell-num {
+            font-size: 0.8rem;
+            font-weight: 900;
+            color: #475569;
+            pointer-events: none;
+        }
+
+        /* 亮燈效果：當期淺綠色 */
+        .state-now {
+            background-color: #4ade80 !important;
+            box-shadow: 0 0 15px #22c55e;
+            border-color: #fff;
+        }
+        .state-now .cell-num {
+            color: #064e3b !important;
+        }
+
+        /* 亮燈效果：上期橘色 */
+        .state-prev {
+            background-color: #f97316 !important;
+            box-shadow: 0 0 8px #ea580c;
+            border-color: #fb923c;
+        }
+        .state-prev .cell-num {
+            color: #fff !important;
+        }
+
+        /* 亮燈效果：重疊號碼黃色 */
+        .state-overlap {
+            background-color: #facc15 !important; /* 黃色 yellow-400 */
+            box-shadow: 0 0 20px #eab308;
+            border-color: #fff;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .state-overlap .cell-num {
+            color: #713f12 !important; /* 深褐色文字 */
+        }
+
+        /* 亮燈效果：使用者點擊選取的號碼 */
+        .state-selected {
+            background-color: #3b82f6 !important; /* 藍色 */
+            border-color: #fff !important;
+            box-shadow: 0 0 20px #2563eb, inset 0 0 10px rgba(255,255,255,0.5);
+            transform: scale(1.1);
+            z-index: 20;
+        }
+        .state-selected .cell-num {
+            color: #fff !important;
+        }
+
+        /* 控制列 */
+        .control-panel {
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .input-dark {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 4px 8px;
+            text-align: center;
+            font-weight: 900;
+            color: #4ade80;
+            outline: none;
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #4ade80;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 總結矩陣特別樣式 */
+        .summary-block {
+            border: 2px solid #22c55e;
+            background: rgba(22, 101, 52, 0.25);
+            box-shadow: 0 0 25px rgba(34, 197, 94, 0.15);
+        }
+
+        /* 合併矩陣特別樣式 */
+        .merged-block {
+            border: 2px solid #fbbf24;
+            background: rgba(120, 53, 15, 0.25);
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.15);
+        }
+
+        /* 預測分析區塊樣式 (橫向) */
+        .analysis-block {
+            grid-column: 1 / -1;
+            border: 2px solid #3b82f6;
+            background: rgba(30, 58, 138, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .freq-horizontal-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .freq-item {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 4px 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .freq-num-label {
+            font-weight: 900;
+            color: #4ade80;
+            font-size: 1rem;
+        }
+
+        .freq-count-label {
+            font-weight: 700;
+            color: #94a3b8;
+            font-size: 0.7rem;
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* 報表區樣式 */
+        .report-block {
+            grid-column: 1 / -1;
+            border: 1px solid #475569;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .report-row {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+        }
+
+        .report-row:hover {
+            border-color: #475569;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #ef4444;
+            padding: 4px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            z-index: 30;
+        }
+
+        .delete-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* 空白佔位符樣式 */
+        .matrix-placeholder {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* 按鈕樣式 */
+        .btn-base {
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 900;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .btn-base:active {
+            transform: scale(0.95);
+        }
+
+        /* 選取矩陣勾選框樣式 */
+        .matrix-select-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 2px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid #334155;
+        }
+        .matrix-select-wrap:hover {
+            border-color: #fbbf24;
+        }
+        .matrix-select-wrap input {
+            cursor: pointer;
+            accent-color: #fbbf24;
+        }
+        .matrix-select-wrap span {
+            font-size: 0.7rem;
+            font-weight: 900;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- 頂部控制與資訊列 -->
+    <div class="control-panel p-4">
+        <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-green-500 rounded-lg shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 6h16M4 12h16m-7 6h7" />
+                    </svg>
+                </div>
+                <h1 class="text-lg font-black tracking-tighter uppercase hidden lg:block">Matrix View</h1>
+            </div>
+
+            <div class="flex items-center flex-wrap gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500">遊戲</span>
+                    <select id="typeSelect" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-black outline-none focus:ring-2 focus:ring-green-500">
+                        <option value="539">今彩 539</option>
+                        <option value="lotto649">大樂透</option>
+                        <option value="super-lotto">威力彩</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500">顯示期數(N)</span>
+                    <input type="number" id="periodN" value="10" min="1" max="200" class="input-dark w-16 text-sm">
+                </div>
+
+                <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
+                    <span class="text-xs font-bold text-slate-500">矩陣欄數</span>
+                    <input type="number" id="matrixX" value="10" min="1" max="20" class="input-dark w-14 text-sm">
+                    <span class="text-xs font-bold text-slate-500">x 列數</span>
+                    <input type="number" id="matrixY" value="4" min="1" max="20" class="input-dark w-14 text-sm">
+                </div>
+
+                <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
+                    <span class="text-xs font-bold text-slate-500">每行排幾個</span>
+                    <input type="number" id="colsCount" value="2" min="1" max="5" class="input-dark w-14 text-sm">
+                </div>
+
+                <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
+                    <button id="togglePrevBtn" class="btn-base bg-slate-700 text-slate-300 hover:bg-slate-600">
+                        顯示上期
+                    </button>
+                    <button id="refreshBtn" class="btn-base bg-green-500 hover:bg-green-600 text-slate-900">
+                        重新整理
+                    </button>
+                    <button id="clearAllBtn" class="btn-base bg-red-600 hover:bg-red-700 text-white">
+                        清空全部
+                    </button>
+                </div>
+
+                <div id="loader" class="hidden loading-spinner"></div>
+            </div>
+
+            <div class="flex items-center gap-4 border-l border-slate-700 pl-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-green-400 rounded-full"></span>
+                    <span class="text-[10px] font-bold text-slate-400">當期</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-orange-500 rounded-full"></span>
+                    <span class="text-[10px] font-bold text-slate-400">上期</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
+                    <span class="text-[10px] font-bold text-slate-400">選取</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主顯示區域 -->
+    <div id="mainContainer" class="all-matrices-wrapper max-w-[1600px] mx-auto pb-40">
+        <!-- 矩陣、統計、報表、合併結果會動態生成於此 -->
+    </div>
+
+    <script>
+        let fullHistory = [];
+        let showPrevDraw = false; 
+        let selectedBalls = new Set(); 
+        let selectedMatrixIds = new Set(); // 存放選中的期數矩陣 ID
+        let selectedStatIds = new Set();   // 存放選中的統計矩陣 ID (e.g., 'global', 'col-1')
+        let reportHistory = []; // 存放報表資料
+        let mergedMatrices = []; // 存放合併後的矩陣結果 { id, ballsSet, title }
+
+        const typeSelect = document.getElementById('typeSelect');
+        const periodNInput = document.getElementById('periodN');
+        const colsCountInput = document.getElementById('colsCount');
+        const matrixXInput = document.getElementById('matrixX');
+        const matrixYInput = document.getElementById('matrixY');
+        const mainContainer = document.getElementById('mainContainer');
+        const loader = document.getElementById('loader');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const togglePrevBtn = document.getElementById('togglePrevBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        async function loadData() {
+            const type = typeSelect.value;
+            const url = `https://raw.githubusercontent.com/win83/secret-lotto-888/main/fine/${type}-all.csv`;
+            
+            if (loader) loader.classList.remove('hidden');
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const lines = text.trim().split('\n');
+                
+                fullHistory = lines.slice(1).map(line => {
+                    const cols = line.split(',').map(c => c.trim());
+                    return {
+                        id: cols[0],
+                        date: cols[1],
+                        balls: cols.slice(2).map(v => parseInt(v)).filter(v => !isNaN(v))
+                    };
+                });
+
+                renderAll();
+            } catch (e) {
+                console.error("Fetch error:", e);
+                mainContainer.innerHTML = '<div class="text-center py-20 text-red-400 font-bold">資料載入失敗</div>';
+            } finally {
+                if (loader) loader.classList.add('hidden');
+            }
+        }
+
+        function handleCellClick(e) {
+            const num = parseInt(e.currentTarget.getAttribute('data-num'));
+            if (isNaN(num)) return;
+            
+            if (selectedBalls.has(num)) {
+                selectedBalls.delete(num);
+            } else {
+                selectedBalls.add(num);
+            }
+            renderAll();
+        }
+
+        function toggleMatrixSelection(id) {
+            if (selectedMatrixIds.has(id)) {
+                selectedMatrixIds.delete(id);
+            } else {
+                selectedMatrixIds.add(id);
+            }
+            renderAll();
+        }
+
+        function toggleStatSelection(id) {
+            if (selectedStatIds.has(id)) {
+                selectedStatIds.delete(id);
+            } else {
+                selectedStatIds.add(id);
+            }
+            renderAll();
+        }
+
+        function renderAll() {
+            if (!fullHistory.length) return;
+            const n = parseInt(periodNInput.value) || 10;
+            const cols = parseInt(colsCountInput.value) || 2;
+            
+            mainContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            mainContainer.innerHTML = '';
+
+            const targetData = fullHistory.slice(-n);
+            const columnSets = Array.from({ length: cols }, () => new Set());
+            const globalSet = new Set();
+
+            // 1. 渲染所有期數矩陣
+            targetData.forEach((draw, idx) => {
+                const originalIndex = fullHistory.findIndex(h => h.id === draw.id);
+                const prevDraw = originalIndex > 0 ? fullHistory[originalIndex - 1] : null;
+
+                const colIdx = idx % cols;
+                draw.balls.forEach(b => {
+                    columnSets[colIdx].add(b);
+                    globalSet.add(b);
+                });
+
+                const block = createMatrixBlock(draw, prevDraw);
+                mainContainer.appendChild(block);
+            });
+
+            // 2. 補空白佔位符
+            const remainder = targetData.length % cols;
+            if (remainder !== 0) {
+                const placeholdersNeeded = cols - remainder;
+                for (let i = 0; i < placeholdersNeeded; i++) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'matrix-block matrix-placeholder';
+                    mainContainer.appendChild(placeholder);
+                }
+            }
+
+            // 3. 渲染直列統計
+            for (let i = 0; i < cols; i++) {
+                mainContainer.appendChild(createSummaryBlock(columnSets[i], i + 1));
+            }
+
+            // 4. 渲染全域統計
+            mainContainer.appendChild(createSummaryBlock(globalSet, "全域", true));
+
+            // 5. 渲染合併後的矩陣結果
+            mergedMatrices.forEach((m) => {
+                mainContainer.appendChild(createMergedMatrixBlock(m));
+            });
+
+            // 6. 渲染目前的即時預測統計 (橫向)
+            if (selectedBalls.size > 0) {
+                mainContainer.appendChild(createCurrentAnalysisBlock());
+            }
+
+            // 7. 渲染報表區
+            if (reportHistory.length > 0) {
+                mainContainer.appendChild(createReportBlock());
+            }
+        }
+
+        function createMatrixBlock(currentDraw, prevDraw) {
+            const isSelectedMatrix = selectedMatrixIds.has(currentDraw.id);
+            const container = document.createElement('div');
+            container.className = 'matrix-block' + (isSelectedMatrix ? ' selected-block' : '');
+            
+            const header = document.createElement('div');
+            header.className = 'matrix-header';
+            header.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="text-green-400 font-black text-sm tracking-tight"># ${currentDraw.id}</span>
+                    <span class="text-slate-500 font-bold text-[10px] uppercase">${currentDraw.date}</span>
+                </div>
+                <label class="matrix-select-wrap" onclick="event.stopPropagation()">
+                    <input type="checkbox" ${isSelectedMatrix ? 'checked' : ''} onchange="toggleMatrixSelection('${currentDraw.id}')">
+                    <span>選取</span>
+                </label>
+            `;
+            container.appendChild(header);
+
+            const mX = parseInt(matrixXInput.value) || 10;
+            const grid = document.createElement('div');
+            grid.className = 'matrix-grid';
+            grid.style.gridTemplateColumns = `repeat(${mX}, 1fr)`;
+
+            for (let i = 1; i <= mX * (parseInt(matrixYInput.value) || 4); i++) {
+                const cell = createCell(i);
+                const isNow = currentDraw.balls.includes(i);
+                const isPrev = prevDraw && prevDraw.balls.includes(i);
+                const isSelected = selectedBalls.has(i);
+
+                if (isSelected) cell.classList.add('state-selected');
+                else if (showPrevDraw) {
+                    if (isNow && isPrev) cell.classList.add('state-overlap');
+                    else if (isNow) cell.classList.add('state-now');
+                    else if (isPrev) cell.classList.add('state-prev');
+                } else if (isNow) cell.classList.add('state-now');
+                
+                grid.appendChild(cell);
+            }
+            container.appendChild(grid);
+            return container;
+        }
+
+        function createSummaryBlock(ballsSet, label, isGlobal = false) {
+            const statId = isGlobal ? 'global' : `col-${label}`;
+            const isSelectedStat = selectedStatIds.has(statId);
+            const container = document.createElement('div');
+            container.className = 'matrix-block summary-block' + (isSelectedStat ? ' selected-block' : '');
+            
+            const header = document.createElement('div');
+            header.className = 'matrix-header';
+            header.innerHTML = `
+                <div class="flex flex-col">
+                    <span class="text-white font-black text-sm uppercase leading-none mb-1">${isGlobal?'全域':'直列'}統計 (${label})</span>
+                    <span class="text-green-400/80 font-bold text-[9px] uppercase tracking-widest">Summary Statistics</span>
+                </div>
+                <label class="matrix-select-wrap" onclick="event.stopPropagation()">
+                    <input type="checkbox" ${isSelectedStat ? 'checked' : ''} onchange="toggleStatSelection('${statId}')">
+                    <span>選取</span>
+                </label>
+            `;
+            container.appendChild(header);
+
+            const mX = parseInt(matrixXInput.value) || 10;
+            const grid = document.createElement('div');
+            grid.className = 'matrix-grid';
+            grid.style.gridTemplateColumns = `repeat(${mX}, 1fr)`;
+
+            for (let i = 1; i <= mX * (parseInt(matrixYInput.value) || 4); i++) {
+                const cell = createCell(i);
+                if (selectedBalls.has(i)) cell.classList.add('state-selected');
+                else if (ballsSet.has(i)) cell.classList.add('state-now');
+                grid.appendChild(cell);
+            }
+            container.appendChild(grid);
+            return container;
+        }
+
+        function createMergedMatrixBlock(item) {
+            const container = document.createElement('div');
+            container.className = 'matrix-block merged-block';
+            container.innerHTML = `
+                <button class="delete-btn" onclick="deleteMergedMatrix(${item.id})">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <div class="matrix-header">
+                    <div class="flex flex-col">
+                        <span class="text-amber-400 font-black text-sm uppercase leading-none mb-1">合併矩陣結果</span>
+                        <span class="text-amber-400/60 font-bold text-[9px] uppercase tracking-widest">${item.title}</span>
+                    </div>
+                </div>
+            `;
+            const mX = parseInt(matrixXInput.value) || 10;
+            const grid = document.createElement('div');
+            grid.className = 'matrix-grid';
+            grid.style.gridTemplateColumns = `repeat(${mX}, 1fr)`;
+
+            for (let i = 1; i <= mX * (parseInt(matrixYInput.value) || 4); i++) {
+                const cell = createCell(i);
+                if (selectedBalls.has(i)) cell.classList.add('state-selected');
+                else if (item.ballsSet.has(i)) cell.classList.add('state-now');
+                grid.appendChild(cell);
+            }
+            container.appendChild(grid);
+            return container;
+        }
+
+        function createCell(num) {
+            const cell = document.createElement('div');
+            cell.className = 'matrix-cell';
+            cell.setAttribute('data-num', num);
+            cell.onclick = handleCellClick;
+            cell.innerHTML = `<span class="cell-num">${String(num).padStart(2, '0')}</span>`;
+            return cell;
+        }
+
+        function calculateStats() {
+            const searchArray = Array.from(selectedBalls);
+            const stats = {};
+            let matches = 0;
+            for (let i = 0; i < fullHistory.length - 1; i++) {
+                if (searchArray.every(num => fullHistory[i].balls.includes(num))) {
+                    matches++;
+                    fullHistory[i + 1].balls.forEach(b => stats[b] = (stats[b] || 0) + 1);
+                }
+            }
+            return { matches, stats, condition: [...searchArray].sort((a,b)=>a-b) };
+        }
+
+        function createCurrentAnalysisBlock() {
+            const result = calculateStats();
+            const container = document.createElement('div');
+            container.className = 'analysis-block';
+            
+            container.innerHTML = `
+                <div class="flex justify-between items-center border-b border-blue-500/30 pb-3 mb-4">
+                    <div class="flex flex-col">
+                        <span class="text-blue-400 font-black text-lg uppercase leading-none">即時下期分析</span>
+                        <span class="text-blue-300/60 font-bold text-xs uppercase tracking-widest mt-1">選取：${result.condition.join(', ')} | 歷史匹配：${result.matches} 次</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 italic">按 Enter 鍵加入報表</span>
+                </div>
+            `;
+
+            const list = document.createElement('div');
+            list.className = 'freq-horizontal-list';
+            
+            const sorted = Object.entries(result.stats).sort((a, b) => b[1] - a[1]);
+            if (sorted.length === 0) {
+                list.innerHTML = `<span class="text-slate-500 italic text-sm">歷史中無相同組合匹配</span>`;
+            } else {
+                sorted.forEach(([num, count]) => {
+                    list.innerHTML += `
+                        <div class="freq-item">
+                            <span class="freq-num-label">${String(num).padStart(2, '0')}</span>
+                            <span class="freq-count-label">${count} 次</span>
+                        </div>
+                    `;
+                });
+            }
+            container.appendChild(list);
+            return container;
+        }
+
+        function createReportBlock() {
+            const container = document.createElement('div');
+            container.className = 'report-block';
+            container.innerHTML = `<h2 class="text-white font-black text-xl mb-6 border-b border-slate-700 pb-3 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                分析存檔報表
+            </h2>`;
+
+            reportHistory.forEach((item, idx) => {
+                const row = document.createElement('div');
+                row.className = 'report-row';
+                let statsHtml = '';
+                const sorted = Object.entries(item.stats).sort((a, b) => b[1] - a[1]);
+                sorted.forEach(([num, count]) => {
+                    statsHtml += `
+                        <div class="freq-item" style="border-color: #3b82f6;">
+                            <span class="freq-num-label" style="color:#60a5fa">${String(num).padStart(2, '0')}</span>
+                            <span class="freq-count-label">${count} 次</span>
+                        </div>
+                    `;
+                });
+
+                row.innerHTML = `
+                    <button class="delete-btn" onclick="deleteReport(${item.id})">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div class="flex items-center gap-4 border-l-4 border-green-500 pl-3">
+                        <span class="text-green-400 font-black text-sm">組合：${item.condition.join(', ')}</span>
+                        <span class="text-slate-400 text-xs font-bold bg-slate-800 px-2 py-1 rounded">匹配 ${item.matches} 次</span>
+                    </div>
+                    <div class="freq-horizontal-list">${statsHtml}</div>
+                `;
+                container.appendChild(row);
+            });
+            return container;
+        }
+
+        function addToReport() {
+            // 如果選中了矩陣或統計矩陣，優先進行合併
+            if (selectedMatrixIds.size > 0 || selectedStatIds.size > 0) {
+                mergeSelectedMatrices();
+                return;
+            }
+
+            // 否則，執行號碼分析報表
+            if (selectedBalls.size === 0) return;
+            const analysis = calculateStats();
+            reportHistory.unshift({
+                id: Date.now(),
+                ...analysis
+            });
+            renderAll();
+        }
+
+        function mergeSelectedMatrices() {
+            if (selectedMatrixIds.size === 0 && selectedStatIds.size === 0) return;
+            
+            const n = parseInt(periodNInput.value) || 10;
+            const cols = parseInt(colsCountInput.value) || 2;
+            const targetData = fullHistory.slice(-n);
+            const columnSets = Array.from({ length: cols }, () => new Set());
+            const globalSet = new Set();
+
+            // 預先計算統計集合
+            targetData.forEach((draw, idx) => {
+                const colIdx = idx % cols;
+                draw.balls.forEach(b => {
+                    columnSets[colIdx].add(b);
+                    globalSet.add(b);
+                });
+            });
+
+            const mergedBalls = new Set();
+            const sourceLabels = [];
+
+            // 從期數矩陣獲取號碼
+            const idList = Array.from(selectedMatrixIds).sort();
+            idList.forEach(id => {
+                const draw = fullHistory.find(h => h.id === id);
+                if (draw) {
+                    draw.balls.forEach(b => mergedBalls.add(b));
+                    sourceLabels.push(`#${id}`);
+                }
+            });
+
+            // 從統計矩陣獲取號碼
+            selectedStatIds.forEach(statId => {
+                if (statId === 'global') {
+                    globalSet.forEach(b => mergedBalls.add(b));
+                    sourceLabels.push('全域統計');
+                } else if (statId.startsWith('col-')) {
+                    const colNum = parseInt(statId.replace('col-', ''));
+                    const set = columnSets[colNum - 1];
+                    if (set) {
+                        set.forEach(b => mergedBalls.add(b));
+                        sourceLabels.push(`直列統計(${colNum})`);
+                    }
+                }
+            });
+
+            mergedMatrices.unshift({
+                id: Date.now(),
+                ballsSet: mergedBalls,
+                title: `來源：${sourceLabels.join(', ')}`
+            });
+
+            selectedMatrixIds.clear(); 
+            selectedStatIds.clear(); 
+            renderAll();
+        }
+
+        function deleteReport(id) {
+            reportHistory = reportHistory.filter(r => r.id !== id);
+            renderAll();
+        }
+
+        function deleteMergedMatrix(id) {
+            mergedMatrices = mergedMatrices.filter(m => m.id !== id);
+            renderAll();
+        }
+
+        function clearAll() {
+            selectedBalls.clear();
+            selectedMatrixIds.clear();
+            selectedStatIds.clear();
+            reportHistory = [];
+            mergedMatrices = [];
+            renderAll();
+        }
+
+        togglePrevBtn.addEventListener('click', () => {
+            showPrevDraw = !showPrevDraw;
+            togglePrevBtn.classList.toggle('bg-orange-500', showPrevDraw);
+            togglePrevBtn.classList.toggle('text-white', showPrevDraw);
+            togglePrevBtn.textContent = showPrevDraw ? '關閉上期' : '顯示上期';
+            renderAll();
+        });
+
+        clearAllBtn.addEventListener('click', clearAll);
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { 
+                selectedBalls.clear(); 
+                selectedMatrixIds.clear(); 
+                selectedStatIds.clear();
+                renderAll(); 
+            }
+            if (e.key === 'Enter') { addToReport(); }
+        });
+
+        periodNInput.addEventListener('change', renderAll);
+        colsCountInput.addEventListener('change', renderAll);
+        matrixXInput.addEventListener('change', renderAll);
+        matrixYInput.addEventListener('change', renderAll);
+        typeSelect.addEventListener('change', () => { clearAll(); loadData(); });
+        refreshBtn.addEventListener('click', loadData);
+        
+        window.onload = loadData;
+    </script>
+</body>
+</html>
