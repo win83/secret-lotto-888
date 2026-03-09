@@ -3,36 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>純文字機碼比對系統</title>
+    <title>機碼文字比對系統</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
         .container { position: relative; width: 100vw; height: 100vh; }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* 掃描準星框 */
+        /* 調整後的掃描框：更寬、更高，適合長字串 */
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             pointer-events: none;
         }
         .scan-region {
-            width: 80%; height: 100px; border: 2px solid #00ff00;
-            box-shadow: 0 0 0 5000px rgba(0, 0, 0, 0.5); border-radius: 8px;
+            width: 90%;       /* 寬度增加到 90% */
+            height: 480px;    /* 高度增加到 180px */
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 0 5000px rgba(0, 0, 0, 0.6); /* 增加背景陰影深度 */
+            border-radius: 12px;
+            position: relative;
+        }
+        /* 框角裝飾 */
+        .scan-region::after {
+            content: "對準文字區域";
+            position: absolute; top: -30px; left: 0; color: #00ff00; font-size: 14px;
         }
         
         .ui-panel {
-            position: absolute; bottom: 30px; width: 100%; text-align: center;
+            position: absolute; bottom: 40px; width: 100%; text-align: center;
             pointer-events: auto;
         }
         button {
-            padding: 15px 40px; font-size: 18px; border-radius: 30px;
+            padding: 18px 50px; font-size: 20px; border-radius: 35px;
             border: none; background: #00ff00; color: black; font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,255,0,0.3);
         }
         #result-status {
-            position: absolute; top: 50px; width: 100%; text-align: center;
-            font-size: 1.2em; padding: 10px;
+            position: absolute; top: 40px; width: 100%; text-align: center;
+            font-size: 1.4em; padding: 15px; font-weight: bold;
         }
+        #debug-text { font-size: 14px; color: #00ff00; margin-top: 15px; background: rgba(0,0,0,0.5); }
         canvas { display: none; }
     </style>
 </head>
@@ -43,14 +54,14 @@
     
     <div class="overlay">
         <div class="scan-region"></div>
-        <p>請將型號或機碼文字放入框內</p>
+        <p style="margin-top: 20px; color: #ccc;">將「貼紙文字」或「單據型號」放入綠框</p>
     </div>
 
     <div id="result-status">準備就緒</div>
 
     <div class="ui-panel">
-        <button id="snap">立即比對文字</button>
-        <p id="debug-text" style="font-size: 12px; color: #aaa; margin-top: 10px;"></p>
+        <button id="snap">點擊辨識文字</button>
+        <div id="debug-text">尚未偵測</div>
     </div>
 </div>
 
@@ -62,41 +73,42 @@
     const status = document.getElementById('result-status');
     const debug = document.getElementById('debug-text');
 
-    // 啟動相機
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then(stream => { video.srcObject = stream; });
+    // 開啟相機
+    navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment", focusMode: "continuous" } 
+    }).then(stream => { video.srcObject = stream; });
 
     document.getElementById('snap').addEventListener('click', async () => {
-        status.innerText = "正在辨識文字...";
+        status.innerText = "🔍 辨識中...";
         status.style.color = "yellow";
 
         const ctx = canvas.getContext('2d');
+        // 增加畫布解析度以提升 OCR 準確度
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        
-        // 只擷取畫面中央（準星範圍）的圖片，提高辨識率與速度
         ctx.drawImage(video, 0, 0);
         
-        Tesseract.recognize(canvas.toDataURL(), 'eng', {
+        // 執行 OCR
+        Tesseract.recognize(canvas.toDataURL('image/jpeg', 0.8), 'eng', {
             logger: m => console.log(m)
         }).then(({ data: { text } }) => {
-            const cleanText = text.replace(/[^A-Z0-9-]/g, '').trim();
-            debug.innerText = "偵測到內容: " + cleanText;
+            // 過濾掉雜質，只留大寫英文、數字、橫線
+            const cleanText = text.replace(/[^A-Z0-9-]/g, ' ').trim();
+            debug.innerText = "偵測結果: " + cleanText;
 
-            // 比對邏輯：檢查同一個關鍵字（如 NA-V170NMS）是否在畫面中出現多次
-            // 或是與您預設的資料比對
             checkMatch(cleanText);
         });
     });
 
-    function checkMatch(text) {
-        // 這裡放您要比對的邏輯
-        // 範例：若偵測到 AH1K (機碼開頭)
-        if (text.includes("AH1K") || text.includes("NAV170")) {
-            status.innerText = "✅ 辨識成功！";
+    function checkMatch(detectedText) {
+        // 這裡可以放入您這批貨預期要比對的型號
+        const targetModel = "NA-V170NMS"; 
+        
+        if (detectedText.includes(targetModel)) {
+            status.innerText = "✅ 比對成功 (型號正確)";
             status.style.color = "#00ff00";
         } else {
-            status.innerText = "❌ 未偵測到目標文字";
+            status.innerText = "❓ 未能完全匹配";
             status.style.color = "#ff4444";
         }
     }
