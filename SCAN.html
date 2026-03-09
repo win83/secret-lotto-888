@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 自動出貨比對</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; background: #222; color: white; text-align: center; }
+        #video-container { position: relative; width: 100%; max-width: 500px; margin: auto; }
+        #reader { width: 100%; border: 2px solid #555; }
+        .overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; text-align: left; pointer-events: none; }
+        .status { font-size: 2rem; font-weight: bold; margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
+        .match { background: #28a745; display: block; }
+        .error { background: #dc3545; display: block; }
+        .debug-info { font-size: 0.8rem; color: #aaa; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h2>🤖 AI 自動比對系統</h2>
+    
+    <div id="video-container">
+        <div id="reader"></div>
+        <div class="overlay">
+            <div>📄 偵測到品名：<span id="detected-text" style="color:#00d1ff">搜尋中...</span></div>
+            <div>🏷️ 偵測到機碼：<span id="detected-barcode" style="color:#f39c12">等待掃描...</span></div>
+        </div>
+    </div>
+
+    <div id="status-display" class="status"></div>
+    <div id="debug" class="debug-info">正在啟動相機與 AI 引擎...</div>
+    
+    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px;">重新掃描</button>
+
+    <script>
+        const detectedTextEl = document.getElementById('detected-text');
+        const detectedBarcodeEl = document.getElementById('detected-barcode');
+        const statusDisplay = document.getElementById('status-display');
+        const debugEl = document.getElementById('debug');
+
+        let lastText = "";
+        let lastBarcode = "";
+
+        // 初始化 Tesseract OCR
+        const worker = Tesseract.createWorker({
+            logger: m => console.log(m)
+        });
+
+        async function initOCR() {
+            await worker.load();
+            await worker.loadLanguage('eng');
+            await worker.initialize('eng');
+            debugEl.innerText = "AI 引擎準備就緒，請對準出貨單";
+        }
+
+        // 當條碼掃描成功
+        function onScanSuccess(decodedText) {
+            lastBarcode = decodedText.trim();
+            detectedBarcodeEl.innerText = lastBarcode;
+            checkMatch();
+        }
+
+        // 定時擷取畫面進行文字辨識 (OCR)
+        async function captureText() {
+            const video = document.querySelector('video');
+            if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                const { data: { text } } = await worker.recognize(canvas);
+                // 過濾掉無用字元，只保留大寫英數
+                const filteredText = text.replace(/[^A-Z0-9-]/g, '');
+                if (filteredText.length > 5) {
+                    lastText = filteredText;
+                    detectedTextEl.innerText = lastText;
+                    checkMatch();
+                }
+            }
+            setTimeout(captureText, 2000); // 每 2 秒辨識一次文字以節省效能
+        }
+
+        // 比對邏輯
+        function checkMatch() {
+            if (lastText && lastBarcode) {
+                // 如果條碼內容包含 OCR 識別出的型號，或反之
+                if (lastBarcode.includes(lastText) || lastText.includes(lastBarcode.substring(0, 5))) {
+                    statusDisplay.innerText = "✅ 比對成功";
+                    statusDisplay.className = "status match";
+                    if (navigator.vibrate) navigator.vibrate(200);
+                } else {
+                    statusDisplay.innerText = "❌ 型號不符";
+                    statusDisplay.className = "status error";
+                }
+            }
+        }
+
+        // 啟動
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 250, height: 150 } },
+            onScanSuccess
+        ).then(() => {
+            initOCR().then(captureText);
+        });
+    </script>
+</body>
+</html>
