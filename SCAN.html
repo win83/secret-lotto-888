@@ -3,149 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>電器出貨雙重對比助手</title>
+    <title>專業出貨掃描儀</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; margin: 0; padding: 15px; text-align: center; }
-        .camera-view { width: 100%; height: 300px; background: #000; border-radius: 15px; overflow: hidden; position: relative; border: 2px solid #333; }
+        body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
+        /* 相機底層 */
+        #camera-wrapper { position: relative; width: 100vw; height: 60vh; background: #222; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .slot-container { display: flex; justify-content: space-around; margin: 20px 0; }
-        .slot { width: 45%; border: 2px dashed #666; border-radius: 10px; padding: 10px; min-height: 80px; background: #1e1e1e; }
+        
+        /* 定位框遮罩 */
+        .scanner-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.4);
+            pointer-events: none;
+        }
+        .scan-window {
+            width: 80%; height: 120px;
+            border: 2px solid #00d1ff;
+            box-shadow: 0 0 15px rgba(0, 209, 255, 0.5);
+            background: rgba(0, 209, 255, 0.05);
+            position: relative;
+        }
+        .scan-window::after {
+            content: "將型號文字放入框內";
+            position: absolute; bottom: -30px; left: 0; width: 100%;
+            text-align: center; color: #00d1ff; font-size: 14px;
+        }
+
+        /* 下方操作區 */
+        .control-panel { height: 40vh; background: #1a1a1a; padding: 15px; box-sizing: border-box; }
+        .slots { display: flex; gap: 10px; margin-bottom: 15px; }
+        .slot { flex: 1; padding: 10px; border: 1px solid #444; border-radius: 8px; font-size: 13px; text-align: left; }
         .slot.active { border-color: #00d1ff; background: #002b36; }
-        .slot.filled { border-color: #28a745; border-style: solid; }
-        .btn-capture { background: #1a73e8; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 1.2rem; margin: 10px; width: 80%; }
-        .btn-reset { background: #444; color: #ccc; border: none; padding: 10px; border-radius: 5px; margin-top: 20px; }
-        #result { margin-top: 20px; font-size: 1.5rem; font-weight: bold; padding: 15px; border-radius: 10px; display: none; }
-        .match { background: #28a745; color: white; }
-        .error { background: #dc3545; color: white; }
-        .model-text { font-family: monospace; font-size: 1rem; color: #00d1ff; display: block; margin-top: 5px; }
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .slot b { color: #888; display: block; margin-bottom: 5px; }
+        .slot span { color: #fff; font-weight: bold; word-break: break-all; }
+
+        .btn-scan {
+            width: 100%; padding: 20px; font-size: 1.5rem; font-weight: bold;
+            background: #1a73e8; color: white; border: none; border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .btn-scan:active { background: #1557b0; transform: scale(0.98); }
+
+        #result-popup {
+            position: fixed; top: 20%; left: 5%; width: 90%; 
+            padding: 30px 0; border-radius: 15px; text-align: center;
+            font-size: 2.5rem; font-weight: bold; z-index: 100; display: none;
+        }
     </style>
 </head>
 <body>
 
-    <div id="loading-overlay">⌛ AI 辨識中...</div>
-
-    <h2>📦 拍照比對助手</h2>
-
-    <div class="camera-view">
-        <video id="video" autoplay playsinline></video>
+<div id="camera-wrapper">
+    <video id="video" autoplay playsinline></video>
+    <div class="scanner-overlay">
+        <div class="scan-window" id="scan-window"></div>
     </div>
+</div>
 
-    <button class="btn-capture" onclick="capture()">📸 拍照辨識</button>
-
-    <div class="slot-container">
-        <div id="slot1" class="slot active">
-            <div>1. 出貨單品名</div>
-            <span id="text1" class="model-text">等待拍照...</span>
-        </div>
-        <div id="slot2" class="slot">
-            <div>2. 機碼貼紙</div>
-            <span id="text2" class="model-text">等待拍照...</span>
-        </div>
+<div class="control-panel">
+    <div class="slots">
+        <div id="slot1" class="slot active"><b>📦 出貨單品名</b><span id="text1">等待掃描...</span></div>
+        <div id="slot2" class="slot"><b>🏷️ 機碼貼紙</b><span id="text2">等待掃描...</span></div>
     </div>
+    <button class="btn-scan" onclick="performScan()">按下掃描比對</button>
+    <div style="text-align: center; margin-top: 15px;">
+        <button onclick="location.reload()" style="background:none; border:none; color:#666; text-decoration:underline;">重設全部</button>
+    </div>
+</div>
 
-    <div id="result"></div>
+<div id="result-popup"></div>
 
-    <button class="btn-reset" onclick="resetAll()">全部清除重拍</button>
+<script>
+    const video = document.getElementById('video');
+    const slot1 = document.getElementById('slot1');
+    const slot2 = document.getElementById('slot2');
+    const text1 = document.getElementById('text1');
+    const text2 = document.getElementById('text2');
+    const resultPopup = document.getElementById('result-popup');
 
-    <script>
-        const video = document.getElementById('video');
-        const loading = document.getElementById('loading-overlay');
-        const slot1 = document.getElementById('slot1');
-        const slot2 = document.getElementById('slot2');
-        const text1El = document.getElementById('text1');
-        const text2El = document.getElementById('text2');
-        const resultEl = document.getElementById('result');
+    let worker;
+    let code1 = "";
+    let code2 = "";
 
-        let worker;
-        let model1 = "";
-        let model2 = "";
+    // 啟動相機
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => { video.srcObject = stream; });
 
-        // 啟動相機
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; });
+    // 初始化 Tesseract
+    async function init() {
+        worker = await Tesseract.createWorker('eng');
+    }
+    init();
 
-        // 初始化 AI
-        async function initAI() {
-            worker = await Tesseract.createWorker('eng');
-        }
-        initAI();
+    async function performScan() {
+        // UI 回饋
+        statusUpdate("正在辨識...");
+        
+        // 擷取框框內的畫面
+        const canvas = document.createElement('canvas');
+        const scale = video.videoWidth / video.clientWidth;
+        
+        // 只截取中間定位框的位置
+        const windowRect = document.getElementById('scan-window').getBoundingClientRect();
+        const videoRect = video.getBoundingClientRect();
 
-        async function capture() {
-            loading.style.display = 'flex';
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+        canvas.width = windowRect.width * scale;
+        canvas.height = windowRect.height * scale;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 
+            (windowRect.left - videoRect.left) * scale, (windowRect.top - videoRect.top) * scale, 
+            windowRect.width * scale, windowRect.height * scale,
+            0, 0, canvas.width, canvas.height
+        );
 
-            // 辨識文字
-            const result = await worker.recognize(canvas);
-            const foundModels = result.data.words
-                .map(w => w.text.replace(/[^A-Z0-9-]/gi, '').toUpperCase())
-                .filter(t => t.length >= 6);
-
-            // 邏輯：如果單次拍照就抓到兩個型號，直接完成比對
-            if (foundModels.length >= 2 && model1 === "") {
-                model1 = foundModels[0];
-                model2 = foundModels[1];
-                updateUI(true);
-            } 
-            // 邏輯：如果是分開拍
-            else if (foundModels.length >= 1) {
-                if (model1 === "") {
-                    model1 = foundModels[0];
-                    updateUI(false);
-                } else {
-                    model2 = foundModels[0];
-                    updateUI(false);
-                }
-            }
-
-            loading.style.display = 'none';
-            checkMatch();
+        // 執行辨識
+        const { data: { text } } = await worker.recognize(canvas);
+        const cleanText = text.replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+        
+        if (cleanText.length < 5) {
+            statusUpdate("辨識失敗，請對準一點");
+            return;
         }
 
-        function updateUI(isSimultaneous) {
-            if (model1) {
-                text1El.innerText = model1;
-                slot1.classList.add('filled');
-                slot1.classList.remove('active');
-                slot2.classList.add('active');
-            }
-            if (model2) {
-                text2El.innerText = model2;
-                slot2.classList.add('filled');
-                slot2.classList.remove('active');
-            }
+        if (code1 === "") {
+            code1 = cleanText;
+            text1.innerText = code1;
+            slot1.classList.remove('active');
+            slot2.classList.add('active');
+            statusUpdate("第一組OK，請掃描貼紙");
+        } else {
+            code2 = cleanText;
+            text2.innerText = code2;
+            compare();
         }
+    }
 
-        function checkMatch() {
-            if (model1 && model2) {
-                resultEl.style.display = 'block';
-                // 模糊比對：內容包含或長度接近
-                if (model1.includes(model2) || model2.includes(model1)) {
-                    resultEl.innerText = "✅ 型號吻合！可以出貨";
-                    resultEl.className = "result match";
-                    if(navigator.vibrate) navigator.vibrate(200);
-                } else {
-                    resultEl.innerText = "❌ 錯誤！型號不符";
-                    resultEl.className = "result error";
-                    if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
-                }
-            }
-        }
+    function statusUpdate(msg) {
+        document.querySelector('.btn-scan').innerText = msg;
+        setTimeout(() => {
+            if (code2 === "") document.querySelector('.btn-scan').innerText = "按下掃描比對";
+        }, 1500);
+    }
 
-        function resetAll() {
-            model1 = "";
-            model2 = "";
-            text1El.innerText = "等待拍照...";
-            text2El.innerText = "等待拍照...";
-            slot1.className = "slot active";
-            slot2.className = "slot";
-            resultEl.style.display = 'none';
+    function compare() {
+        resultPopup.style.display = 'block';
+        if (code1.includes(code2) || code2.includes(code1)) {
+            resultPopup.innerText = "✅ 正確";
+            resultPopup.style.background = "#28a745";
+            if(navigator.vibrate) navigator.vibrate(200);
+        } else {
+            resultPopup.innerText = "❌ 錯誤";
+            resultPopup.style.background = "#dc3545";
+            if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
         }
-    </script>
+        
+        setTimeout(() => {
+            resultPopup.style.display = 'none';
+            location.reload(); // 比對完自動重設，方便掃下一張
+        }, 3000);
+    }
+</script>
 </body>
 </html>
