@@ -2,106 +2,152 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智慧出貨清點儀</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智慧鏡頭-自動清點</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 15px; }
-        .card { background: #1e1e1e; border-radius: 20px; padding: 20px; border: 2px solid #333; }
-        .btn-main { background: #fbff00; color: #000; border: none; padding: 20px; border-radius: 50px; font-size: 1.4rem; font-weight: bold; width: 100%; cursor: pointer; }
-        .result-box { margin-top: 20px; padding: 15px; border-radius: 12px; display: none; text-align: left; }
-        .pass { background: #28a745; }
-        .error { background: #dc3545; }
-        .info-item { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 0; }
-        .sn-list { font-size: 0.8rem; color: #aaa; background: #000; padding: 10px; border-radius: 5px; margin-top: 5px; }
-        #loading { display: none; margin: 20px 0; color: #fbff00; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #video-container { position: relative; width: 100vw; height: 100vh; }
+        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
+        
+        /* 狀態 HUD */
+        .hud { 
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 10; width: 90%; text-align: center; pointer-events: none;
+        }
+        #status-bar {
+            background: rgba(0,0,0,0.8); color: #00d1ff; padding: 15px;
+            border-radius: 15px; border: 1px solid #00d1ff; font-size: 1.1rem;
+        }
+        .loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #121212; color: white; display: flex; 
+            align-items: center; justify-content: center; z-index: 100;
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>🎯 智慧清點比對</h2>
-    <p>拍攝紅框區域：包含<b style="color:#fbff00">出貨品名</b>與<b style="color:#fbff00">所有貼紙</b></p>
-    
-    <input type="file" accept="image/*" capture="environment" id="file-input" style="display:none">
-    <button class="btn-main" onclick="document.getElementById('file-input').click()">📸 拍照清點</button>
+<div id="loading" class="loading-screen">⚙️ 正在啟動智慧鏡頭引擎...</div>
 
-    <div id="loading">🚀 AI 正在分析數量與機碼...</div>
-
-    <div id="result" class="result-box">
-        <h3 id="res-title"></h3>
-        <div class="info-item">📋 應出品名：<span id="target-name">--</span></div>
-        <div class="info-item">🔢 偵測數量：<span id="detected-count">0</span> 張貼紙</div>
-        <div class="info-item">🚫 重複檢查：<span id="duplicate-status">--</span></div>
-        <div class="sn-list" id="sn-details"></div>
+<div id="video-container">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div class="hud">
+        <div id="status-bar">🔍 正在掃描... 請對準出貨單與貼紙</div>
     </div>
 </div>
 
 <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusBar = document.getElementById('status-bar');
+    const loading = document.getElementById('loading');
+
     let worker;
-    async function init() {
-        worker = await Tesseract.createWorker('eng');
+    let isProcessing = false;
+
+    // 1. 啟動相機 (環境後鏡頭)
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", focusMode: "continuous" } 
+            });
+            video.srcObject = stream;
+            return new Promise(res => video.onloadedmetadata = res);
+        } catch (err) {
+            alert("無法開啟相機，請確保使用 HTTPS 網址並允許權限");
+        }
     }
-    init();
 
-    document.getElementById('file-input').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    // 2. 初始化 OCR 引擎
+    async function initAI() {
+        worker = await Tesseract.createWorker('eng'); // 型號多為英數，用英文字庫速度最快
+        loading.style.display = 'none';
+        scanLoop();
+    }
 
-        const loading = document.getElementById('loading');
-        const resultBox = document.getElementById('result');
-        loading.style.display = 'block';
-        resultBox.style.display = 'none';
+    // 3. 智慧鏡頭循環辨識
+    async function scanLoop() {
+        if (isProcessing) {
+            requestAnimationFrame(scanLoop);
+            return;
+        }
+        isProcessing = true;
 
-        const result = await worker.recognize(file);
-        const lines = result.data.lines;
+        // 同步畫布與影片大小
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // 擷取目前影格辨識
+        const result = await worker.recognize(video);
+        const words = result.data.words;
 
-        let allModels = []; // 存所有型號
-        let allSNs = [];    // 存所有序號/機碼
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        lines.forEach(line => {
-            const text = line.text.trim().toUpperCase();
-            // 辨識規則：型號通常包含大寫字母、數字及橫線
-            const match = text.match(/[A-Z0-9-]{7,}/g);
-            if (match) {
-                match.forEach(m => {
-                    // 如果這行包含特定的 S/N 或機碼特徵 (假設是比較長的或特定格式)
-                    if (m.length > 10) allSNs.push(m);
-                    else allModels.push(m);
-                });
+        let detectedModels = [];
+        words.forEach(word => {
+            // 過濾：只要長度大於 6 且包含英數組合的字串
+            let cleanText = word.text.trim().replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+            if (cleanText.length >= 7) {
+                detectedModels.push({ text: cleanText, bbox: word.bbox });
             }
         });
 
-        // 邏輯分析
-        const uniqueSNs = [...new Set(allSNs)]; // 去重後的序號
-        const isDuplicate = allSNs.length !== uniqueSNs.length;
-        const targetModel = allModels[0] || "未知"; // 假設第一筆抓到的是出貨單品名
+        // 4. 比對邏輯：找出畫面中相同的字串
+        const counts = {};
+        const duplicates = [];
 
-        // 顯示結果
-        loading.style.display = 'none';
-        resultBox.style.display = 'block';
-        
-        document.getElementById('target-name').innerText = targetModel;
-        document.getElementById('detected-count').innerText = allSNs.length;
-        
-        const resTitle = document.getElementById('res-msg');
-        if (isDuplicate) {
-            resultBox.className = "result-box error";
-            document.getElementById('res-title').innerText = "❌ 發現重複機碼！";
-            document.getElementById('duplicate-status').innerText = "有重複，請重新核對";
-            if(navigator.vibrate) navigator.vibrate([500, 200, 500]);
-        } else if (allSNs.length === 0) {
-            resultBox.className = "result-box error";
-            document.getElementById('res-title').innerText = "⚠️ 未能偵測到貼紙";
-        } else {
-            resultBox.className = "result-box pass";
-            document.getElementById('res-title').innerText = "✅ 核對完成";
-            document.getElementById('duplicate-status').innerText = "無重複";
-            if(navigator.vibrate) navigator.vibrate(200);
+        detectedModels.forEach(item => {
+            counts[item.text] = (counts[item.text] || 0) + 1;
+            // 繪製藍色基礎框
+            drawBox(item.bbox, "#00d1ff", item.text);
+        });
+
+        // 檢查是否有相同的文字
+        let matchCount = 0;
+        let lastMatchedText = "";
+
+        for (const [text, count] of Object.entries(counts)) {
+            if (count >= 2) {
+                matchCount = count;
+                lastMatchedText = text;
+                // 將相同的文字標註為綠色框
+                detectedModels.filter(m => m.text === text).forEach(m => {
+                    drawBox(m.bbox, "#28a745", "MATCHED");
+                });
+            }
         }
 
-        document.getElementById('sn-details').innerText = "偵測到的機碼清單：\n" + uniqueSNs.join("\n");
-    });
+        // 5. 更新 HUD 狀態
+        if (matchCount >= 2) {
+            statusBar.innerHTML = `✅ 偵測到相同型號: <b>${lastMatchedText}</b><br>數量: ${matchCount} 張貼紙`;
+            statusBar.style.borderColor = "#28a745";
+            statusBar.style.color = "#28a745";
+            if (navigator.vibrate) navigator.vibrate(50); // 輕微震動回饋
+        } else {
+            statusBar.innerHTML = `🔍 正在搜尋對應文字... (已偵測 ${detectedModels.length} 組字串)`;
+            statusBar.style.borderColor = "#00d1ff";
+            statusBar.style.color = "#00d1ff";
+        }
+
+        isProcessing = false;
+        // 稍微延遲避免手機過熱，每秒辨識約 2 次
+        setTimeout(scanLoop, 500); 
+    }
+
+    function drawBox(bbox, color, label) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(bbox.x0, bbox.y0, bbox.x1 - bbox.x0, bbox.y1 - bbox.y0);
+        ctx.fillStyle = color;
+        ctx.font = "bold 20px Arial";
+        ctx.fillText(label, bbox.x0, bbox.y0 - 10);
+    }
+
+    startCamera().then(initAI);
 </script>
 </body>
 </html>
