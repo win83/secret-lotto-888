@@ -3,96 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>出貨紅框自動比對</title>
+    <title>智慧出貨清點儀</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
-        .main-card { background: #1e1e1e; border-radius: 20px; padding: 30px; border: 2px solid #333; }
-        .btn-scan { background: #00d1ff; color: #000; border: none; padding: 20px; border-radius: 50px; font-size: 1.5rem; font-weight: bold; width: 100%; margin: 20px 0; }
-        #loading { display: none; font-size: 1.2rem; color: #fbff00; margin: 10px 0; }
-        .result-area { display: none; margin-top: 20px; padding: 20px; border-radius: 15px; font-size: 1.8rem; font-weight: bold; }
-        .pass { background: #28a745; border: 3px solid #fff; }
-        .fail { background: #dc3545; border: 3px solid #fff; }
-        .debug-text { font-size: 0.9rem; color: #888; margin-top: 15px; text-align: left; background: #000; padding: 10px; border-radius: 5px; }
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 15px; }
+        .card { background: #1e1e1e; border-radius: 20px; padding: 20px; border: 2px solid #333; }
+        .btn-main { background: #fbff00; color: #000; border: none; padding: 20px; border-radius: 50px; font-size: 1.4rem; font-weight: bold; width: 100%; cursor: pointer; }
+        .result-box { margin-top: 20px; padding: 15px; border-radius: 12px; display: none; text-align: left; }
+        .pass { background: #28a745; }
+        .error { background: #dc3545; }
+        .info-item { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 0; }
+        .sn-list { font-size: 0.8rem; color: #aaa; background: #000; padding: 10px; border-radius: 5px; margin-top: 5px; }
+        #loading { display: none; margin: 20px 0; color: #fbff00; }
     </style>
 </head>
 <body>
 
-    <div class="main-card">
-        <h2>📷 單張拍照自動比對</h2>
-        <p>請對準出貨單<span style="color:red">紅框區域</span>拍照</p>
+<div class="card">
+    <h2>🎯 智慧清點比對</h2>
+    <p>拍攝紅框區域：包含<b style="color:#fbff00">出貨品名</b>與<b style="color:#fbff00">所有貼紙</b></p>
+    
+    <input type="file" accept="image/*" capture="environment" id="file-input" style="display:none">
+    <button class="btn-main" onclick="document.getElementById('file-input').click()">📸 拍照清點</button>
 
-        <input type="file" accept="image/*" capture="environment" id="file-input" style="display:none">
-        <button class="btn-scan" onclick="document.getElementById('file-input').click()">📸 拍一張照即比對</button>
+    <div id="loading">🚀 AI 正在分析數量與機碼...</div>
 
-        <div id="loading">⌛ AI 辨識中，請稍候...</div>
-
-        <div id="result-box" class="result-area"></div>
-        
-        <div id="debug-info" class="debug-text" style="display:none">
-            <b>偵測到的內容：</b><br>
-            <span id="found-items"></span>
-        </div>
+    <div id="result" class="result-box">
+        <h3 id="res-title"></h3>
+        <div class="info-item">📋 應出品名：<span id="target-name">--</span></div>
+        <div class="info-item">🔢 偵測數量：<span id="detected-count">0</span> 張貼紙</div>
+        <div class="info-item">🚫 重複檢查：<span id="duplicate-status">--</span></div>
+        <div class="sn-list" id="sn-details"></div>
     </div>
+</div>
 
-    <script>
-        let worker;
-        // 初始化 AI 引擎
-        async function init() {
-            worker = await Tesseract.createWorker('eng');
-        }
-        init();
+<script>
+    let worker;
+    async function init() {
+        worker = await Tesseract.createWorker('eng');
+    }
+    init();
 
-        document.getElementById('file-input').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-            const loading = document.getElementById('loading');
-            const resultBox = document.getElementById('result-box');
-            const debugInfo = document.getElementById('debug-info');
-            const foundItems = document.getElementById('found-items');
+        const loading = document.getElementById('loading');
+        const resultBox = document.getElementById('result');
+        loading.style.display = 'block';
+        resultBox.style.display = 'none';
 
-            loading.style.display = 'block';
-            resultBox.style.display = 'none';
+        const result = await worker.recognize(file);
+        const lines = result.data.lines;
 
-            // 辨識整張照片的文字
-            const result = await worker.recognize(file);
-            const words = result.data.words;
+        let allModels = []; // 存所有型號
+        let allSNs = [];    // 存所有序號/機碼
 
-            // 過濾出長得像型號的字串 (英數組合，長度 6 以上)
-            let models = words
-                .map(w => w.text.trim().replace(/[^A-Z0-9-]/gi, '').toUpperCase())
-                .filter(t => t.length >= 6);
-
-            // 去除重複偵測到的相同字串
-            models = [...new Set(models)];
-
-            loading.style.display = 'none';
-            debugInfo.style.display = 'block';
-            foundItems.innerText = models.join(' , ');
-
-            if (models.length >= 2) {
-                // 拿前兩個抓到的型號進行比對
-                const m1 = models[0];
-                const m2 = models[1];
-
-                resultBox.style.display = 'block';
-                if (m1 === m2 || m1.includes(m2) || m2.includes(m1)) {
-                    resultBox.innerText = "✅ 正確一致";
-                    resultBox.className = "result-area pass";
-                    if(navigator.vibrate) navigator.vibrate(200);
-                } else {
-                    resultBox.innerText = "❌ 型號不符";
-                    resultBox.className = "result-area fail";
-                    if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
-                }
-            } else {
-                resultBox.style.display = 'block';
-                resultBox.innerText = "⚠️ 辨識不足";
-                resultBox.className = "result-area fail";
-                resultBox.style.background = "#555";
+        lines.forEach(line => {
+            const text = line.text.trim().toUpperCase();
+            // 辨識規則：型號通常包含大寫字母、數字及橫線
+            const match = text.match(/[A-Z0-9-]{7,}/g);
+            if (match) {
+                match.forEach(m => {
+                    // 如果這行包含特定的 S/N 或機碼特徵 (假設是比較長的或特定格式)
+                    if (m.length > 10) allSNs.push(m);
+                    else allModels.push(m);
+                });
             }
         });
-    </script>
+
+        // 邏輯分析
+        const uniqueSNs = [...new Set(allSNs)]; // 去重後的序號
+        const isDuplicate = allSNs.length !== uniqueSNs.length;
+        const targetModel = allModels[0] || "未知"; // 假設第一筆抓到的是出貨單品名
+
+        // 顯示結果
+        loading.style.display = 'none';
+        resultBox.style.display = 'block';
+        
+        document.getElementById('target-name').innerText = targetModel;
+        document.getElementById('detected-count').innerText = allSNs.length;
+        
+        const resTitle = document.getElementById('res-msg');
+        if (isDuplicate) {
+            resultBox.className = "result-box error";
+            document.getElementById('res-title').innerText = "❌ 發現重複機碼！";
+            document.getElementById('duplicate-status').innerText = "有重複，請重新核對";
+            if(navigator.vibrate) navigator.vibrate([500, 200, 500]);
+        } else if (allSNs.length === 0) {
+            resultBox.className = "result-box error";
+            document.getElementById('res-title').innerText = "⚠️ 未能偵測到貼紙";
+        } else {
+            resultBox.className = "result-box pass";
+            document.getElementById('res-title').innerText = "✅ 核對完成";
+            document.getElementById('duplicate-status').innerText = "無重複";
+            if(navigator.vibrate) navigator.vibrate(200);
+        }
+
+        document.getElementById('sn-details').innerText = "偵測到的機碼清單：\n" + uniqueSNs.join("\n");
+    });
+</script>
 </body>
 </html>
