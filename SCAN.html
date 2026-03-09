@@ -1,142 +1,99 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR 智慧掃描</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出貨單機碼即時比對</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #video-container { position: relative; width: 100vw; height: 100vh; }
-        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
-        
-        .hud { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 10; width: 85%; text-align: center;
-        }
-        #status-bar {
-            background: rgba(0,0,0,0.7); color: #00ff00; padding: 10px;
-            border-radius: 10px; border: 1px solid #00ff00; font-weight: bold;
-        }
-        .loading-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #121212; color: white; display: flex; 
-            align-items: center; justify-content: center; z-index: 100;
-        }
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 20px; background: #f4f4f9; }
+        #video { width: 100%; max-width: 400px; border: 2px solid #333; border-radius: 10px; }
+        #canvas { display: none; }
+        .controls { margin-top: 15px; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        #status { margin-top: 20px; font-weight: bold; font-size: 1.1em; }
+        .match { color: #28a745; background: #e8f5e9; padding: 10px; border-radius: 5px; }
+        .mismatch { color: #dc3545; background: #fdeaea; padding: 10px; border-radius: 5px; }
+        .loading { color: #666; }
     </style>
 </head>
 <body>
 
-<div id="loading" class="loading-screen">⚙️ AI 智慧鏡頭啟動中...</div>
-
-<div id="video-container">
+    <h2>機碼/型號自動比對</h2>
+    
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-    <div class="hud">
-        <div id="status-bar">🔍 請對準品名與貼紙...</div>
+
+    <div class="controls">
+        <button id="capture">擷取並比對文字</button>
     </div>
-</div>
 
-<script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const statusBar = document.getElementById('status-bar');
-    const loading = document.getElementById('loading');
+    <div id="status">請對準貼紙與單據文字後按下按鈕</div>
+    
+    <div id="results" style="margin-top: 20px; text-align: left; display: inline-block;">
+        <p>辨識結果：<span id="detected-text">--</span></p>
+    </div>
 
-    let worker;
-    let isProcessing = false;
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const status = document.getElementById('status');
+        const detectedTextElement = document.getElementById('detected-text');
 
-    // 啟動相機
-    async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", focusMode: "continuous" } 
-        });
-        video.srcObject = stream;
-        return new Promise(res => video.onloadedmetadata = res);
-    }
-
-    // 初始化 AI
-    async function initAI() {
-        worker = await Tesseract.createWorker('eng');
-        loading.style.display = 'none';
-        scanLoop();
-    }
-
-    async function scanLoop() {
-        if (isProcessing) { requestAnimationFrame(scanLoop); return; }
-        isProcessing = true;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        // 抓取當前影格
-        const result = await worker.recognize(video);
-        const words = result.data.words;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        let detectedItems = [];
-        words.forEach(word => {
-            // 過濾型號：長度 > 6 的英數組合
-            let text = word.text.trim().replace(/[^A-Z0-9-]/gi, '').toUpperCase();
-            if (text.length >= 7) {
-                detectedItems.push({ text, bbox: word.bbox });
-            }
-        });
-
-        // 比對：找出相同的文字
-        const groups = {};
-        detectedItems.forEach(item => {
-            if (!groups[item.text]) groups[item.text] = [];
-            groups[item.text].push(item);
-        });
-
-        let foundMatch = false;
-        for (const text in groups) {
-            if (groups[text].length >= 2) {
-                foundMatch = true;
-                const matches = groups[text];
-                
-                // 畫框與連線
-                ctx.strokeStyle = "#00ff00";
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                
-                matches.forEach((m, index) => {
-                    const b = m.bbox;
-                    // 畫框
-                    ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-                    // 畫連線 (連到下一個相同的字)
-                    if (index < matches.length - 1) {
-                        ctx.moveTo(b.x0 + (b.x1-b.x0)/2, b.y0 + (b.y1-b.y0)/2);
-                        const nextB = matches[index+1].bbox;
-                        ctx.lineTo(nextB.x0 + (nextB.x1-nextB.x0)/2, nextB.y0 + (nextB.y1-nextB.y0)/2);
-                    }
+        // 1. 啟動相機 (後置鏡頭)
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
                 });
-                ctx.stroke();
-
-                statusBar.innerText = `✅ 匹配成功: ${text} (共 ${matches.length} 處)`;
-                if (navigator.vibrate) navigator.vibrate(50);
+                video.srcObject = stream;
+            } catch (err) {
+                status.innerText = "無法開啟相機，請確認是否允許權限或使用 HTTPS 連線。";
             }
         }
 
-        if (!foundMatch) {
-            statusBar.innerText = "🔍 搜尋重複文字中...";
-            // 沒匹配到時顯示藍色偵測框
-            detectedItems.forEach(item => {
-                ctx.strokeStyle = "rgba(0, 209, 255, 0.4)";
-                ctx.lineWidth = 2;
-                ctx.strokeRect(item.bbox.x0, item.bbox.y0, item.bbox.x1 - item.bbox.x0, item.bbox.y1 - item.bbox.y0);
+        // 2. 擷取畫面並辨識
+        document.getElementById('capture').addEventListener('click', async () => {
+            status.innerHTML = '<span class="loading">辨識中，請稍候...</span>';
+            
+            // 將影像畫到畫布上
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // 使用 Tesseract.js 辨識英數字 (針對型號與機號)
+            Tesseract.recognize(
+                canvas.toDataURL('image/png'),
+                'eng', // 辨識英文與數字
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                processResult(text);
             });
+        });
+
+        // 3. 比對邏輯
+        function processResult(rawText) {
+            // 清理文字，只留大寫英文與數字
+            const cleanText = rawText.replace(/[^A-Z0-9-]/g, '');
+            detectedTextElement.innerText = cleanText;
+
+            // 範例邏輯：檢查畫面中是否同時存在型號 "NA-V170NMS"
+            // 在實際應用中，我們會檢查 cleanText 是否包含多組相同的字串
+            const modelKey = "NAV170NMS"; 
+            
+            // 尋找字串中出現兩次以上（表示貼紙跟單據都有）
+            const occurrences = (cleanText.match(new RegExp(modelKey, "g")) || []).length;
+
+            if (occurrences >= 2) {
+                status.innerHTML = `<div class="match">✅ 比對成功！<br>偵測到型號：${modelKey} 已重複出現在貼紙與單據上。</div>`;
+            } else if (occurrences === 1) {
+                status.innerHTML = `<div class="mismatch">⚠️ 僅偵測到一處型號，請確保貼紙與單據都在畫面內。</div>`;
+            } else {
+                status.innerHTML = `<div class="mismatch">❌ 比對失敗：未偵測到相符機型文字。</div>`;
+            }
         }
 
-        isProcessing = false;
-        setTimeout(scanLoop, 300); // 控制辨識頻率
-    }
-
-    startCamera().then(initAI);
-</script>
+        startCamera();
+    </script>
 </body>
 </html>
