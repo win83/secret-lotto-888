@@ -2,103 +2,140 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR 型號自動對比</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AR 型號自動核對器</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; }
+        #camera-container { position: relative; width: 100vw; height: 100vh; }
         video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .ui-layer { position: absolute; bottom: 20px; width: 100%; text-align: center; pointer-events: none; }
-        #msg { background: rgba(0,0,0,0.7); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 1.2rem; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        .info-overlay { position: absolute; bottom: 30px; width: 100%; text-align: center; z-index: 20; pointer-events: none; }
+        #status-tag { background: rgba(0,0,0,0.8); color: #00d1ff; padding: 12px 25px; border-radius: 30px; font-size: 1.2rem; border: 1px solid #00d1ff; }
+        .loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a73e8; color: white; display: flex; align-items: center; justify-content: center; z-index: 100; }
     </style>
 </head>
 <body>
 
-<div id="container">
+<div id="loading" class="loading-screen">AI 視覺引擎啟動中...</div>
+
+<div id="camera-container">
     <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-    <div class="ui-layer"><span id="msg">🔍 正在尋找型號...</span></div>
+    <canvas id="overlay"></canvas>
+    <div class="info-overlay">
+        <span id="status-tag">🔍 請對準型號文字</span>
+    </div>
 </div>
 
 <script>
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
-    const msg = document.getElementById('msg');
+    const statusTag = document.getElementById('status-tag');
+    const loading = document.getElementById('loading');
 
+    let worker;
     let isProcessing = false;
 
-    // 啟動相機
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then(stream => { video.srcObject = stream; });
-
-    // 初始化 Tesseract
-    async function init() {
-        const worker = await Tesseract.createWorker('eng');
-        
-        async function scan() {
-            if (isProcessing) return;
-            isProcessing = true;
-
-            // 調整畫布大小匹配視頻
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-
-            // 進行偵測（獲取文字位置數據）
-            const result = await worker.recognize(canvas);
-            const lines = result.data.lines;
-            
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清除舊框
-            
-            let detectedModels = [];
-
-            lines.forEach(line => {
-                // 過濾出符合電器型號特徵的文字 (英數混合 + 橫線)
-                const text = line.text.trim().replace(/[^A-Z0-9-]/g, '');
-                if (text.length > 5) {
-                    const b = line.bbox; // 獲取框線座標
-                    
-                    // 畫出偵測框
-                    ctx.strokeStyle = "#00d1ff";
-                    ctx.lineWidth = 4;
-                    ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-                    
-                    detectedModels.push({ text, bbox: b });
-                }
-            });
-
-            // 如果偵測到至少兩個模型字串
-            if (detectedModels.length >= 2) {
-                const m1 = detectedModels[0];
-                const m2 = detectedModels[1];
-
-                if (m1.text === m2.text) {
-                    msg.innerText = `✅ 吻合: ${m1.text}`;
-                    ctx.strokeStyle = "#28a745"; // 綠色連線
-                    if (navigator.vibrate) navigator.vibrate(200);
-                } else {
-                    msg.innerText = `❌ 錯誤! ${m1.text} ≠ ${m2.text}`;
-                    ctx.strokeStyle = "#dc3545"; // 紅色連線
-                    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-                }
-                
-                // 在兩個框之間畫連線
-                ctx.beginPath();
-                ctx.moveTo(m1.bbox.x0, m1.bbox.y0);
-                ctx.lineTo(m2.bbox.x0, m2.bbox.y0);
-                ctx.stroke();
-            }
-
-            isProcessing = false;
-            requestAnimationFrame(scan);
-        }
-        scan();
+    // 1. 初始化相機
+    async function startCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", focusMode: "continuous" } 
+        });
+        video.srcObject = stream;
+        return new Promise(resolve => video.onloadedmetadata = resolve);
     }
 
-    video.onloadedmetadata = init;
+    // 2. 初始化 AI 引擎
+    async function initAI() {
+        worker = await Tesseract.createWorker('eng'); // 型號通常是英文數字
+        loading.style.display = 'none';
+        tick();
+    }
+
+    // 3. 繪製比對框與連線
+    function drawBoxes(detectedItems) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (detectedItems.length >= 2) {
+            const m1 = detectedItems[0];
+            const m2 = detectedItems[1];
+
+            // 判斷是否一致
+            const isMatch = m1.text === m2.text;
+            const color = isMatch ? "#28a745" : "#ff4d4d"; // 綠色或紅色
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 5;
+
+            // 畫出兩個對應框
+            [m1, m2].forEach(item => {
+                const b = item.bbox;
+                ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+                
+                // 標註文字標籤
+                ctx.fillStyle = color;
+                ctx.font = "bold 20px sans-serif";
+                ctx.fillText(item.text, b.x0, b.y0 - 10);
+            });
+
+            // 畫出連線
+            ctx.beginPath();
+            ctx.setLineDash([10, 5]);
+            ctx.moveTo(m1.bbox.x0 + (m1.bbox.x1 - m1.bbox.x0)/2, m1.bbox.y0 + (m1.bbox.y1 - m1.bbox.y0)/2);
+            ctx.lineTo(m2.bbox.x0 + (m2.bbox.x1 - m2.bbox.x0)/2, m2.bbox.y0 + (m2.bbox.y1 - m2.bbox.y0)/2);
+            ctx.stroke();
+
+            statusTag.innerText = isMatch ? "✅ 比對一致" : "❌ 型號錯誤！";
+            statusTag.style.color = color;
+            statusTag.style.borderColor = color;
+
+            if (isMatch && navigator.vibrate) navigator.vibrate(100);
+        } else {
+            // 單一偵測時顯示藍色框
+            detectedItems.forEach(item => {
+                const b = item.bbox;
+                ctx.strokeStyle = "#00d1ff";
+                ctx.setLineDash([]);
+                ctx.lineWidth = 3;
+                ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+            });
+            statusTag.innerText = "🔍 正在搜尋第二組型號...";
+            statusTag.style.color = "#00d1ff";
+        }
+    }
+
+    // 4. 循環辨識邏輯
+    async function tick() {
+        if (isProcessing) {
+            requestAnimationFrame(tick);
+            return;
+        }
+        isProcessing = true;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // 擷取當前畫面進行辨識
+        const result = await worker.recognize(video);
+        const lines = result.data.lines;
+        
+        let foundModels = [];
+        lines.forEach(line => {
+            // 過濾型號：只保留長度大於5且包含英數的內容
+            const cleanText = line.text.trim().replace(/[^A-Z0-9-]/g, '');
+            if (cleanText.length > 5) {
+                foundModels.push({ text: cleanText, bbox: line.bbox });
+            }
+        });
+
+        drawBoxes(foundModels);
+        
+        isProcessing = false;
+        setTimeout(tick, 500); // 降低辨識頻率以維持流暢度並防止過熱
+    }
+
+    startCamera().then(initAI);
 </script>
 </body>
 </html>
