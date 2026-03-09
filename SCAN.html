@@ -3,139 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR 型號自動核對器</title>
+    <title>電器出貨雙重對比助手</title>
     <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #camera-container { position: relative; width: 100vw; height: 100vh; }
-        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-        .info-overlay { position: absolute; bottom: 30px; width: 100%; text-align: center; z-index: 20; pointer-events: none; }
-        #status-tag { background: rgba(0,0,0,0.8); color: #00d1ff; padding: 12px 25px; border-radius: 30px; font-size: 1.2rem; border: 1px solid #00d1ff; }
-        .loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a73e8; color: white; display: flex; align-items: center; justify-content: center; z-index: 100; }
+        body { font-family: sans-serif; background: #121212; color: white; margin: 0; padding: 15px; text-align: center; }
+        .camera-view { width: 100%; height: 300px; background: #000; border-radius: 15px; overflow: hidden; position: relative; border: 2px solid #333; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .slot-container { display: flex; justify-content: space-around; margin: 20px 0; }
+        .slot { width: 45%; border: 2px dashed #666; border-radius: 10px; padding: 10px; min-height: 80px; background: #1e1e1e; }
+        .slot.active { border-color: #00d1ff; background: #002b36; }
+        .slot.filled { border-color: #28a745; border-style: solid; }
+        .btn-capture { background: #1a73e8; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 1.2rem; margin: 10px; width: 80%; }
+        .btn-reset { background: #444; color: #ccc; border: none; padding: 10px; border-radius: 5px; margin-top: 20px; }
+        #result { margin-top: 20px; font-size: 1.5rem; font-weight: bold; padding: 15px; border-radius: 10px; display: none; }
+        .match { background: #28a745; color: white; }
+        .error { background: #dc3545; color: white; }
+        .model-text { font-family: monospace; font-size: 1rem; color: #00d1ff; display: block; margin-top: 5px; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 100; }
     </style>
 </head>
 <body>
 
-<div id="loading" class="loading-screen">AI 視覺引擎啟動中...</div>
+    <div id="loading-overlay">⌛ AI 辨識中...</div>
 
-<div id="camera-container">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="overlay"></canvas>
-    <div class="info-overlay">
-        <span id="status-tag">🔍 請對準型號文字</span>
+    <h2>📦 拍照比對助手</h2>
+
+    <div class="camera-view">
+        <video id="video" autoplay playsinline></video>
     </div>
-</div>
 
-<script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('overlay');
-    const ctx = canvas.getContext('2d');
-    const statusTag = document.getElementById('status-tag');
-    const loading = document.getElementById('loading');
+    <button class="btn-capture" onclick="capture()">📸 拍照辨識</button>
 
-    let worker;
-    let isProcessing = false;
+    <div class="slot-container">
+        <div id="slot1" class="slot active">
+            <div>1. 出貨單品名</div>
+            <span id="text1" class="model-text">等待拍照...</span>
+        </div>
+        <div id="slot2" class="slot">
+            <div>2. 機碼貼紙</div>
+            <span id="text2" class="model-text">等待拍照...</span>
+        </div>
+    </div>
 
-    // 1. 初始化相機
-    async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", focusMode: "continuous" } 
-        });
-        video.srcObject = stream;
-        return new Promise(resolve => video.onloadedmetadata = resolve);
-    }
+    <div id="result"></div>
 
-    // 2. 初始化 AI 引擎
-    async function initAI() {
-        worker = await Tesseract.createWorker('eng'); // 型號通常是英文數字
-        loading.style.display = 'none';
-        tick();
-    }
+    <button class="btn-reset" onclick="resetAll()">全部清除重拍</button>
 
-    // 3. 繪製比對框與連線
-    function drawBoxes(detectedItems) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        if (detectedItems.length >= 2) {
-            const m1 = detectedItems[0];
-            const m2 = detectedItems[1];
+    <script>
+        const video = document.getElementById('video');
+        const loading = document.getElementById('loading-overlay');
+        const slot1 = document.getElementById('slot1');
+        const slot2 = document.getElementById('slot2');
+        const text1El = document.getElementById('text1');
+        const text2El = document.getElementById('text2');
+        const resultEl = document.getElementById('result');
 
-            // 判斷是否一致
-            const isMatch = m1.text === m2.text;
-            const color = isMatch ? "#28a745" : "#ff4d4d"; // 綠色或紅色
+        let worker;
+        let model1 = "";
+        let model2 = "";
+
+        // 啟動相機
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; });
+
+        // 初始化 AI
+        async function initAI() {
+            worker = await Tesseract.createWorker('eng');
+        }
+        initAI();
+
+        async function capture() {
+            loading.style.display = 'flex';
             
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 5;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
 
-            // 畫出兩個對應框
-            [m1, m2].forEach(item => {
-                const b = item.bbox;
-                ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-                
-                // 標註文字標籤
-                ctx.fillStyle = color;
-                ctx.font = "bold 20px sans-serif";
-                ctx.fillText(item.text, b.x0, b.y0 - 10);
-            });
+            // 辨識文字
+            const result = await worker.recognize(canvas);
+            const foundModels = result.data.words
+                .map(w => w.text.replace(/[^A-Z0-9-]/gi, '').toUpperCase())
+                .filter(t => t.length >= 6);
 
-            // 畫出連線
-            ctx.beginPath();
-            ctx.setLineDash([10, 5]);
-            ctx.moveTo(m1.bbox.x0 + (m1.bbox.x1 - m1.bbox.x0)/2, m1.bbox.y0 + (m1.bbox.y1 - m1.bbox.y0)/2);
-            ctx.lineTo(m2.bbox.x0 + (m2.bbox.x1 - m2.bbox.x0)/2, m2.bbox.y0 + (m2.bbox.y1 - m2.bbox.y0)/2);
-            ctx.stroke();
-
-            statusTag.innerText = isMatch ? "✅ 比對一致" : "❌ 型號錯誤！";
-            statusTag.style.color = color;
-            statusTag.style.borderColor = color;
-
-            if (isMatch && navigator.vibrate) navigator.vibrate(100);
-        } else {
-            // 單一偵測時顯示藍色框
-            detectedItems.forEach(item => {
-                const b = item.bbox;
-                ctx.strokeStyle = "#00d1ff";
-                ctx.setLineDash([]);
-                ctx.lineWidth = 3;
-                ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-            });
-            statusTag.innerText = "🔍 正在搜尋第二組型號...";
-            statusTag.style.color = "#00d1ff";
-        }
-    }
-
-    // 4. 循環辨識邏輯
-    async function tick() {
-        if (isProcessing) {
-            requestAnimationFrame(tick);
-            return;
-        }
-        isProcessing = true;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        // 擷取當前畫面進行辨識
-        const result = await worker.recognize(video);
-        const lines = result.data.lines;
-        
-        let foundModels = [];
-        lines.forEach(line => {
-            // 過濾型號：只保留長度大於5且包含英數的內容
-            const cleanText = line.text.trim().replace(/[^A-Z0-9-]/g, '');
-            if (cleanText.length > 5) {
-                foundModels.push({ text: cleanText, bbox: line.bbox });
+            // 邏輯：如果單次拍照就抓到兩個型號，直接完成比對
+            if (foundModels.length >= 2 && model1 === "") {
+                model1 = foundModels[0];
+                model2 = foundModels[1];
+                updateUI(true);
+            } 
+            // 邏輯：如果是分開拍
+            else if (foundModels.length >= 1) {
+                if (model1 === "") {
+                    model1 = foundModels[0];
+                    updateUI(false);
+                } else {
+                    model2 = foundModels[0];
+                    updateUI(false);
+                }
             }
-        });
 
-        drawBoxes(foundModels);
-        
-        isProcessing = false;
-        setTimeout(tick, 500); // 降低辨識頻率以維持流暢度並防止過熱
-    }
+            loading.style.display = 'none';
+            checkMatch();
+        }
 
-    startCamera().then(initAI);
-</script>
+        function updateUI(isSimultaneous) {
+            if (model1) {
+                text1El.innerText = model1;
+                slot1.classList.add('filled');
+                slot1.classList.remove('active');
+                slot2.classList.add('active');
+            }
+            if (model2) {
+                text2El.innerText = model2;
+                slot2.classList.add('filled');
+                slot2.classList.remove('active');
+            }
+        }
+
+        function checkMatch() {
+            if (model1 && model2) {
+                resultEl.style.display = 'block';
+                // 模糊比對：內容包含或長度接近
+                if (model1.includes(model2) || model2.includes(model1)) {
+                    resultEl.innerText = "✅ 型號吻合！可以出貨";
+                    resultEl.className = "result match";
+                    if(navigator.vibrate) navigator.vibrate(200);
+                } else {
+                    resultEl.innerText = "❌ 錯誤！型號不符";
+                    resultEl.className = "result error";
+                    if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
+                }
+            }
+        }
+
+        function resetAll() {
+            model1 = "";
+            model2 = "";
+            text1El.innerText = "等待拍照...";
+            text2El.innerText = "等待拍照...";
+            slot1.className = "slot active";
+            slot2.className = "slot";
+            resultEl.style.display = 'none';
+        }
+    </script>
 </body>
 </html>
