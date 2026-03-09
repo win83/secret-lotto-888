@@ -3,96 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 電器型號自動核對</title>
-    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <title>AR 型號自動對比</title>
+    <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; overflow: hidden; text-align: center; }
-        #video { width: 100%; height: auto; background: #222; }
-        .focus-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                      width: 80%; height: 200px; border: 2px solid rgba(0, 209, 255, 0.5); border-radius: 10px; }
-        .result-panel { position: fixed; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 20px; box-sizing: border-box; }
-        .status { font-size: 2rem; font-weight: bold; margin-bottom: 10px; }
-        .match { color: #28a745; }
-        .mismatch { color: #dc3545; }
-        .debug { font-size: 0.8rem; color: #aaa; }
-        #loading { position: fixed; top: 0; width: 100%; background: #1a73e8; padding: 5px; z-index: 100; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .ui-layer { position: absolute; bottom: 20px; width: 100%; text-align: center; pointer-events: none; }
+        #msg { background: rgba(0,0,0,0.7); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 1.2rem; }
     </style>
 </head>
 <body>
 
-<div id="loading">AI 引擎加載中...</div>
-<video id="video" autoplay playsinline></video>
-<div class="focus-area"></div>
-
-<div class="result-panel">
-    <div id="status" class="status">請對準單據型號</div>
-    <div id="detail" class="debug">等待辨識...</div>
-    <button onclick="location.reload()" style="margin-top:10px;">重新掃描</button>
+<div id="container">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div class="ui-layer"><span id="msg">🔍 正在尋找型號...</span></div>
 </div>
 
 <script>
     const video = document.getElementById('video');
-    const status = document.getElementById('status');
-    const detail = document.getElementById('detail');
-    const loading = document.getElementById('loading');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const msg = document.getElementById('msg');
 
-    let worker;
+    let isProcessing = false;
 
     // 啟動相機
-    async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", focusMode: "continuous" } 
-        });
-        video.srcObject = stream;
-    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => { video.srcObject = stream; });
 
-    // 初始化 AI 辨識
-    async function initAI() {
-        worker = Tesseract.createWorker();
-        await worker.load();
-        await worker.loadLanguage('eng');
-        await worker.initialize('eng');
-        loading.style.display = 'none';
-        recognizeLoop();
-    }
-
-    async function recognizeLoop() {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // 進行文字辨識
-        const { data: { text } } = await worker.recognize(canvas);
+    // 初始化 Tesseract
+    async function init() {
+        const worker = await Tesseract.createWorker('eng');
         
-        // 尋找型號邏輯：找出所有包含英數與橫線的字串
-        const models = text.match(/[A-Z0-9-]{5,}/g) || [];
-        
-        if (models.length >= 2) {
-            // 取出前兩個最像型號的字串進行比對
-            const modelA = models[0];
-            const modelB = models[1];
-            detail.innerText = `比對中: ${modelA} vs ${modelB}`;
+        async function scan() {
+            if (isProcessing) return;
+            isProcessing = true;
 
-            if (modelA === modelB) {
-                status.innerText = "✅ 型號吻合";
-                status.className = "status match";
-                if(navigator.vibrate) navigator.vibrate(200);
-            } else {
-                status.innerText = "❌ 不吻合！";
-                status.className = "status mismatch";
-                if(navigator.vibrate) navigator.vibrate([300, 100, 300]);
+            // 調整畫布大小匹配視頻
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // 進行偵測（獲取文字位置數據）
+            const result = await worker.recognize(canvas);
+            const lines = result.data.lines;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清除舊框
+            
+            let detectedModels = [];
+
+            lines.forEach(line => {
+                // 過濾出符合電器型號特徵的文字 (英數混合 + 橫線)
+                const text = line.text.trim().replace(/[^A-Z0-9-]/g, '');
+                if (text.length > 5) {
+                    const b = line.bbox; // 獲取框線座標
+                    
+                    // 畫出偵測框
+                    ctx.strokeStyle = "#00d1ff";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+                    
+                    detectedModels.push({ text, bbox: b });
+                }
+            });
+
+            // 如果偵測到至少兩個模型字串
+            if (detectedModels.length >= 2) {
+                const m1 = detectedModels[0];
+                const m2 = detectedModels[1];
+
+                if (m1.text === m2.text) {
+                    msg.innerText = `✅ 吻合: ${m1.text}`;
+                    ctx.strokeStyle = "#28a745"; // 綠色連線
+                    if (navigator.vibrate) navigator.vibrate(200);
+                } else {
+                    msg.innerText = `❌ 錯誤! ${m1.text} ≠ ${m2.text}`;
+                    ctx.strokeStyle = "#dc3545"; // 紅色連線
+                    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+                }
+                
+                // 在兩個框之間畫連線
+                ctx.beginPath();
+                ctx.moveTo(m1.bbox.x0, m1.bbox.y0);
+                ctx.lineTo(m2.bbox.x0, m2.bbox.y0);
+                ctx.stroke();
             }
-        } else if (models.length === 1) {
-            detail.innerText = `只偵測到一個型號: ${models[0]}`;
-        }
 
-        // 稍微延遲後繼續下一次辨識，避免手機過熱
-        setTimeout(recognizeLoop, 1500);
+            isProcessing = false;
+            requestAnimationFrame(scan);
+        }
+        scan();
     }
 
-    setupCamera().then(initAI);
+    video.onloadedmetadata = init;
 </script>
 </body>
 </html>
